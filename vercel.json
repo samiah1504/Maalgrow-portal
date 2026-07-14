@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-maturities",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

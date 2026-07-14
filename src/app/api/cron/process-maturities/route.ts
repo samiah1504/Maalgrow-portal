@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
 
-  // Allow internal cron calls with secret, or from server-side
+  // Vercel sets this automatically on cron invocations
   if (
     authHeader !== `Bearer ${process.env.CRON_SECRET}` &&
     process.env.NODE_ENV !== "development"
