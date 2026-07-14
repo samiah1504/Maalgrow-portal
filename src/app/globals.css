@@ -1,26 +1,190 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Brand Colors */
+  --color-primary: #3D1A6E;
+  --color-primary-50: #F3EEF9;
+  --color-primary-100: #E4D5F5;
+  --color-primary-200: #C9ABE9;
+  --color-primary-300: #AD81DD;
+  --color-primary-400: #9257D0;
+  --color-primary-500: #7730C4;
+  --color-primary-600: #5E25A0;
+  --color-primary-700: #3D1A6E;
+  --color-primary-800: #2C1350;
+  --color-primary-900: #1A0B31;
+  --color-primary-foreground: #ffffff;
+
+  --color-gold: #C9A435;
+  --color-gold-50: #FDF9EC;
+  --color-gold-100: #FAF0CC;
+  --color-gold-200: #F3DC99;
+  --color-gold-300: #ECC866;
+  --color-gold-400: #E5B433;
+  --color-gold-500: #C9A435;
+  --color-gold-600: #A8882B;
+  --color-gold-700: #876C22;
+  --color-gold-800: #665018;
+  --color-gold-900: #45340F;
+  --color-gold-foreground: #1a0b31;
+
+  /* Semantic Colors */
+  --color-success: #10B981;
+  --color-success-foreground: #ffffff;
+  --color-warning: #F59E0B;
+  --color-warning-foreground: #ffffff;
+  --color-danger: #EF4444;
+  --color-danger-foreground: #ffffff;
+  --color-info: #3B82F6;
+  --color-info-foreground: #ffffff;
+
+  /* Surface Colors */
+  --color-background: #F8F7FC;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F3F0FA;
+  --color-border: #E8E0F5;
+  --color-border-2: #D4C8ED;
+  --color-muted: #9B8DB5;
+  --color-muted-foreground: #6B5A8E;
+  --color-foreground: #1A0B31;
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans, system-ui, sans-serif);
+  --font-mono: var(--font-geist-mono, monospace);
+
+  /* Border Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px 0 rgb(61 26 110 / 0.08), 0 1px 2px -1px rgb(61 26 110 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(61 26 110 / 0.08), 0 2px 4px -2px rgb(61 26 110 / 0.04);
+  --shadow-lg: 0 10px 15px -3px rgb(61 26 110 / 0.08), 0 4px 6px -4px rgb(61 26 110 / 0.04);
+  --shadow-xl: 0 20px 25px -5px rgb(61 26 110 / 0.08), 0 8px 10px -6px rgb(61 26 110 / 0.04);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C9ABE9;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7730C4;
+}
+
+/* Focus Styles */
+:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: #C9ABE9;
+  color: var(--color-primary-900);
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
+.animate-slide-up { animation: slide-up 0.4s ease-out; }
+.animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
+.animate-pulse-gold { animation: pulse-gold 2s ease-in-out infinite; }
+
+/* Glass Effect */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, #3D1A6E 0%, #7730C4 50%, #C9A435 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Card Hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Status Badge */
+.status-active {
+  background-color: #D1FAE5;
+  color: #065F46;
+}
+
+.status-matured {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.status-completed {
+  background-color: #F3EEF9;
+  color: #3D1A6E;
+}
+
+.status-pending {
+  background-color: #DBEAFE;
+  color: #1E40AF;
 }
