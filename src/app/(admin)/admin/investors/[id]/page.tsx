@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { InvestorActions } from "./_components/investor-actions";
 import { AddPaymentDialog } from "./_components/add-payment-dialog";
+import { AcknowledgementDownloadButton } from "./_components/acknowledgement-download-button";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investor Detail | Admin" };
@@ -67,6 +68,8 @@ type InvestorFull = {
   nin: string | null;
   kyc_status: string;
   kyc_notes: string | null;
+  invitation_status: string | null;
+  invitation_sent_at: string | null;
   created_at: string;
   profile: { id: string; email: string; is_active: boolean } | null;
   investments: InvestmentFull[];
@@ -285,13 +288,22 @@ export default async function AdminInvestorDetailPage({
                           Series {inv.series?.name} · {inv.cycle?.cycle_label}
                         </p>
                       </div>
-                      <AddPaymentDialog
-                        investmentId={inv.id}
-                        investmentCode={inv.investment_code}
-                        capital={inv.capital}
-                        units={inv.units}
-                        totalPaid={totalPaid}
-                      />
+                      <div className="flex items-center gap-2">
+                        <AcknowledgementDownloadButton
+                          investorCode={investor.investor_code}
+                          fullName={investor.full_name}
+                          email={investor.profile?.email ?? investor.email}
+                          investment={inv}
+                          totalPaid={totalPaid}
+                        />
+                        <AddPaymentDialog
+                          investmentId={inv.id}
+                          investmentCode={inv.investment_code}
+                          capital={inv.capital}
+                          units={inv.units}
+                          totalPaid={totalPaid}
+                        />
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0 space-y-3">
@@ -519,6 +531,38 @@ export default async function AdminInvestorDetailPage({
                   <p className="text-xs text-foreground mt-0.5">
                     {investor.kyc_notes}
                   </p>
+                </div>
+              )}
+              {investor.invitation_status && (
+                <div>
+                  <p className="text-xs text-muted">Invitation</p>
+                  <Badge
+                    variant={
+                      investor.invitation_status === "sent" || investor.invitation_status === "activated"
+                        ? "approved"
+                        : investor.invitation_status === "failed" || investor.invitation_status === "expired"
+                        ? "rejected"
+                        : "pending"
+                    }
+                    dot
+                  >
+                    {investor.invitation_status === "not_sent"
+                      ? "Not Sent"
+                      : investor.invitation_status === "sent"
+                      ? "Sent"
+                      : investor.invitation_status === "activated"
+                      ? "Account Activated"
+                      : investor.invitation_status === "expired"
+                      ? "Link Expired"
+                      : investor.invitation_status === "failed"
+                      ? "Delivery Failed"
+                      : investor.invitation_status}
+                  </Badge>
+                  {investor.invitation_sent_at && (
+                    <p className="text-xs text-muted mt-0.5">
+                      Sent {formatDate(investor.invitation_sent_at)}
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

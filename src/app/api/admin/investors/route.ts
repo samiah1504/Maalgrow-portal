@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { generateUniqueInvestorCode } from "@/lib/investor-code";
 
 const ADMIN_ROLES = [
   "super_admin",
@@ -31,7 +32,6 @@ async function requireAdmin() {
 }
 
 // GET /api/admin/investors?search=email_or_phone
-// Returns up to 5 matching investors for the "existing investor" lookup
 export async function GET(request: Request) {
   const auth = await requireAdmin();
   if ("error" in auth) {
@@ -60,7 +60,9 @@ export async function GET(request: Request) {
   return NextResponse.json({ investors: data ?? [] });
 }
 
-// POST /api/admin/investors — create new investor + send invite
+// POST /api/admin/investors — create new investor + auth account
+// The onboarding email is sent by the investments route after the investment is created,
+// so it can include full investment details in one email.
 export async function POST(request: Request) {
   try {
     const auth = await requireAdmin();
@@ -71,11 +73,14 @@ export async function POST(request: Request) {
     const { user } = auth;
     const adminClient = await createAdminClient();
 
-    const body = await request.json();
-    const { full_name, email, phone, address } = body as Record<
-      string,
-      string | undefined
-    >;
+    const body = (await request.json()) as {
+      full_name?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
+    };
+
+    const { full_name, email, phone, address } = body;
 
     if (!full_name?.trim() || !email?.trim()) {
       return NextResponse.json(
@@ -100,40 +105,61 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create auth account via invite
+    // Generate cryptographically secure investor code (MG-XXXXXX format)
+    const investor_code = await generateUniqueInvestorCode(async (code) => {
+      const { data } = await adminClient
+        .from("investors")
+        .select("id")
+        .eq("investor_code", code)
+        .maybeSingle();
+      return !!data;
+    });
+
+    // Create auth user WITHOUT sending any email.
+    // generateLink({ type: "invite" }) creates the user and returns an action_link
+    // but does not trigger Supabase's email system.
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app";
 
-    const { data: inviteData, error: inviteError } =
-      await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, {
-        data: { full_name: full_name.trim(), role: "investor" },
-        redirectTo: `${siteUrl}/api/auth/callback`,
+    const { data: linkData, error: linkError } =
+      await adminClient.auth.admin.generateLink({
+        type: "invite",
+        email: normalizedEmail,
+        options: {
+          data: { full_name: full_name.trim(), role: "investor" },
+          redirectTo: `${siteUrl}/investor/dashboard`,
+        },
       });
 
-    if (inviteError || !inviteData?.user) {
+    if (linkError || !linkData?.user) {
       return NextResponse.json(
-        { error: inviteError?.message ?? "Failed to create auth account" },
+        { error: linkError?.message ?? "Failed to create auth account" },
         { status: 500 }
       );
     }
 
-    const newUserId = inviteData.user.id;
+    const newUserId = linkData.user.id;
 
-    // Generate investor code: MGI-001, MGI-002, …
-    const { data: lastInvestor } = await adminClient
-      .from("investors")
-      .select("investor_code")
-      .like("investor_code", "MGI-%")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Ensure profile exists (created by auth trigger or create manually)
+    const { error: profileError } = await adminClient
+      .from("profiles")
+      .upsert(
+        {
+          id: newUserId,
+          email: normalizedEmail,
+          full_name: full_name.trim(),
+          role: "investor",
+        },
+        { onConflict: "id" }
+      );
 
-    let nextNumber = 1;
-    if (lastInvestor?.investor_code) {
-      const match = lastInvestor.investor_code.match(/MGI-(\d+)/);
-      if (match) nextNumber = parseInt(match[1], 10) + 1;
+    if (profileError) {
+      await adminClient.auth.admin.deleteUser(newUserId);
+      return NextResponse.json(
+        { error: "Failed to create profile: " + profileError.message },
+        { status: 500 }
+      );
     }
-    const investor_code = `MGI-${String(nextNumber).padStart(3, "0")}`;
 
     // Insert investor record
     const { data: investor, error: investorError } = await adminClient
@@ -145,7 +171,12 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         phone: phone?.trim() || null,
         address: address?.trim() || null,
+        invitation_status: "not_sent",
+        invitation_expires_at: new Date(
+          Date.now() + 24 * 60 * 60 * 1000
+        ).toISOString(),
         created_by: user.id,
+        onboarded_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -153,7 +184,10 @@ export async function POST(request: Request) {
     if (investorError) {
       await adminClient.auth.admin.deleteUser(newUserId);
       return NextResponse.json(
-        { error: "Failed to create investor record: " + investorError.message },
+        {
+          error:
+            "Failed to create investor record: " + investorError.message,
+        },
         { status: 500 }
       );
     }
@@ -161,6 +195,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ investor }, { status: 201 });
   } catch (err) {
     console.error("[API] POST /admin/investors error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

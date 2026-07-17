@@ -61,6 +61,9 @@ export type Database = {
           kyc_status: "pending" | "approved" | "rejected";
           kyc_notes: string | null;
           onboarded_at: string | null;
+          invitation_status: "not_sent" | "sent" | "activated" | "expired" | "failed";
+          invitation_sent_at: string | null;
+          invitation_expires_at: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -81,6 +84,9 @@ export type Database = {
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
           onboarded_at?: string | null;
+          invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
+          invitation_sent_at?: string | null;
+          invitation_expires_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -97,6 +103,9 @@ export type Database = {
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
           onboarded_at?: string | null;
+          invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
+          invitation_sent_at?: string | null;
+          invitation_expires_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -153,7 +162,9 @@ export type Database = {
           unit_value: number | null;
           notes: string | null;
           total_capital: number;
+          total_slots: number;
           total_investors: number;
+          amount_received: number;
           maturity_processed_at: string | null;
           created_at: string;
           updated_at: string;
@@ -171,7 +182,9 @@ export type Database = {
           unit_value?: number | null;
           notes?: string | null;
           total_capital?: number;
+          total_slots?: number;
           total_investors?: number;
+          amount_received?: number;
           maturity_processed_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -186,7 +199,9 @@ export type Database = {
           unit_value?: number | null;
           notes?: string | null;
           total_capital?: number;
+          total_slots?: number;
           total_investors?: number;
+          amount_received?: number;
           maturity_processed_at?: string | null;
           updated_at?: string;
         };

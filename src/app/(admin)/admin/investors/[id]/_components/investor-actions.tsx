@@ -88,10 +88,19 @@ export function InvestorActions({
     setPending(action);
 
     try {
-      const res = await fetch(`/api/admin/investors/${investorId}`, {
-        method: "PATCH",
+      // Resend invitation uses the dedicated endpoint
+      const url =
+        action === "resend_invite"
+          ? `/api/admin/investors/${investorId}/resend-invitation`
+          : `/api/admin/investors/${investorId}`;
+      const method = action === "resend_invite" ? "POST" : "PATCH";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        ...(action !== "resend_invite"
+          ? { body: JSON.stringify({ action }) }
+          : {}),
       });
 
       const json = await res.json();

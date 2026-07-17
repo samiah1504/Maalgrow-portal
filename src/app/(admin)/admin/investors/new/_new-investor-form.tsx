@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,6 +27,7 @@ import {
   paymentStatusColor,
   slotLabel,
 } from "@/lib/investment-utils";
+import { SuccessScreen, type SuccessData } from "./_success-screen";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,10 +57,9 @@ type FoundInvestor = {
   kyc_status: string;
 };
 
-// ─── Validation schema ────────────────────────────────────────────────────────
+// ─── Validation schemas ───────────────────────────────────────────────────────
 
 const newInvestorSchema = z.object({
-  // Investor fields (only when creating new)
   full_name: z.string().min(2, "Full name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
   phone: z.string().optional(),
@@ -88,7 +87,7 @@ const investmentSchema = z.object({
 type NewInvestorData = z.infer<typeof newInvestorSchema>;
 type InvestmentData = z.infer<typeof investmentSchema>;
 
-// ─── Shared investment sub-form ────────────────────────────────────────────────
+// ─── Investment sub-form ──────────────────────────────────────────────────────
 
 function InvestmentSection({
   series,
@@ -115,25 +114,21 @@ function InvestmentSection({
   const selectedSeries = series.find((s) => s.id === selectedSeriesId);
   const selectedCycle = filteredCycles.find((c) => c.id === selectedCycleId);
 
-  // Live calculations
   const capital = units && isValidSlots(units) ? calcCapital(units) : 0;
   const balance = capital - (paymentAmount || 0);
   const payStatus = capital > 0 ? getPaymentStatus(capital, paymentAmount || 0) : null;
 
-  // Reset cycle when series changes
   useEffect(() => {
     setValue("cycle_id", "");
   }, [selectedSeriesId, setValue]);
 
   return (
     <div className="space-y-6">
-      {/* Series + Cycle */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Investment Allocation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Slot value notice */}
           <div className="rounded-lg bg-primary-50 border border-primary-100 p-3 flex items-center gap-2">
             <Info className="h-4 w-4 text-primary-600 flex-shrink-0" />
             <p className="text-sm text-primary-700">
@@ -172,7 +167,7 @@ function InvestmentSection({
             <input type="hidden" {...register("series_id")} />
           </div>
 
-          {/* Cycle — only shown after series is selected */}
+          {/* Cycle */}
           {selectedSeriesId && (
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-foreground">
@@ -224,7 +219,7 @@ function InvestmentSection({
             </div>
           )}
 
-          {/* Slots + live calculation */}
+          {/* Slots */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground">
               Number of Slots <span className="text-danger ml-0.5">*</span>
@@ -238,16 +233,13 @@ function InvestmentSection({
                 {...register("units", { valueAsNumber: true })}
                 className="h-10 w-36 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
-              <p className="text-xs text-muted">
-                Min 0.5 · increments of 0.5
-              </p>
+              <p className="text-xs text-muted">Min 0.5 · increments of 0.5</p>
             </div>
             {errors.units && (
               <p className="text-xs text-danger">{errors.units.message}</p>
             )}
           </div>
 
-          {/* Live investment calculation */}
           {capital > 0 && (
             <div className="rounded-xl bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 p-4 space-y-2">
               <div className="flex justify-between text-sm">
@@ -280,7 +272,6 @@ function InvestmentSection({
             )}
           </div>
 
-          {/* Notes */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground">
               Notes (optional)
@@ -342,7 +333,6 @@ function InvestmentSection({
             placeholder="e.g. Bank transfer ref: TXN123456"
           />
 
-          {/* Live balance */}
           {capital > 0 && (
             <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
               <div className="flex justify-between">
@@ -388,18 +378,16 @@ interface Props {
 }
 
 export function NewInvestorForm({ series, cycles }: Props) {
-  const router = useRouter();
-
-  // Investor search / selection state
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FoundInvestor[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedInvestor, setSelectedInvestor] = useState<FoundInvestor | null>(null);
   const [mode, setMode] = useState<"search" | "new">("search");
 
-  // Form state
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successData, setSuccessData] = useState<SuccessData | null>(null);
+  const [createdInvestor, setCreatedInvestor] = useState<SuccessData["investor"] | null>(null);
 
   const investorForm = useForm<NewInvestorData>({
     resolver: zodResolver(newInvestorSchema),
@@ -410,7 +398,6 @@ export function NewInvestorForm({ series, cycles }: Props) {
     defaultValues: { series_id: "", cycle_id: "" },
   });
 
-  // Debounced search
   const search = useCallback(async (q: string) => {
     if (q.length < 3) {
       setSearchResults([]);
@@ -444,18 +431,17 @@ export function NewInvestorForm({ series, cycles }: Props) {
   const handleSubmit = async () => {
     setServerError(null);
 
-    // Validate investment form
     const investmentValid = await investmentForm.trigger();
     if (!investmentValid) return;
 
     const investmentData = investmentForm.getValues();
 
     let investorId: string;
+    let isNewInvestor = false;
 
     if (selectedInvestor) {
       investorId = selectedInvestor.id;
     } else {
-      // Validate new investor form
       const investorValid = await investorForm.trigger();
       if (!investorValid) return;
 
@@ -477,11 +463,17 @@ export function NewInvestorForm({ series, cycles }: Props) {
       }
 
       investorId = json.investor.id;
+      isNewInvestor = true;
+      setCreatedInvestor({
+        id: json.investor.id,
+        full_name: json.investor.full_name,
+        investor_code: json.investor.investor_code,
+        email: json.investor.email,
+      });
     }
 
     setIsSubmitting(true);
 
-    // Create investment
     const invRes = await fetch("/api/admin/investments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -495,6 +487,7 @@ export function NewInvestorForm({ series, cycles }: Props) {
         payment_amount: investmentData.payment_amount || undefined,
         payment_date: investmentData.payment_date || undefined,
         payment_reference: investmentData.payment_reference || undefined,
+        send_onboarding_email: isNewInvestor,
       }),
     });
 
@@ -508,12 +501,68 @@ export function NewInvestorForm({ series, cycles }: Props) {
 
     if (invJson.warning) {
       toast.warning(invJson.warning);
-    } else {
-      toast.success("Investor and investment created successfully!");
     }
 
-    router.push(`/admin/investors/${investorId}`);
+    // Build success data from what we have
+    const inv = invJson.investment;
+    const selectedCycle = cycles.find((c) => c.id === investmentData.cycle_id);
+    const selectedSeries = series.find((s) => s.id === investmentData.series_id);
+
+    const finalInvestorData = selectedInvestor
+      ? {
+          id: selectedInvestor.id,
+          full_name: selectedInvestor.full_name,
+          investor_code: selectedInvestor.investor_code,
+          email: selectedInvestor.email,
+        }
+      : createdInvestor ?? {
+          id: investorId,
+          full_name: investorForm.getValues("full_name"),
+          investor_code: "—",
+          email: investorForm.getValues("email"),
+        };
+
+    const totalPaid =
+      investmentData.payment_amount && investmentData.payment_amount > 0
+        ? investmentData.payment_amount
+        : 0;
+
+    setSuccessData({
+      investor: finalInvestorData,
+      investment: {
+        id: inv.id,
+        investment_code: inv.investment_code,
+        units: investmentData.units,
+        capital: inv.capital,
+        investment_date: investmentData.investment_date,
+        maturity_date: inv.maturity_date,
+      },
+      series_name: selectedSeries?.name ?? "—",
+      cycle_label: selectedCycle?.cycle_label ?? "—",
+      cycle_start: selectedCycle?.start_date ?? "",
+      cycle_end: selectedCycle?.end_date ?? "",
+      total_paid: totalPaid,
+      invitation_status: invJson.invitation_status ?? "not_sent",
+      email_sent: invJson.email_sent ?? false,
+      email_error: invJson.email_error,
+    });
+
+    setIsSubmitting(false);
   };
+
+  const handleAddAnother = () => {
+    setSuccessData(null);
+    setCreatedInvestor(null);
+    setSelectedInvestor(null);
+    setMode("search");
+    setServerError(null);
+    investorForm.reset();
+    investmentForm.reset({ series_id: "", cycle_id: "" });
+  };
+
+  if (successData) {
+    return <SuccessScreen data={successData} onAddAnother={handleAddAnother} />;
+  }
 
   const kycVariant: Record<string, "approved" | "pending" | "rejected"> = {
     approved: "approved",
@@ -535,7 +584,7 @@ export function NewInvestorForm({ series, cycles }: Props) {
         </div>
       </div>
 
-      {/* ─── Step 1: Investor selection ─── */}
+      {/* Step 1: Investor selection */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -544,7 +593,6 @@ export function NewInvestorForm({ series, cycles }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* If an investor is already selected */}
           {selectedInvestor ? (
             <div className="rounded-lg bg-green-50 border border-green-200 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -594,7 +642,6 @@ export function NewInvestorForm({ series, cycles }: Props) {
             </div>
           ) : (
             <>
-              {/* Search */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-foreground">
                   Search existing investor
@@ -615,7 +662,6 @@ export function NewInvestorForm({ series, cycles }: Props) {
                   )}
                 </div>
 
-                {/* Search results */}
                 {searchResults.length > 0 && (
                   <div className="rounded-lg border border-border bg-white shadow-lg overflow-hidden">
                     {searchResults.map((inv) => (
@@ -648,14 +694,12 @@ export function NewInvestorForm({ series, cycles }: Props) {
                   )}
               </div>
 
-              {/* Divider */}
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
                 <span className="text-xs text-muted">or</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
 
-              {/* New investor toggle */}
               <div>
                 <button
                   type="button"
@@ -669,11 +713,11 @@ export function NewInvestorForm({ series, cycles }: Props) {
                 </button>
               </div>
 
-              {/* New investor fields */}
               {mode === "new" && (
                 <div className="space-y-4 pt-2 border-t border-border">
                   <p className="text-xs text-muted">
-                    An invitation email will be sent to the address below.
+                    An invitation email with a secure password-setup link will be
+                    sent to the address below after the investment is created.
                   </p>
                   <Input
                     {...investorForm.register("full_name")}
@@ -708,7 +752,7 @@ export function NewInvestorForm({ series, cycles }: Props) {
         </CardContent>
       </Card>
 
-      {/* ─── Step 2: Investment + Payment ─── */}
+      {/* Step 2: Investment + Payment */}
       {(selectedInvestor || mode === "new") && (
         <InvestmentSection
           series={series}
@@ -741,7 +785,11 @@ export function NewInvestorForm({ series, cycles }: Props) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.back()}
+            onClick={() => {
+              setMode("search");
+              setSelectedInvestor(null);
+              setServerError(null);
+            }}
             disabled={isSubmitting}
           >
             Cancel

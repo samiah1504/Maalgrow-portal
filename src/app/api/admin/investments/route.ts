@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { sendOnboardingEmail } from "@/lib/email";
+import { getPaymentStatus } from "@/lib/investment-utils";
 
 const ADMIN_ROLES = [
   "super_admin",
@@ -9,28 +11,14 @@ const ADMIN_ROLES = [
   "customer_support",
 ];
 
-// Fixed slot value: ₦500,000 per slot
 const SLOT_VALUE_NGN = 500_000;
 
 function validateUnits(units: unknown): units is number {
   if (typeof units !== "number" || isNaN(units)) return false;
   if (units < 0.5) return false;
-  // Must be a multiple of 0.5: units × 2 must be an integer
   return Number.isInteger(Math.round(units * 2));
 }
 
-// POST /api/admin/investments
-// Body: {
-//   investor_id: string,
-//   series_id: string,
-//   cycle_id: string,
-//   units: number,         // slots — decimal, 0.5 increments, min 0.5
-//   investment_date: string,
-//   notes?: string,
-//   payment_amount?: number,
-//   payment_date?: string,
-//   payment_reference?: string,
-// }
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -63,6 +51,7 @@ export async function POST(request: Request) {
       payment_amount,
       payment_date,
       payment_reference,
+      send_onboarding_email,
     } = body as {
       investor_id: string;
       series_id: string;
@@ -73,12 +62,15 @@ export async function POST(request: Request) {
       payment_amount?: number;
       payment_date?: string;
       payment_reference?: string;
+      send_onboarding_email?: boolean;
     };
 
-    // Validate required fields
     if (!investor_id || !series_id || !cycle_id || !investment_date) {
       return NextResponse.json(
-        { error: "investor_id, series_id, cycle_id, and investment_date are required" },
+        {
+          error:
+            "investor_id, series_id, cycle_id, and investment_date are required",
+        },
         { status: 400 }
       );
     }
@@ -105,7 +97,6 @@ export async function POST(request: Request) {
 
     const adminClient = await createAdminClient();
 
-    // Fetch series for name and price_per_unit
     const { data: series, error: seriesErr } = await adminClient
       .from("series")
       .select("id, name")
@@ -116,7 +107,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Series not found" }, { status: 404 });
     }
 
-    // Fetch cycle (for maturity_date and cycle_number)
     const { data: cycle, error: cycleErr } = await adminClient
       .from("cycles")
       .select("id, cycle_number, cycle_label, start_date, end_date, status")
@@ -126,30 +116,31 @@ export async function POST(request: Request) {
 
     if (cycleErr || !cycle) {
       return NextResponse.json(
-        { error: "Cycle not found or does not belong to the selected series" },
+        {
+          error:
+            "Cycle not found or does not belong to the selected series",
+        },
         { status: 404 }
       );
     }
 
-    // Fetch investor (for investor_code used in investment_code generation)
     const { data: investor, error: investorErr } = await adminClient
       .from("investors")
-      .select("id, investor_code, full_name")
+      .select("id, investor_code, full_name, email, profile_id")
       .eq("id", investor_id)
       .single();
 
     if (investorErr || !investor) {
-      return NextResponse.json({ error: "Investor not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Investor not found" },
+        { status: 404 }
+      );
     }
 
-    // capital = units × ₦500,000
     const capitalKobo = Math.round(units * SLOT_VALUE_NGN * 100);
     const capital = capitalKobo / 100;
 
-    // Generate investment code: MG-{series}-{cycle_number_padded}-{investor_code}
     const baseCode = `MG-${series.name}-${String(cycle.cycle_number).padStart(3, "0")}-${investor.investor_code}`;
-
-    // Handle uniqueness: append suffix if collision
     const { count } = await adminClient
       .from("investments")
       .select("id", { count: "exact", head: true })
@@ -158,7 +149,6 @@ export async function POST(request: Request) {
     const investment_code =
       !count || count === 0 ? baseCode : `${baseCode}-${count + 1}`;
 
-    // Insert investment
     const { data: investment, error: investmentError } = await adminClient
       .from("investments")
       .insert({
@@ -186,6 +176,7 @@ export async function POST(request: Request) {
     }
 
     // Record initial payment if provided
+    let paymentWarning: string | undefined;
     if (payment_amount && payment_amount > 0 && payment_date) {
       const { error: paymentError } = await adminClient
         .from("investment_payments")
@@ -199,23 +190,101 @@ export async function POST(request: Request) {
         });
 
       if (paymentError) {
-        // Investment is created; log the payment error but don't roll back
         console.error("[API] investment payment insert error:", paymentError);
-        return NextResponse.json(
-          {
-            investment,
-            warning:
-              "Investment created but initial payment record failed: " +
-              paymentError.message,
-          },
-          { status: 201 }
-        );
+        paymentWarning =
+          "Investment created but initial payment record failed: " +
+          paymentError.message;
       }
     }
 
-    return NextResponse.json({ investment }, { status: 201 });
+    // Send onboarding email when requested (for new investors)
+    let invitationStatus: string | undefined;
+    let emailSent = false;
+    let emailError: string | undefined;
+
+    if (send_onboarding_email) {
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ??
+        "https://maalgrow-portal.vercel.app";
+
+      // Generate a fresh invite link (does not send any email on its own)
+      const { data: linkData, error: linkErr } =
+        await adminClient.auth.admin.generateLink({
+          type: "invite",
+          email: investor.email,
+          options: {
+            data: { full_name: investor.full_name, role: "investor" },
+            redirectTo: `${siteUrl}/investor/dashboard`,
+          },
+        });
+
+      const passwordSetupLink =
+        linkData?.properties?.action_link ?? `${siteUrl}/login`;
+
+      const totalPaid =
+        payment_amount && payment_amount > 0 && !paymentWarning
+          ? payment_amount
+          : 0;
+      const outstandingBalance = Math.max(0, capital - totalPaid);
+      const payStatus = getPaymentStatus(capital, totalPaid);
+
+      if (!linkErr) {
+        const result = await sendOnboardingEmail({
+          to: investor.email,
+          fullName: investor.full_name,
+          investorCode: investor.investor_code,
+          email: investor.email,
+          passwordSetupLink,
+          portalLink: siteUrl,
+          seriesName: series.name,
+          cycleLabel: cycle.cycle_label,
+          slots: units,
+          slotValue: SLOT_VALUE_NGN,
+          totalInvestment: capital,
+          totalPaid,
+          outstandingBalance,
+          paymentStatus: payStatus,
+          paymentDate: payment_date,
+          cycleStart: cycle.start_date,
+          maturityDate: cycle.end_date,
+        });
+
+        emailSent = result.success;
+        emailError = result.error;
+      } else {
+        emailError = linkErr.message;
+      }
+
+      invitationStatus = emailSent ? "sent" : "failed";
+
+      // Update investor's invitation_status
+      await adminClient
+        .from("investors")
+        .update({
+          invitation_status: invitationStatus as "sent" | "failed",
+          ...(emailSent
+            ? { invitation_sent_at: new Date().toISOString() }
+            : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", investor_id);
+    }
+
+    return NextResponse.json(
+      {
+        investment,
+        ...(paymentWarning ? { warning: paymentWarning } : {}),
+        ...(invitationStatus !== undefined
+          ? { invitation_status: invitationStatus, email_sent: emailSent, email_error: emailError }
+          : {}),
+      },
+      { status: 201 }
+    );
   } catch (err) {
     console.error("[API] POST /admin/investments error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
