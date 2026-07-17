@@ -19,35 +19,55 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+// Safely extract a string message from any thrown value.
+// Error.message is non-enumerable so JSON.stringify(error) returns {} —
+// this function reads the property directly instead.
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  if (typeof error === "string") return error;
+  return "";
+}
+
+function mapToUserMessage(raw: string): string {
+  const msg = raw.toLowerCase();
+
+  if (!raw || raw === "{}" || raw === "[]" || raw.trim() === "") {
+    return "Unable to sign in. Please try again or contact support.";
+  }
+  if (msg.includes("invalid login credentials")) {
+    return "The email address or password is incorrect.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Please confirm your email address before signing in.";
+  }
+  if (msg.includes("too many requests") || msg.includes("rate limit")) {
+    return "Too many sign-in attempts. Please wait a few minutes and try again.";
+  }
+  if (msg.includes("profile") || msg.includes("investor")) {
+    return "Your login succeeded, but your investor profile could not be found. Please contact support.";
+  }
+  if (msg.includes("permission") || msg.includes("row-level security") || msg.includes("rls")) {
+    return "Your account does not currently have permission to access the portal.";
+  }
+  // Return raw if it looks like a real readable message; otherwise fallback
+  if (raw.length > 0 && raw !== "{}") return raw;
+  return "Unable to sign in. Please try again or contact support.";
+}
+
 export default function LoginPage() {
   return (
     <Suspense>
       <LoginForm />
     </Suspense>
   );
-}
-
-function mapAuthError(error: { message?: string }): string {
-  const raw = error.message ?? "";
-  const msg = raw.toLowerCase().trim();
-
-  // Empty body or "{}" means the Supabase project is paused or misconfigured
-  if (!msg || msg === "{}" || msg === "[]") {
-    return "Authentication service is temporarily unavailable. If this persists, the database may be paused — please contact support.";
-  }
-  if (msg.includes("invalid login credentials") || msg.includes("invalid email or password") || msg.includes("user not found")) {
-    return "Invalid email or password. Please check your details and try again.";
-  }
-  if (msg.includes("email not confirmed")) {
-    return "Your email address has not been confirmed. Please check your inbox for a confirmation link.";
-  }
-  if (msg.includes("too many requests") || msg.includes("rate limit")) {
-    return "Too many sign-in attempts. Please wait a few minutes and try again.";
-  }
-  if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch") || msg.includes("load failed")) {
-    return "Unable to connect to authentication service. Please check your internet connection and try again.";
-  }
-  return raw || "An unexpected error occurred. Please try again.";
 }
 
 function LoginForm() {
@@ -66,75 +86,122 @@ function LoginForm() {
 
   const onSubmit = async (data: FormData) => {
     setLoginError(null);
-    const supabase = createClient();
 
-    let authError: { message?: string } | null = null;
+    // Stage 0 — env var diagnostic (never prints actual values)
+    console.log("[Login] env check", {
+      hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      hasAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    });
+
+    const supabase = createClient();
+    const email = data.email.trim().toLowerCase();
+
+    // Stage 1 — password authentication
+    let signInData: { user: unknown; session: unknown } | null = null;
+    let signInError: unknown = null;
+
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: data.email.trim().toLowerCase(),
+      const { data: d, error: e } = await supabase.auth.signInWithPassword({
+        email,
         password: data.password,
       });
-      authError = error;
-    } catch {
-      const message = "Unable to connect to authentication service. Please check your internet connection and try again.";
-      setLoginError(message);
-      toast.error(message);
-      return;
-    }
+      signInData = d;
+      signInError = e;
 
-    if (authError) {
-      // Log full error so we can diagnose via browser console
-      console.error("[Login] Auth error:", {
-        name: (authError as { name?: string }).name,
-        message: authError.message,
-        status: (authError as { status?: number }).status,
-        full: authError,
+      console.log("[Login] AUTH RESULT", {
+        hasUser: Boolean(d?.user),
+        hasSession: Boolean(d?.session),
+        errorMessage: getErrorMessage(e),
+        errorStatus: (e as { status?: unknown } | null)?.status,
+        errorCode: (e as { code?: unknown } | null)?.code,
       });
-      const message = mapAuthError(authError);
-      setLoginError(message);
-      toast.error(message);
+    } catch (err: unknown) {
+      console.error("[Login] AUTH FAILURE (thrown)", {
+        name: typeof err === "object" && err !== null && "name" in err ? (err as { name?: unknown }).name : undefined,
+        message: getErrorMessage(err),
+        status: typeof err === "object" && err !== null && "status" in err ? (err as { status?: unknown }).status : undefined,
+        code: typeof err === "object" && err !== null && "code" in err ? (err as { code?: unknown }).code : undefined,
+      });
+      setLoginError("Unable to connect to the authentication service. Please check your internet connection.");
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      const message = "Unable to retrieve account details. Please try again.";
-      setLoginError(message);
-      toast.error(message);
+    if (signInError) {
+      console.error("[Login] AUTH FAILURE (returned error)", {
+        name: typeof signInError === "object" && signInError !== null && "name" in signInError
+          ? (signInError as { name?: unknown }).name : undefined,
+        message: getErrorMessage(signInError),
+        status: typeof signInError === "object" && signInError !== null && "status" in signInError
+          ? (signInError as { status?: unknown }).status : undefined,
+        code: typeof signInError === "object" && signInError !== null && "code" in signInError
+          ? (signInError as { code?: unknown }).code : undefined,
+      });
+      setLoginError(mapToUserMessage(getErrorMessage(signInError)));
       return;
     }
 
+    if (!signInData?.user) {
+      console.error("[Login] AUTH FAILURE: no user in response", { signInData });
+      setLoginError("Sign-in succeeded but no user was returned. Please try again.");
+      return;
+    }
+
+    // Stage 2 — re-fetch authenticated user to confirm session
+    const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+    console.log("[Login] GET USER", {
+      hasUser: Boolean(user),
+      userId: user?.id,
+      error: getErrorMessage(getUserError),
+    });
+
+    if (getUserError || !user) {
+      setLoginError("Session could not be established. Please try again.");
+      return;
+    }
+
+    // Stage 3 — profile lookup
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single();
 
+    console.log("[Login] PROFILE RESULT", {
+      hasProfile: Boolean(profile),
+      role: profile?.role,
+      errorMessage: profileError ? getErrorMessage(profileError) : null,
+      errorCode: profileError?.code,
+    });
+
     if (profileError || !profile) {
-      const message = "Account profile not found. Please contact support at support@maalvest.com.";
-      setLoginError(message);
-      toast.error(message);
+      setLoginError(
+        profileError
+          ? mapToUserMessage(getErrorMessage(profileError))
+          : "Your investor profile could not be found. Please contact support."
+      );
       return;
     }
 
+    // Stage 4 — role check and redirect
     const isAdmin = ["super_admin", "administrator", "finance", "operations", "customer_support"].includes(
       profile.role ?? ""
     );
+    const destination = isAdmin ? "/admin/dashboard" : redirectTo;
+
+    console.log("[Login] REDIRECT", { role: profile.role, isAdmin, destination });
 
     toast.success("Welcome back!");
-    window.location.href = isAdmin ? "/admin/dashboard" : redirectTo;
+    window.location.href = destination;
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-900 via-primary-700 to-primary-800 flex items-center justify-center p-4">
-      {/* Background Pattern */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-white/5 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-gold-500/10 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md animate-slide-up">
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-primary-700 to-primary-800 px-8 pt-8 pb-6 text-center">
@@ -200,7 +267,7 @@ function LoginForm() {
                 </div>
               </div>
 
-              {/* Inline error — visible even if toast is hidden */}
+              {/* Single error location — inline, always visible */}
               {loginError && (
                 <div className="rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
@@ -218,7 +285,6 @@ function LoginForm() {
               </Button>
             </form>
 
-            {/* Security Notice */}
             <div className="mt-6 rounded-lg bg-primary-50 border border-primary-100 p-3">
               <div className="flex items-start gap-2">
                 <Lock className="h-4 w-4 text-primary-600 mt-0.5 flex-shrink-0" />
@@ -233,7 +299,6 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-xs text-white/50 mt-6">
           © {new Date().getFullYear()} MaalVest Investment Limited · All rights reserved
         </p>
