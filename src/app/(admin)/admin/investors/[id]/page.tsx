@@ -1,11 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, TrendingUp, DollarSign, User, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  TrendingUp,
+  DollarSign,
+  User,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Building2,
+  CreditCard,
+  ShieldCheck,
+} from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
+import { InvestorActions } from "./_components/investor-actions";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investor Detail | Admin" };
@@ -16,8 +28,20 @@ type InvestorFull = {
   investor_code: string;
   email: string;
   phone: string | null;
+  address: string | null;
+  bank_name: string | null;
+  account_name: string | null;
+  account_number: string | null;
+  bvn: string | null;
+  nin: string | null;
   kyc_status: string;
+  kyc_notes: string | null;
   created_at: string;
+  profile: {
+    id: string;
+    email: string;
+    is_active: boolean;
+  } | null;
   investments: {
     id: string;
     investment_code: string;
@@ -44,14 +68,21 @@ export default async function AdminInvestorDetailPage({
 }) {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { id } = await params;
 
   const { data: rawInvestor } = await supabase
     .from("investors")
-    .select("*, investments(*, series(*), cycle:cycles(*)), payment_requests(*)")
+    .select(`
+      *,
+      profile:profiles(id, email, is_active),
+      investments(*, series(*), cycle:cycles(*)),
+      payment_requests(*)
+    `)
     .eq("id", id)
     .single();
 
@@ -63,7 +94,11 @@ export default async function AdminInvestorDetailPage({
   const totalROIPaid = investor.payment_requests
     .filter((p) => p.type === "roi" && p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
-  const activeCount = investor.investments.filter((i) => i.status === "active").length;
+  const activeCount = investor.investments.filter(
+    (i) => i.status === "active"
+  ).length;
+
+  const isActive = investor.profile?.is_active !== false;
 
   const kycVariant: Record<string, "approved" | "pending" | "rejected"> = {
     approved: "approved",
@@ -71,7 +106,10 @@ export default async function AdminInvestorDetailPage({
     rejected: "rejected",
   };
 
-  const statusVariant: Record<string, "active" | "matured" | "completed" | "pending"> = {
+  const statusVariant: Record<
+    string,
+    "active" | "matured" | "completed" | "pending"
+  > = {
     active: "active",
     matured: "matured",
     completed: "completed",
@@ -90,14 +128,16 @@ export default async function AdminInvestorDetailPage({
       </div>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-100 text-primary-700 text-xl font-bold">
-            {investor.full_name.charAt(0)}
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-100 text-primary-700 text-xl font-bold flex-shrink-0">
+            {investor.full_name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-foreground">{investor.full_name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">
+                {investor.full_name}
+              </h1>
               <Badge variant={kycVariant[investor.kyc_status] ?? "pending"}>
                 {investor.kyc_status === "approved" ? (
                   <CheckCircle2 className="h-3 w-3" />
@@ -106,50 +146,101 @@ export default async function AdminInvestorDetailPage({
                 ) : (
                   <Clock className="h-3 w-3" />
                 )}
-                KYC {investor.kyc_status.charAt(0).toUpperCase() + investor.kyc_status.slice(1)}
+                KYC{" "}
+                {investor.kyc_status.charAt(0).toUpperCase() +
+                  investor.kyc_status.slice(1)}
               </Badge>
+              {!isActive && (
+                <Badge variant="rejected" dot>
+                  Inactive
+                </Badge>
+              )}
             </div>
-            <p className="text-sm font-mono text-muted mt-0.5">{investor.investor_code}</p>
+            <p className="text-sm font-mono text-muted mt-0.5">
+              {investor.investor_code}
+            </p>
           </div>
         </div>
+
+        {/* Action buttons */}
+        <InvestorActions
+          investorId={investor.id}
+          investorName={investor.full_name}
+          investorEmail={investor.profile?.email ?? investor.email}
+          isActive={isActive}
+        />
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Capital" value={formatCurrency(totalCapital)} accentColor="primary" icon={<DollarSign className="h-5 w-5" />} />
-        <StatCard title="ROI Received" value={formatCurrency(totalROIPaid)} accentColor="gold" icon={<TrendingUp className="h-5 w-5" />} />
-        <StatCard title="Active Investments" value={String(activeCount)} accentColor="success" icon={<TrendingUp className="h-5 w-5" />} />
+        <StatCard
+          title="Total Capital"
+          value={formatCurrency(totalCapital)}
+          accentColor="primary"
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+        <StatCard
+          title="ROI Received"
+          value={formatCurrency(totalROIPaid)}
+          accentColor="gold"
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <StatCard
+          title="Active Investments"
+          value={String(activeCount)}
+          accentColor="success"
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Investments */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Investments ({investor.investments.length})</CardTitle>
+              <CardTitle className="text-sm">
+                Investments ({investor.investments.length})
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {investor.investments.length === 0 ? (
-                <p className="px-6 py-8 text-center text-sm text-muted">No investments yet</p>
+                <p className="px-6 py-8 text-center text-sm text-muted">
+                  No investments yet
+                </p>
               ) : (
                 <div className="divide-y divide-border">
                   {investor.investments.map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between px-6 py-3">
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between px-6 py-3"
+                    >
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-xs font-mono text-muted">{inv.investment_code}</span>
-                          <Badge variant={statusVariant[inv.status] ?? "pending"} dot>
-                            {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                          <span className="text-xs font-mono text-muted">
+                            {inv.investment_code}
+                          </span>
+                          <Badge
+                            variant={statusVariant[inv.status] ?? "pending"}
+                            dot
+                          >
+                            {inv.status.charAt(0).toUpperCase() +
+                              inv.status.slice(1)}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted">
                           Series {inv.series?.name} · {inv.cycle?.cycle_label}
                         </p>
-                        <p className="text-xs text-muted">Matures {formatDate(inv.maturity_date)}</p>
+                        <p className="text-xs text-muted">
+                          Matures {formatDate(inv.maturity_date)}
+                        </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-foreground">{formatCurrency(inv.capital)}</p>
-                        <p className="text-xs text-gold-600">+{formatCurrency(inv.expected_roi)} ROI</p>
+                        <p className="font-bold text-foreground">
+                          {formatCurrency(inv.capital)}
+                        </p>
+                        <p className="text-xs text-gold-600">
+                          +{formatCurrency(inv.expected_roi)} ROI
+                        </p>
                         <Link
                           href={`/admin/investments/${inv.id}`}
                           className="text-xs text-primary-600 hover:underline"
@@ -163,10 +254,64 @@ export default async function AdminInvestorDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {/* Full payment history */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">
+                Payment History ({investor.payment_requests.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {investor.payment_requests.length === 0 ? (
+                <p className="px-6 py-8 text-center text-sm text-muted">
+                  No payments yet
+                </p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {investor.payment_requests.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between px-6 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
+                            p.type === "roi"
+                              ? "bg-gold-100 text-gold-700"
+                              : "bg-primary-100 text-primary-700"
+                          }`}
+                        >
+                          {p.type === "roi" ? "ROI" : "CAP"}
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-foreground capitalize">
+                            {p.type === "roi" ? "ROI Payment" : "Capital Return"}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {formatDate(p.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold">
+                          {formatCurrency(p.amount)}
+                        </p>
+                        <p className="text-xs text-muted capitalize">
+                          {p.status}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Profile */}
+        {/* Sidebar */}
         <div className="space-y-4">
+          {/* Profile card */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm flex items-center gap-2">
@@ -176,7 +321,9 @@ export default async function AdminInvestorDetailPage({
             <CardContent className="space-y-3 text-sm">
               <div>
                 <p className="text-xs text-muted">Email</p>
-                <p className="font-medium text-foreground">{investor.email}</p>
+                <p className="font-medium text-foreground break-all">
+                  {investor.profile?.email ?? investor.email}
+                </p>
               </div>
               {investor.phone && (
                 <div>
@@ -184,49 +331,111 @@ export default async function AdminInvestorDetailPage({
                   <p className="font-medium text-foreground">{investor.phone}</p>
                 </div>
               )}
+              {investor.address && (
+                <div>
+                  <p className="text-xs text-muted">Address</p>
+                  <p className="font-medium text-foreground">
+                    {investor.address}
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-muted">Member Since</p>
-                <p className="font-medium text-foreground">{formatDate(investor.created_at)}</p>
+                <p className="font-medium text-foreground">
+                  {formatDate(investor.created_at)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">Account Status</p>
+                <Badge variant={isActive ? "approved" : "rejected"} dot>
+                  {isActive ? "Active" : "Inactive"}
+                </Badge>
               </div>
               <div>
                 <p className="text-xs text-muted">KYC Status</p>
                 <Badge variant={kycVariant[investor.kyc_status] ?? "pending"}>
-                  {investor.kyc_status.charAt(0).toUpperCase() + investor.kyc_status.slice(1)}
+                  {investor.kyc_status.charAt(0).toUpperCase() +
+                    investor.kyc_status.slice(1)}
                 </Badge>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Payments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Recent Payments</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {investor.payment_requests.length === 0 ? (
-                <p className="px-4 py-6 text-center text-xs text-muted">No payments yet</p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {investor.payment_requests.slice(0, 5).map((p) => (
-                    <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
-                      <div>
-                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
-                          p.type === "roi" ? "bg-gold-100 text-gold-700" : "bg-primary-100 text-primary-700"
-                        }`}>
-                          {p.type === "roi" ? "R" : "C"}
-                        </span>
-                        <span className="ml-2 text-xs text-muted">{formatDate(p.created_at)}</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">{formatCurrency(p.amount)}</p>
-                        <p className="text-xs text-muted capitalize">{p.status}</p>
-                      </div>
-                    </div>
-                  ))}
+              {investor.kyc_notes && (
+                <div>
+                  <p className="text-xs text-muted">KYC Notes</p>
+                  <p className="text-xs text-foreground mt-0.5">
+                    {investor.kyc_notes}
+                  </p>
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Bank details */}
+          {(investor.bank_name ||
+            investor.account_name ||
+            investor.account_number) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Building2 className="h-4 w-4" /> Bank Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {investor.bank_name && (
+                  <div>
+                    <p className="text-xs text-muted">Bank</p>
+                    <p className="font-medium text-foreground">
+                      {investor.bank_name}
+                    </p>
+                  </div>
+                )}
+                {investor.account_name && (
+                  <div>
+                    <p className="text-xs text-muted">Account Name</p>
+                    <p className="font-medium text-foreground">
+                      {investor.account_name}
+                    </p>
+                  </div>
+                )}
+                {investor.account_number && (
+                  <div>
+                    <p className="text-xs text-muted">Account Number</p>
+                    <p className="font-mono font-medium text-foreground">
+                      {investor.account_number}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Identity */}
+          {(investor.bvn || investor.nin) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" /> Identity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {investor.bvn && (
+                  <div>
+                    <p className="text-xs text-muted">BVN</p>
+                    <p className="font-mono font-medium text-foreground">
+                      ••••••••{investor.bvn.slice(-3)}
+                    </p>
+                  </div>
+                )}
+                {investor.nin && (
+                  <div>
+                    <p className="text-xs text-muted">NIN</p>
+                    <p className="font-mono font-medium text-foreground">
+                      ••••••••{investor.nin.slice(-3)}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
