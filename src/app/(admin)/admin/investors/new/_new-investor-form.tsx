@@ -438,6 +438,7 @@ export function NewInvestorForm({ series, cycles }: Props) {
 
     let investorId: string;
     let isNewInvestor = false;
+    let newInvestorData: SuccessData["investor"] | null = null;
 
     if (selectedInvestor) {
       investorId = selectedInvestor.id;
@@ -464,12 +465,13 @@ export function NewInvestorForm({ series, cycles }: Props) {
 
       investorId = json.investor.id;
       isNewInvestor = true;
-      setCreatedInvestor({
+      newInvestorData = {
         id: json.investor.id,
         full_name: json.investor.full_name,
         investor_code: json.investor.investor_code,
         email: json.investor.email,
-      });
+      };
+      setCreatedInvestor(newInvestorData);
     }
 
     setIsSubmitting(true);
@@ -515,7 +517,7 @@ export function NewInvestorForm({ series, cycles }: Props) {
           investor_code: selectedInvestor.investor_code,
           email: selectedInvestor.email,
         }
-      : createdInvestor ?? {
+      : newInvestorData ?? {
           id: investorId,
           full_name: investorForm.getValues("full_name"),
           investor_code: "—",
