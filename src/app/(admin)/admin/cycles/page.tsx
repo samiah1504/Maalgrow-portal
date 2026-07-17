@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { RefreshCw, TrendingUp, Calendar, AlertCircle } from "lucide-react";
+import { RefreshCw, TrendingUp, Calendar, AlertCircle, Plus, Pencil } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,19 +22,29 @@ type CycleRow = {
 };
 
 const STATUS_VARIANT: Record<string, "active" | "completed" | "pending" | "warning"> = {
+  draft: "pending",
+  subscription_open: "active",
+  subscription_closed: "pending",
+  upcoming: "pending",
   active: "active",
+  maturity_window: "warning",
   awaiting_profit_declaration: "warning",
   completed: "completed",
   matured: "completed",
-  upcoming: "pending",
+  cancelled: "completed",
 };
 
 const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  subscription_open: "Subscription Open",
+  subscription_closed: "Subscription Closed",
+  upcoming: "Upcoming",
   active: "Active",
+  maturity_window: "Maturity Window",
   awaiting_profit_declaration: "Awaiting Profit Declaration",
   completed: "Completed",
   matured: "Matured",
-  upcoming: "Upcoming",
+  cancelled: "Cancelled",
 };
 
 export default async function AdminCyclesPage() {
@@ -52,25 +62,30 @@ export default async function AdminCyclesPage() {
 
   const cycles = rawCycles as unknown as CycleRow[] | null;
 
-  const activeCycles =
-    cycles?.filter((c) => c.status === "active" || c.status === "upcoming") ?? [];
+  const LIVE_STATUSES = new Set(["draft", "subscription_open", "subscription_closed", "upcoming", "active", "maturity_window"]);
+  const activeCycles = cycles?.filter((c) => LIVE_STATUSES.has(c.status)) ?? [];
   const awaitingDeclaration =
     cycles?.filter((c) => c.status === "awaiting_profit_declaration") ?? [];
   const closedCycles =
     cycles?.filter(
-      (c) =>
-        c.status !== "active" &&
-        c.status !== "upcoming" &&
-        c.status !== "awaiting_profit_declaration"
+      (c) => !LIVE_STATUSES.has(c.status) && c.status !== "awaiting_profit_declaration"
     ) ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Cycles</h1>
-        <p className="text-sm text-muted mt-1">
-          3-month Mudārabah investment cycles per series
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Cycles</h1>
+          <p className="text-sm text-muted mt-1">
+            3-month Mudārabah investment cycles per series
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link href="/admin/cycles/new" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Create Cycle
+          </Link>
+        </Button>
       </div>
 
       {/* Awaiting Profit Declaration — urgent alert */}
@@ -135,6 +150,7 @@ export default async function AdminCyclesPage() {
                         Total Capital
                       </th>
                       <th className="px-4 py-3 text-center font-medium text-muted">Status</th>
+                      <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -175,6 +191,14 @@ export default async function AdminCyclesPage() {
                               {STATUS_LABEL[cycle.status] ?? cycle.status}
                             </Badge>
                           </td>
+                          <td className="px-4 py-3 text-right">
+                            <Link
+                              href={`/admin/cycles/${cycle.id}/edit`}
+                              className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
+                            >
+                              <Pencil className="h-3 w-3" /> Edit
+                            </Link>
+                          </td>
                         </tr>
                       );
                     })}
@@ -191,9 +215,15 @@ export default async function AdminCyclesPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <RefreshCw className="h-12 w-12 text-border mb-4" />
             <p className="font-medium text-foreground">No cycles yet</p>
-            <p className="text-sm text-muted mt-1">
-              Cycles are created automatically when series are set up.
+            <p className="text-sm text-muted mt-1 mb-4">
+              Create your first cycle using the button above.
             </p>
+            <Button asChild size="sm">
+              <Link href="/admin/cycles/new" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create Cycle
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       ) : null}
@@ -258,6 +288,12 @@ function CycleCard({ cycle }: { cycle: CycleRow }) {
             </Link>
           </Button>
         )}
+        <Button asChild size="sm" variant="outline" className="w-full">
+          <Link href={`/admin/cycles/${cycle.id}/edit`} className="flex items-center gap-1.5">
+            <Pencil className="h-3.5 w-3.5" />
+            Edit Cycle
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   );

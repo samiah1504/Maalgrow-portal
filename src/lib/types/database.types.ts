@@ -147,7 +147,11 @@ export type Database = {
           cycle_label: string;
           start_date: string;
           end_date: string;
-          status: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
+          status: "draft" | "subscription_open" | "subscription_closed" | "upcoming" | "active" | "maturity_window" | "awaiting_profit_declaration" | "matured" | "completed" | "cancelled";
+          subscription_open_date: string | null;
+          subscription_close_date: string | null;
+          unit_value: number | null;
+          notes: string | null;
           total_capital: number;
           total_investors: number;
           maturity_processed_at: string | null;
@@ -161,7 +165,11 @@ export type Database = {
           cycle_label: string;
           start_date: string;
           end_date: string;
-          status?: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
+          status?: "draft" | "subscription_open" | "subscription_closed" | "upcoming" | "active" | "maturity_window" | "awaiting_profit_declaration" | "matured" | "completed" | "cancelled";
+          subscription_open_date?: string | null;
+          subscription_close_date?: string | null;
+          unit_value?: number | null;
+          notes?: string | null;
           total_capital?: number;
           total_investors?: number;
           maturity_processed_at?: string | null;
@@ -172,7 +180,11 @@ export type Database = {
           cycle_label?: string;
           start_date?: string;
           end_date?: string;
-          status?: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
+          status?: "draft" | "subscription_open" | "subscription_closed" | "upcoming" | "active" | "maturity_window" | "awaiting_profit_declaration" | "matured" | "completed" | "cancelled";
+          subscription_open_date?: string | null;
+          subscription_close_date?: string | null;
+          unit_value?: number | null;
+          notes?: string | null;
           total_capital?: number;
           total_investors?: number;
           maturity_processed_at?: string | null;
@@ -443,6 +455,28 @@ export type Database = {
           profit_per_slot?: number;
           total_slots?: number;
           notes?: string | null;
+        };
+        Relationships: [];
+      };
+      cycle_audit_log: {
+        Row: {
+          id: string;
+          cycle_id: string;
+          changed_by: string | null;
+          changed_at: string;
+          action: string;
+          changes: Json;
+        };
+        Insert: {
+          id?: string;
+          cycle_id: string;
+          changed_by?: string | null;
+          changed_at?: string;
+          action: string;
+          changes?: Json;
+        };
+        Update: {
+          [key: string]: never;
         };
         Relationships: [];
       };
