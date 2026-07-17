@@ -12,6 +12,7 @@ export type Notification = Database["public"]["Tables"]["notifications"]["Row"];
 export type Document = Database["public"]["Tables"]["documents"]["Row"];
 export type AuditLog = Database["public"]["Tables"]["audit_logs"]["Row"];
 export type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
+export type CycleProfitDeclaration = Database["public"]["Tables"]["cycle_profit_declarations"]["Row"];
 
 export type UserRole =
   | "super_admin"
@@ -25,7 +26,7 @@ export type InvestmentStatus = "active" | "matured" | "completed";
 export type PaymentStatus = "pending" | "approved" | "processing" | "paid" | "rejected";
 export type KycStatus = "pending" | "approved" | "rejected";
 export type SeriesName = "A" | "B" | "C";
-export type CycleStatus = "upcoming" | "active" | "matured" | "completed";
+export type CycleStatus = "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
 export type PaymentType = "roi" | "capital";
 export type NotificationType =
   | "investment"
@@ -51,7 +52,7 @@ export interface InvestorWithProfile extends Investor {
   profile?: Profile;
   active_investments_count?: number;
   total_capital?: number;
-  total_roi_received?: number;
+  total_profit_received?: number;
 }
 
 export interface PaymentRequestWithDetails extends PaymentRequest {
@@ -71,7 +72,7 @@ export interface CycleWithSeries extends Cycle {
 // Dashboard stats
 export interface InvestorDashboardStats {
   total_active_capital: number;
-  total_roi_received: number;
+  total_profit_received: number;
   total_capital_returned: number;
   active_investments: number;
   upcoming_maturities: number;
@@ -79,7 +80,7 @@ export interface InvestorDashboardStats {
     series: SeriesName;
     status: "active" | "inactive";
     capital: number;
-    roi: number;
+    declared_profit: number | null;
   }[];
 }
 
@@ -87,10 +88,11 @@ export interface AdminDashboardStats {
   total_investors: number;
   total_active_investments: number;
   total_capital_under_management: number;
-  total_roi_paid: number;
+  total_profit_paid: number;
   pending_payment_requests: number;
   maturing_this_month: number;
   new_investors_this_month: number;
+  cycles_awaiting_declaration: number;
   series_stats: {
     series: SeriesName;
     active_investors: number;

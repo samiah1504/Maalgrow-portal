@@ -5,11 +5,8 @@ import {
   ArrowLeft,
   Calendar,
   DollarSign,
-  TrendingUp,
   User,
   FileText,
-  CheckCircle2,
-  AlertCircle,
   RefreshCw,
 } from "lucide-react";
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
@@ -24,14 +21,14 @@ type InvestmentFull = {
   investment_code: string;
   status: string;
   capital: number;
-  expected_roi: number;
+  declared_profit: number | null;
   units: number;
   investment_date: string;
   maturity_date: string;
   notes: string | null;
   created_at: string;
   investor: { id: string; full_name: string; investor_code: string; email: string; phone: string } | null;
-  series: { name: string; roi_rate: number } | null;
+  series: { name: string } | null;
   cycle: { cycle_label: string; start_date: string; end_date: string } | null;
   payment_requests: {
     id: string;
@@ -138,18 +135,16 @@ export default async function AdminInvestmentDetailPage({
                   <p className="text-xl font-bold text-foreground mt-1">{formatCurrency(inv.capital)}</p>
                 </div>
                 <div className="rounded-xl bg-surface-2 p-4">
-                  <p className="text-xs text-muted uppercase tracking-wide">Expected ROI</p>
-                  <p className="text-xl font-bold text-gold-600 mt-1">{formatCurrency(inv.expected_roi)}</p>
+                  <p className="text-xs text-muted uppercase tracking-wide">Declared Profit</p>
+                  {inv.declared_profit != null ? (
+                    <p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(inv.declared_profit)}</p>
+                  ) : (
+                    <p className="text-sm text-muted mt-1">Not yet declared</p>
+                  )}
                 </div>
                 <div className="rounded-xl bg-surface-2 p-4">
                   <p className="text-xs text-muted uppercase tracking-wide">Units</p>
                   <p className="text-xl font-bold text-foreground mt-1">{inv.units}</p>
-                </div>
-                <div className="rounded-xl bg-surface-2 p-4">
-                  <p className="text-xs text-muted uppercase tracking-wide">ROI Rate</p>
-                  <p className="text-xl font-bold text-foreground mt-1">
-                    {((inv.series?.roi_rate ?? 0) * 100).toFixed(1)}%
-                  </p>
                 </div>
                 <div className="rounded-xl bg-surface-2 p-4">
                   <p className="text-xs text-muted uppercase tracking-wide flex items-center gap-1">
@@ -192,9 +187,9 @@ export default async function AdminInvestmentDetailPage({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
-                            pr.type === "roi" ? "bg-gold-100 text-gold-700" : "bg-primary-100 text-primary-700"
+                            pr.type === "roi" ? "bg-emerald-100 text-emerald-700" : "bg-primary-100 text-primary-700"
                           }`}>
-                            {pr.type === "roi" ? "R" : "C"}
+                            {pr.type === "roi" ? "P" : "C"}
                           </span>
                           <span className="text-xs font-mono text-muted">{pr.request_code}</span>
                           <Badge variant={paymentStatusVariant[pr.status] ?? "pending"}>

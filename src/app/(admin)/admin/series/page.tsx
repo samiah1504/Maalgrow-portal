@@ -29,7 +29,7 @@ export default async function SeriesPage() {
     id: string;
     name: "A" | "B" | "C";
     description: string | null;
-    roi_rate: number;
+    mudarabah_investor_ratio: number;
     price_per_unit: number;
     is_active: boolean;
     cycles: CycleRow[];
@@ -105,9 +105,9 @@ export default async function SeriesPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className={`rounded-lg ${seriesColors.light} ${seriesColors.border} border p-3 text-center`}>
                     <p className={`text-lg font-bold ${seriesColors.text}`}>
-                      {(s.roi_rate * 100).toFixed(0)}%
+                      {(s.mudarabah_investor_ratio * 100).toFixed(0)}%
                     </p>
-                    <p className="text-xs text-muted mt-0.5">ROI per cycle</p>
+                    <p className="text-xs text-muted mt-0.5">investor ratio</p>
                   </div>
                   <div className={`rounded-lg ${seriesColors.light} ${seriesColors.border} border p-3 text-center`}>
                     <p className={`text-lg font-bold ${seriesColors.text}`}>

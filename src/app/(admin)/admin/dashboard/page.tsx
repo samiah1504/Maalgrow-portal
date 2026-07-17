@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Activity,
   Layers,
+  AlertCircle,
 } from "lucide-react";
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
 import { StatCard } from "@/components/ui/stat-card";
@@ -23,10 +24,11 @@ export const metadata: Metadata = { title: "Admin Dashboard" };
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Stats
   type InvestmentRow = {
     id: string;
     investment_code: string;
@@ -51,10 +53,11 @@ export default async function AdminDashboardPage() {
     { count: activeInvestments },
     { count: pendingPayments },
     { data: capitalDataRaw },
-    { data: roiDataRaw },
+    { data: profitDataRaw },
     { data: recentInvestmentsRaw },
     { data: maturingInvestmentsRaw },
     { data: pendingPaymentRequestsRaw },
+    { data: awaitingDeclarationRaw },
   ] = await Promise.all([
     supabase.from("investors").select("*", { count: "exact", head: true }),
     supabase.from("investments").select("*", { count: "exact", head: true }).eq("status", "active"),
@@ -63,58 +66,77 @@ export default async function AdminDashboardPage() {
     supabase.from("payment_requests").select("amount").eq("type", "roi").eq("status", "paid"),
     supabase
       .from("investments")
-      .select("*, investor:investors(full_name, investor_code), series(*), cycle:cycles(cycle_label)")
+      .select("*, investor:investors(full_name, investor_code), series(name), cycle:cycles(cycle_label)")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(5),
     supabase
       .from("investments")
-      .select("*, investor:investors(full_name, investor_code), series(*), cycle:cycles(cycle_label, end_date)")
+      .select(
+        "*, investor:investors(full_name, investor_code), series(name), cycle:cycles(cycle_label, end_date)"
+      )
       .eq("status", "active")
-      .lte("maturity_date", new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+      .lte(
+        "maturity_date",
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+      )
       .order("maturity_date", { ascending: true }),
     supabase
       .from("payment_requests")
-      .select("*, investor:investors(full_name, investor_code), investment:investments(investment_code, series:series(name))")
+      .select(
+        "*, investor:investors(full_name, investor_code), investment:investments(investment_code, series:series(name))"
+      )
       .eq("status", "pending")
       .order("created_at", { ascending: true })
       .limit(5),
+    supabase
+      .from("cycles")
+      .select("id, cycle_label, series(name)")
+      .eq("status", "awaiting_profit_declaration"),
   ]);
 
   const capitalData = capitalDataRaw as { capital: number }[] | null;
-  const roiData = roiDataRaw as { amount: number }[] | null;
+  const profitData = profitDataRaw as { amount: number }[] | null;
   const recentInvestments = recentInvestmentsRaw as InvestmentRow[] | null;
   const maturingInvestments = maturingInvestmentsRaw as InvestmentRow[] | null;
   const pendingPaymentRequests = pendingPaymentRequestsRaw as PaymentRow[] | null;
+  const awaitingDeclaration = awaitingDeclarationRaw as {
+    id: string;
+    cycle_label: string;
+    series: { name: string } | null;
+  }[] | null;
+
   const totalCapitalAUM = capitalData?.reduce((s, i) => s + (i.capital || 0), 0) ?? 0;
-  const totalROIPaid = roiData?.reduce((s, p) => s + (p.amount || 0), 0) ?? 0;
+  const totalProfitPaid = profitData?.reduce((s, p) => s + (p.amount || 0), 0) ?? 0;
 
   type SeriesWithCycles = {
     name: string;
-    roi_rate: number;
     cycles: { status: string; cycle_label: string; investments: { capital: number }[] }[];
   };
 
-  // Series stats
   const { data: seriesDataRaw } = await supabase
     .from("series")
-    .select("*, cycles(*, investments(capital))")
+    .select("name, cycles(status, cycle_label, investments(capital))")
     .eq("is_active", true);
 
   const seriesData = seriesDataRaw as SeriesWithCycles[] | null;
 
-  const seriesStats = seriesData?.map((s) => {
-    const activeCycle = s.cycles?.find((c) => c.status === "active");
-    const totalCap = activeCycle?.investments?.reduce((sum: number, i: { capital: number }) => sum + (i.capital || 0), 0) ?? 0;
-    const investorCount = activeCycle?.investments?.length ?? 0;
-    return {
-      name: s.name,
-      cycleLabel: activeCycle?.cycle_label ?? "No active cycle",
-      totalCapital: totalCap,
-      investors: investorCount,
-      roi_rate: s.roi_rate,
-    };
-  }) ?? [];
+  const seriesStats =
+    seriesData?.map((s) => {
+      const activeCycle = s.cycles?.find((c) => c.status === "active");
+      const totalCap =
+        activeCycle?.investments?.reduce(
+          (sum: number, i: { capital: number }) => sum + (i.capital || 0),
+          0
+        ) ?? 0;
+      const investorCount = activeCycle?.investments?.length ?? 0;
+      return {
+        name: s.name,
+        cycleLabel: activeCycle?.cycle_label ?? "No active cycle",
+        totalCapital: totalCap,
+        investors: investorCount,
+      };
+    }) ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -123,7 +145,37 @@ export default async function AdminDashboardPage() {
         <p className="text-sm text-muted mt-1">MaalGrow platform overview</p>
       </div>
 
-      {/* Alerts */}
+      {/* Awaiting Profit Declaration Alert */}
+      {awaitingDeclaration && awaitingDeclaration.length > 0 && (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900 text-sm">
+                Cycle Matured — Profit Declaration Required
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                The following cycle{awaitingDeclaration.length > 1 ? "s have" : " has"} reached
+                maturity. Please enter the final profit before investor reports can be generated.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {awaitingDeclaration.map((cycle) => (
+                  <Link
+                    key={cycle.id}
+                    href={`/admin/cycles/${cycle.id}/declare-profit`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
+                  >
+                    Declare Profit — {cycle.cycle_label}
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending payments alert */}
       {(pendingPayments ?? 0) > 0 && (
         <Link
           href="/admin/payment-requests"
@@ -132,7 +184,8 @@ export default async function AdminDashboardPage() {
           <AlertTriangle className="h-5 w-5 text-gold-600 flex-shrink-0" />
           <div className="flex-1">
             <p className="font-semibold text-gold-800">
-              {pendingPayments} payment request{Number(pendingPayments) !== 1 ? "s" : ""} pending approval
+              {pendingPayments} payment request{Number(pendingPayments) !== 1 ? "s" : ""} pending
+              approval
             </p>
             <p className="text-sm text-gold-600 mt-0.5">
               Review and approve investor payment requests
@@ -146,7 +199,7 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Total Investors"
-          value={formatCurrency(totalInvestors ?? 0).replace(/[^0-9]/g, "") === "0" ? "0" : String(totalInvestors)}
+          value={String(totalInvestors ?? 0)}
           subtitle="Registered investors"
           accentColor="primary"
           icon={<Users className="h-5 w-5" />}
@@ -166,8 +219,8 @@ export default async function AdminDashboardPage() {
           icon={<DollarSign className="h-5 w-5" />}
         />
         <StatCard
-          title="Total ROI Paid"
-          value={formatCurrency(totalROIPaid)}
+          title="Total Profit Paid"
+          value={formatCurrency(totalProfitPaid)}
           subtitle="Lifetime disbursements"
           accentColor="info"
           icon={<CreditCard className="h-5 w-5" />}
@@ -188,10 +241,15 @@ export default async function AdminDashboardPage() {
               <div key={s.name} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
-                      s.name === "A" ? "bg-primary-100 text-primary-700" :
-                      s.name === "B" ? "bg-gold-100 text-gold-700" : "bg-blue-100 text-blue-700"
-                    }`}>
+                    <div
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
+                        s.name === "A"
+                          ? "bg-primary-100 text-primary-700"
+                          : s.name === "B"
+                          ? "bg-gold-100 text-gold-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
                       {s.name}
                     </div>
                     <div>
@@ -199,7 +257,9 @@ export default async function AdminDashboardPage() {
                       <p className="text-[10px] text-muted">{s.cycleLabel}</p>
                     </div>
                   </div>
-                  <Badge variant="active" dot className="text-[10px]">Active</Badge>
+                  <Badge variant="active" dot className="text-[10px]">
+                    Active
+                  </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
@@ -213,7 +273,10 @@ export default async function AdminDashboardPage() {
                 </div>
               </div>
             ))}
-            <Link href="/admin/series" className="flex items-center justify-center gap-1 text-xs text-primary-600 font-medium hover:underline">
+            <Link
+              href="/admin/series"
+              className="flex items-center justify-center gap-1 text-xs text-primary-600 font-medium hover:underline"
+            >
               Manage series <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </CardContent>
@@ -245,7 +308,9 @@ export default async function AdminDashboardPage() {
                       <p className="text-xs font-semibold text-foreground">
                         {req.investor?.full_name}
                       </p>
-                      <p className="text-[10px] text-muted capitalize">{req.type} payment</p>
+                      <p className="text-[10px] text-muted capitalize">
+                        {req.type === "roi" ? "Profit" : req.type} payment
+                      </p>
                     </div>
                     <p className="text-sm font-bold text-foreground">{formatCurrency(req.amount)}</p>
                   </Link>
@@ -276,7 +341,10 @@ export default async function AdminDashboardPage() {
                 {maturingInvestments.slice(0, 5).map((inv) => {
                   const days = getDaysUntilMaturity(inv.maturity_date);
                   return (
-                    <div key={inv.id} className="flex items-center justify-between rounded-lg border border-border p-2.5">
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between rounded-lg border border-border p-2.5"
+                    >
                       <div>
                         <p className="text-xs font-semibold text-foreground">
                           {inv.investor?.full_name}
@@ -286,7 +354,11 @@ export default async function AdminDashboardPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className={`text-xs font-bold ${days <= 7 ? "text-gold-600" : "text-foreground"}`}>
+                        <p
+                          className={`text-xs font-bold ${
+                            days <= 7 ? "text-gold-600" : "text-foreground"
+                          }`}
+                        >
                           {days}d
                         </p>
                         <p className="text-[10px] text-muted">{formatDate(inv.maturity_date)}</p>
@@ -313,7 +385,10 @@ export default async function AdminDashboardPage() {
               <Activity className="h-4 w-4 text-primary-600" />
               Recent Investments
             </CardTitle>
-            <Link href="/admin/investments" className="text-xs text-primary-600 hover:underline flex items-center gap-1">
+            <Link
+              href="/admin/investments"
+              className="text-xs text-primary-600 hover:underline flex items-center gap-1"
+            >
               View all <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -324,29 +399,50 @@ export default async function AdminDashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase">Code</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase">Investor</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase">Series</th>
-                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase">Capital</th>
-                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase">Maturity</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase">
+                      Code
+                    </th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase">
+                      Investor
+                    </th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted uppercase">
+                      Series
+                    </th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase">
+                      Capital
+                    </th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted uppercase">
+                      Maturity
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {recentInvestments.map((inv) => (
                     <tr key={inv.id} className="hover:bg-primary-50/30 transition-colors">
-                      <td className="py-2.5 px-3 font-mono text-xs text-muted">{inv.investment_code}</td>
+                      <td className="py-2.5 px-3 font-mono text-xs text-muted">
+                        {inv.investment_code}
+                      </td>
                       <td className="py-2.5 px-3 font-medium">{inv.investor?.full_name}</td>
                       <td className="py-2.5 px-3">
-                        <Badge variant="default" className={`${
-                          inv.series?.name === "A" ? "bg-primary-100 text-primary-700" :
-                          inv.series?.name === "B" ? "bg-gold-100 text-gold-700" :
-                          "bg-blue-100 text-blue-700"
-                        }`}>
+                        <Badge
+                          variant="default"
+                          className={`${
+                            inv.series?.name === "A"
+                              ? "bg-primary-100 text-primary-700"
+                              : inv.series?.name === "B"
+                              ? "bg-gold-100 text-gold-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
                           Series {inv.series?.name}
                         </Badge>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-semibold">{formatCurrency(inv.capital)}</td>
-                      <td className="py-2.5 px-3 text-right text-muted text-xs">{formatDate(inv.maturity_date)}</td>
+                      <td className="py-2.5 px-3 text-right font-semibold">
+                        {formatCurrency(inv.capital)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-muted text-xs">
+                        {formatDate(inv.maturity_date)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -15,13 +15,13 @@ type InvestmentRow = {
   investment_code: string;
   status: string;
   capital: number;
-  expected_roi: number;
+  declared_profit: number | null;
   units: number;
   investment_date: string;
   maturity_date: string;
   created_at: string;
   investor: { full_name: string; investor_code: string } | null;
-  series: { name: string; roi_rate: number } | null;
+  series: { name: string } | null;
   cycle: { cycle_label: string } | null;
 };
 
@@ -32,7 +32,9 @@ export default async function AdminInvestmentsPage({
 }) {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const params = await searchParams;
@@ -40,7 +42,9 @@ export default async function AdminInvestmentsPage({
 
   let query = supabase
     .from("investments")
-    .select("*, investor:investors(full_name, investor_code), series(*), cycle:cycles(*)")
+    .select(
+      "*, investor:investors(full_name, investor_code), series(name), cycle:cycles(cycle_label)"
+    )
     .order("created_at", { ascending: false });
 
   if (status) query = query.eq("status", status as "active" | "matured" | "completed");
@@ -150,7 +154,8 @@ export default async function AdminInvestmentsPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {investments?.length ?? 0} Investment{(investments?.length ?? 0) !== 1 ? "s" : ""}
+            {investments?.length ?? 0} Investment
+            {(investments?.length ?? 0) !== 1 ? "s" : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -169,7 +174,7 @@ export default async function AdminInvestmentsPage({
                     <th className="px-4 py-3 text-left font-medium text-muted">Investor</th>
                     <th className="px-4 py-3 text-left font-medium text-muted">Series</th>
                     <th className="px-4 py-3 text-right font-medium text-muted">Capital</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted">ROI</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted">Profit</th>
                     <th className="px-4 py-3 text-center font-medium text-muted">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted">Matures</th>
                     <th className="px-4 py-3 text-center font-medium text-muted">Days Left</th>
@@ -181,19 +186,33 @@ export default async function AdminInvestmentsPage({
                     const daysLeft = getDaysUntilMaturity(inv.maturity_date);
                     return (
                       <tr key={inv.id} className="hover:bg-surface-2 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs text-muted">{inv.investment_code}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted">
+                          {inv.investment_code}
+                        </td>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-foreground">{inv.investor?.full_name}</p>
-                          <p className="text-xs text-muted font-mono">{inv.investor?.investor_code}</p>
+                          <p className="font-medium text-foreground">
+                            {inv.investor?.full_name}
+                          </p>
+                          <p className="text-xs text-muted font-mono">
+                            {inv.investor?.investor_code}
+                          </p>
                         </td>
                         <td className="px-4 py-3">
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold bg-primary-100 text-primary-700">
                             {inv.series?.name}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(inv.capital)}</td>
-                        <td className="px-4 py-3 text-right text-gold-600 font-medium">
-                          {formatCurrency(inv.expected_roi)}
+                        <td className="px-4 py-3 text-right font-medium">
+                          {formatCurrency(inv.capital)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {inv.declared_profit != null ? (
+                            <span className="text-emerald-600 font-medium">
+                              {formatCurrency(inv.declared_profit)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted">Not declared</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <Badge variant={statusVariant[inv.status] ?? "pending"} dot>
@@ -205,7 +224,11 @@ export default async function AdminInvestmentsPage({
                         </td>
                         <td className="px-4 py-3 text-center">
                           {inv.status === "active" ? (
-                            <span className={`text-xs font-medium ${daysLeft <= 7 ? "text-gold-600" : "text-muted"}`}>
+                            <span
+                              className={`text-xs font-medium ${
+                                daysLeft <= 7 ? "text-gold-600" : "text-muted"
+                              }`}
+                            >
                               {daysLeft}d
                             </span>
                           ) : (

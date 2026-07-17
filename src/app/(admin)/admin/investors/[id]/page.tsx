@@ -43,8 +43,7 @@ type InvestmentFull = {
   units: number;
   price_per_unit: number;
   capital: number;
-  expected_roi: number;
-  roi_rate: number;
+  declared_profit: number | null;
   investment_date: string;
   maturity_date: string;
   status: string;
@@ -116,7 +115,7 @@ export default async function AdminInvestorDetailPage({
 
   // Aggregate stats
   const totalCapital = investor.investments.reduce((s, i) => s + i.capital, 0);
-  const totalROIPaid = investor.payment_requests
+  const totalProfitPaid = investor.payment_requests
     .filter((p) => p.type === "roi" && p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
   const activeCount = investor.investments.filter(
@@ -213,9 +212,9 @@ export default async function AdminInvestorDetailPage({
           icon={<DollarSign className="h-5 w-5" />}
         />
         <StatCard
-          title="ROI Received"
-          value={formatCurrency(totalROIPaid)}
-          accentColor="gold"
+          title="Profit Received"
+          value={formatCurrency(totalProfitPaid)}
+          accentColor="success"
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <StatCard
@@ -315,10 +314,14 @@ export default async function AdminInvestorDetailPage({
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted">Expected ROI</p>
-                        <p className="font-semibold text-gold-600">
-                          +{formatCurrency(inv.expected_roi)}
-                        </p>
+                        <p className="text-xs text-muted">Declared Profit</p>
+                        {inv.declared_profit != null ? (
+                          <p className="font-semibold text-emerald-600">
+                            +{formatCurrency(inv.declared_profit)}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted">Not yet declared</p>
+                        )}
                       </div>
                     </div>
 
@@ -410,12 +413,12 @@ export default async function AdminInvestorDetailPage({
             })
           )}
 
-          {/* Outgoing payment requests (ROI/Capital returns) */}
+          {/* Outgoing payment requests (Profit/Capital returns) */}
           {investor.payment_requests.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">
-                  ROI & Capital Payment Requests (
+                  Profit & Capital Payment Requests (
                   {investor.payment_requests.length})
                 </CardTitle>
               </CardHeader>
@@ -430,15 +433,15 @@ export default async function AdminInvestorDetailPage({
                         <span
                           className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
                             p.type === "roi"
-                              ? "bg-gold-100 text-gold-700"
+                              ? "bg-emerald-100 text-emerald-700"
                               : "bg-primary-100 text-primary-700"
                           }`}
                         >
-                          {p.type === "roi" ? "ROI" : "CAP"}
+                          {p.type === "roi" ? "P" : "CAP"}
                         </span>
                         <div>
                           <p className="text-sm font-medium text-foreground capitalize">
-                            {p.type === "roi" ? "ROI Payment" : "Capital Return"}
+                            {p.type === "roi" ? "Profit Payment" : "Capital Return"}
                           </p>
                           <p className="text-xs text-muted">
                             {formatDate(p.created_at)}

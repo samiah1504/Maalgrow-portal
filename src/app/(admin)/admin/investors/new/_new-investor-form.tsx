@@ -34,7 +34,7 @@ import {
 type SeriesRow = {
   id: string;
   name: string;
-  roi_rate: number;
+  mudarabah_investor_ratio: number;
   is_active: boolean;
 };
 
@@ -117,7 +117,6 @@ function InvestmentSection({
 
   // Live calculations
   const capital = units && isValidSlots(units) ? calcCapital(units) : 0;
-  const expectedRoi = capital && selectedSeries ? Math.round(capital * selectedSeries.roi_rate * 100) / 100 : 0;
   const balance = capital - (paymentAmount || 0);
   const payStatus = capital > 0 ? getPaymentStatus(capital, paymentAmount || 0) : null;
 
@@ -162,7 +161,7 @@ function InvestmentSection({
                 >
                   Series {s.name}
                   <span className="block text-xs font-normal mt-0.5 opacity-80">
-                    {(s.roi_rate * 100).toFixed(0)}% ROI
+                    {(s.mudarabah_investor_ratio * 100).toFixed(0)}% investor share
                   </span>
                 </button>
               ))}
@@ -260,16 +259,9 @@ function InvestmentSection({
                   {formatCurrency(capital)}
                 </span>
               </div>
-              {selectedSeries && expectedRoi > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-primary-600">
-                    Expected ROI ({(selectedSeries.roi_rate * 100).toFixed(0)}%)
-                  </span>
-                  <span className="text-gold-700 font-semibold">
-                    +{formatCurrency(expectedRoi)}
-                  </span>
-                </div>
-              )}
+              <p className="text-xs text-primary-600 italic">
+                Profit will be declared by admin at cycle maturity (Mudarabah)
+              </p>
             </div>
           )}
 

@@ -29,7 +29,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="h-5 w-5" /> },
   { label: "My Investments", href: "/investments", icon: <TrendingUp className="h-5 w-5" /> },
-  { label: "ROI History", href: "/roi-history", icon: <BarChart3 className="h-5 w-5" /> },
+  { label: "Profit History", href: "/roi-history", icon: <BarChart3 className="h-5 w-5" /> },
   { label: "Payment Requests", href: "/payment-requests", icon: <CreditCard className="h-5 w-5" /> },
   { label: "Notifications", href: "/notifications", icon: <Bell className="h-5 w-5" /> },
   { label: "Documents", href: "/documents", icon: <FileText className="h-5 w-5" /> },

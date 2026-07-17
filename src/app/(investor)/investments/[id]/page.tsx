@@ -29,9 +29,8 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
     id: string;
     investment_code: string;
     capital: number;
-    expected_roi: number;
+    declared_profit: number | null;
     units: number;
-    roi_rate: number;
     price_per_unit: number;
     investment_date: string;
     maturity_date: string;
@@ -39,7 +38,7 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
     maturity_decision: "continue" | "exit" | null;
     next_investment_id: string | null;
     parent_investment_id: string | null;
-    series: { id: string; name: "A" | "B" | "C"; roi_rate: number } | null;
+    series: { id: string; name: "A" | "B" | "C" } | null;
     cycle: { id: string; cycle_label: string; start_date: string; end_date: string } | null;
   };
   type LinkedInvestment = { investment_code: string; status: string; cycle: { cycle_label: string } | null };
@@ -156,9 +155,13 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
           <p className="text-lg font-bold text-foreground mt-0.5">{formatCurrency(investment.capital)}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-4 text-center">
-          <TrendingUp className="h-5 w-5 text-gold-500 mx-auto mb-1" />
-          <p className="text-[10px] text-muted uppercase tracking-wide">Expected ROI</p>
-          <p className="text-lg font-bold text-gold-600 mt-0.5">{formatCurrency(investment.expected_roi)}</p>
+          <TrendingUp className="h-5 w-5 text-emerald-500 mx-auto mb-1" />
+          <p className="text-[10px] text-muted uppercase tracking-wide">Declared Profit</p>
+          {investment.declared_profit != null ? (
+            <p className="text-lg font-bold text-emerald-600 mt-0.5">{formatCurrency(investment.declared_profit)}</p>
+          ) : (
+            <p className="text-xs text-muted mt-1">Declared at maturity</p>
+          )}
         </div>
         <div className="rounded-xl border border-border bg-surface p-4 text-center">
           <FileText className="h-5 w-5 text-primary-600 mx-auto mb-1" />
@@ -217,10 +220,6 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
             </div>
 
             <div className="space-y-2 text-sm border-t border-border pt-3">
-              <div className="flex justify-between">
-                <span className="text-muted">ROI Rate</span>
-                <span className="font-semibold">{(investment.roi_rate * 100).toFixed(0)}% per cycle</span>
-              </div>
               <div className="flex justify-between">
                 <span className="text-muted">Price per Unit</span>
                 <span className="font-semibold">{formatCurrency(investment.price_per_unit)}</span>
@@ -281,7 +280,9 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <span className="text-xs font-mono text-muted">{pr.request_code}</span>
-                          <p className="text-sm font-semibold capitalize">{pr.type} Payment</p>
+                          <p className="text-sm font-semibold">
+                          {pr.type === "roi" ? "Profit" : "Capital"} Payment
+                        </p>
                         </div>
                         <Badge variant={statusVariantMap[pr.status] as "pending" | "approved" | "processing" | "paid" | "rejected"}>
                           {pr.status.charAt(0).toUpperCase() + pr.status.slice(1)}

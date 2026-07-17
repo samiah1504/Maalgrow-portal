@@ -72,7 +72,7 @@ export default async function PaymentRequestsPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Payment Requests</h1>
-        <p className="text-sm text-muted mt-1">Track all your ROI and capital payment requests</p>
+        <p className="text-sm text-muted mt-1">Track all your profit and capital payment requests</p>
       </div>
 
       {/* Summary */}
@@ -155,12 +155,12 @@ function PaymentRequestCard({ request }: {
         <div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${
-              request.type === "roi" ? "bg-gold-100 text-gold-700" : "bg-primary-100 text-primary-700"
+              request.type === "roi" ? "bg-emerald-100 text-emerald-700" : "bg-primary-100 text-primary-700"
             }`}>
-              {request.type === "roi" ? "R" : "C"}
+              {request.type === "roi" ? "P" : "C"}
             </span>
-            <span className="text-sm font-semibold text-foreground capitalize">
-              {request.type} Payment
+            <span className="text-sm font-semibold text-foreground">
+              {request.type === "roi" ? "Profit" : "Capital"} Payment
             </span>
           </div>
           <p className="text-xs text-muted mt-0.5 font-mono">{request.request_code}</p>

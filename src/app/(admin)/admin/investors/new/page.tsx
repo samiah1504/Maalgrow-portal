@@ -19,7 +19,7 @@ export default async function NewInvestorPage() {
   const [{ data: series }, { data: cycles }] = await Promise.all([
     supabase
       .from("series")
-      .select("id, name, roi_rate, is_active")
+      .select("id, name, mudarabah_investor_ratio, is_active")
       .eq("is_active", true)
       .order("name"),
     supabase

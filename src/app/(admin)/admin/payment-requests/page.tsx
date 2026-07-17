@@ -158,11 +158,13 @@ export default function PaymentRequestsAdminPage() {
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${
-                      req.type === "roi" ? "bg-gold-100 text-gold-700" : "bg-primary-100 text-primary-700"
+                      req.type === "roi" ? "bg-emerald-100 text-emerald-700" : "bg-primary-100 text-primary-700"
                     }`}>
-                      {req.type === "roi" ? "R" : "C"}
+                      {req.type === "roi" ? "P" : "C"}
                     </span>
-                    <span className="font-semibold capitalize">{req.type} Payment</span>
+                    <span className="font-semibold">
+                      {req.type === "roi" ? "Profit" : "Capital"} Payment
+                    </span>
                     <span className="font-mono text-xs text-muted">{req.request_code}</span>
                     <Badge variant={req.status as "pending" | "approved" | "processing" | "paid" | "rejected"}>
                       {req.status.charAt(0).toUpperCase() + req.status.slice(1)}

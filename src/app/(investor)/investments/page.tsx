@@ -42,7 +42,7 @@ export default async function InvestmentsPage() {
     investment_code: string;
     status: string;
     capital: number;
-    expected_roi: number;
+    declared_profit: number | null;
     units: number;
     investment_date: string;
     maturity_date: string;
@@ -155,7 +155,7 @@ function InvestmentCard({
     investment_code: string;
     status: string;
     capital: number;
-    expected_roi: number;
+    declared_profit: number | null;
     units: number;
     investment_date: string;
     maturity_date: string;
@@ -207,8 +207,12 @@ function InvestmentCard({
             <p className="text-sm font-bold text-foreground mt-0.5">{formatCurrency(investment.capital)}</p>
           </div>
           <div className="rounded-lg bg-surface-2 p-2.5">
-            <p className="text-[10px] text-muted uppercase tracking-wide">Expected ROI</p>
-            <p className="text-sm font-bold text-gold-600 mt-0.5">{formatCurrency(investment.expected_roi)}</p>
+            <p className="text-[10px] text-muted uppercase tracking-wide">Profit</p>
+            {investment.declared_profit != null ? (
+              <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatCurrency(investment.declared_profit)}</p>
+            ) : (
+              <p className="text-xs text-muted mt-0.5">Declared at maturity</p>
+            )}
           </div>
         </div>
 

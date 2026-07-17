@@ -10,7 +10,7 @@ interface Props {
     id: string;
     investment_code: string;
     capital: number;
-    expected_roi: number;
+    declared_profit: number | null;
     units: number;
     series?: { name: string };
     cycle?: { cycle_label: string };

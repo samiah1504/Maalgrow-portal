@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     id: string;
     investment_code: string;
     capital: number;
-    expected_roi: number;
+    declared_profit: number | null;
     maturity_date: string;
     status: "active" | "matured" | "completed";
     series: { name: "A" | "B" | "C" } | null;
@@ -77,7 +77,7 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(5);
 
-  // Get paid payment requests for ROI and capital
+  // Get paid profit and capital payment requests
   const { data: paidROI } = await supabase
     .from("payment_requests")
     .select("amount")
@@ -96,7 +96,7 @@ export default async function DashboardPage() {
   const maturedInvestments = investments?.filter((i) => i.status === "matured") ?? [];
 
   const totalActiveCapital = activeInvestments.reduce((sum, i) => sum + (i.capital || 0), 0);
-  const totalROIReceived = (paidROI as { amount: number }[] | null)?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
+  const totalProfitReceived = (paidROI as { amount: number }[] | null)?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
   const totalCapitalReturned = (paidCapital as { amount: number }[] | null)?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
 
   // Upcoming maturities in next 30 days
@@ -112,7 +112,6 @@ export default async function DashboardPage() {
       series: s,
       active: seriesInvestments.length > 0,
       capital: seriesInvestments.reduce((sum, i) => sum + (i.capital || 0), 0),
-      expectedROI: seriesInvestments.reduce((sum, i) => sum + (i.expected_roi || 0), 0),
     };
   });
 
@@ -152,9 +151,9 @@ export default async function DashboardPage() {
           icon={<DollarSign className="h-5 w-5" />}
         />
         <StatCard
-          title="Total ROI Received"
-          value={formatCurrency(totalROIReceived)}
-          subtitle="Cumulative returns paid"
+          title="Total Profit Received"
+          value={formatCurrency(totalProfitReceived)}
+          subtitle="Cumulative profit paid"
           accentColor="gold"
           icon={<TrendingUp className="h-5 w-5" />}
         />
@@ -184,7 +183,7 @@ export default async function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {seriesBreakdown.map(({ series, active, capital, expectedROI }) => (
+            {seriesBreakdown.map(({ series, active, capital }) => (
               <div
                 key={series}
                 className="flex items-center justify-between rounded-xl border border-border p-4 hover:border-primary-200 transition-colors"
@@ -208,10 +207,7 @@ export default async function DashboardPage() {
                 </div>
                 <div className="text-right">
                   {active ? (
-                    <>
-                      <Badge variant="active" dot>Active</Badge>
-                      <p className="text-xs text-muted mt-1">ROI: {formatCurrency(expectedROI)}</p>
-                    </>
+                    <Badge variant="active" dot>Active</Badge>
                   ) : (
                     <Badge variant="default" className="bg-gray-100 text-gray-500">Inactive</Badge>
                   )}

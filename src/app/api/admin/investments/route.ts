@@ -105,10 +105,10 @@ export async function POST(request: Request) {
 
     const adminClient = await createAdminClient();
 
-    // Fetch series (for roi_rate and name)
+    // Fetch series for name and price_per_unit
     const { data: series, error: seriesErr } = await adminClient
       .from("series")
-      .select("id, name, roi_rate")
+      .select("id, name")
       .eq("id", series_id)
       .single();
 
@@ -142,14 +142,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Investor not found" }, { status: 404 });
     }
 
-    // Financial calculations — use integer arithmetic in kobo to avoid float errors
     // capital = units × ₦500,000
     const capitalKobo = Math.round(units * SLOT_VALUE_NGN * 100);
     const capital = capitalKobo / 100;
-
-    // expected_roi = capital × roi_rate
-    const expectedRoiKobo = Math.round(capitalKobo * series.roi_rate);
-    const expected_roi = expectedRoiKobo / 100;
 
     // Generate investment code: MG-{series}-{cycle_number_padded}-{investor_code}
     const baseCode = `MG-${series.name}-${String(cycle.cycle_number).padStart(3, "0")}-${investor.investor_code}`;
@@ -174,8 +169,6 @@ export async function POST(request: Request) {
         units,
         price_per_unit: SLOT_VALUE_NGN,
         capital,
-        roi_rate: series.roi_rate,
-        expected_roi,
         investment_date,
         maturity_date: cycle.end_date,
         status: "active",

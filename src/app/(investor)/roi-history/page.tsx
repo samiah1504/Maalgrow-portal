@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "ROI History" };
+export const metadata: Metadata = { title: "Profit History" };
 
 export default async function ROIHistoryPage() {
   const supabase = await createClient();
@@ -49,12 +49,12 @@ export default async function ROIHistoryPage() {
   return (
     <div className="space-y-6 max-w-3xl animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">ROI History</h1>
+        <h1 className="text-2xl font-bold text-foreground">Profit History</h1>
         <p className="text-sm text-muted mt-1">Track all your Mudārabah profit payments</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total ROI Received" value={formatCurrency(totalPaid)} accentColor="gold" icon={<TrendingUp className="h-5 w-5" />} />
+        <StatCard title="Total Profit Received" value={formatCurrency(totalPaid)} accentColor="success" icon={<TrendingUp className="h-5 w-5" />} />
         <StatCard title="Pending Payment" value={formatCurrency(totalPending)} accentColor="info" icon={<BarChart3 className="h-5 w-5" />} />
         <StatCard title="Payments Made" value={String(paidCount)} subtitle="Total disbursements" accentColor="success" icon={<CheckCircle2 className="h-5 w-5" />} />
       </div>
@@ -63,14 +63,14 @@ export default async function ROIHistoryPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <TrendingUp className="h-12 w-12 text-border mb-4" />
-            <h3 className="font-semibold text-foreground">No ROI payments yet</h3>
-            <p className="text-sm text-muted mt-1">ROI payments will appear here when investments mature.</p>
+            <h3 className="font-semibold text-foreground">No profit payments yet</h3>
+            <p className="text-sm text-muted mt-1">Profit payments will appear here when investments mature.</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">All ROI Payments</CardTitle>
+            <CardTitle className="text-base">All Profit Payments</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
@@ -100,7 +100,7 @@ export default async function ROIHistoryPage() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-gold-600">{formatCurrency(p.amount)}</p>
+                      <p className="text-lg font-bold text-emerald-600">{formatCurrency(p.amount)}</p>
                       <p className="text-xs text-muted">{formatDate(p.created_at)}</p>
                     </div>
                   </div>

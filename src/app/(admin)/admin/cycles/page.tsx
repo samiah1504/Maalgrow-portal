@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { RefreshCw, TrendingUp, Calendar, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, TrendingUp, Calendar, AlertCircle } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Cycles | Admin" };
@@ -15,14 +17,32 @@ type CycleRow = {
   start_date: string;
   end_date: string;
   created_at: string;
-  series: { name: string; roi_rate: number } | null;
+  series: { name: string } | null;
   investments: { capital: number }[];
+};
+
+const STATUS_VARIANT: Record<string, "active" | "completed" | "pending" | "warning"> = {
+  active: "active",
+  awaiting_profit_declaration: "warning",
+  completed: "completed",
+  matured: "completed",
+  upcoming: "pending",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  awaiting_profit_declaration: "Awaiting Profit Declaration",
+  completed: "Completed",
+  matured: "Matured",
+  upcoming: "Upcoming",
 };
 
 export default async function AdminCyclesPage() {
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: rawCycles } = await supabase
@@ -32,23 +52,52 @@ export default async function AdminCyclesPage() {
 
   const cycles = rawCycles as unknown as CycleRow[] | null;
 
-  const activeCycles = cycles?.filter((c) => c.status === "active") ?? [];
-  const closedCycles = cycles?.filter((c) => c.status !== "active") ?? [];
-
-  const statusVariant: Record<string, "active" | "completed" | "pending"> = {
-    active: "active",
-    closed: "completed",
-    upcoming: "pending",
-  };
+  const activeCycles =
+    cycles?.filter((c) => c.status === "active" || c.status === "upcoming") ?? [];
+  const awaitingDeclaration =
+    cycles?.filter((c) => c.status === "awaiting_profit_declaration") ?? [];
+  const closedCycles =
+    cycles?.filter(
+      (c) =>
+        c.status !== "active" &&
+        c.status !== "upcoming" &&
+        c.status !== "awaiting_profit_declaration"
+    ) ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Cycles</h1>
-        <p className="text-sm text-muted mt-1">3-month Mudārabah investment cycles per series</p>
+        <p className="text-sm text-muted mt-1">
+          3-month Mudārabah investment cycles per series
+        </p>
       </div>
 
-      {/* Active Cycles */}
+      {/* Awaiting Profit Declaration — urgent alert */}
+      {awaitingDeclaration.length > 0 && (
+        <section>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-2 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900 text-sm">
+                {awaitingDeclaration.length === 1
+                  ? "1 cycle has matured and requires profit declaration"
+                  : `${awaitingDeclaration.length} cycles have matured and require profit declaration`}
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Investor reports and maturity decisions cannot proceed until profit is declared.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {awaitingDeclaration.map((cycle) => (
+              <CycleCard key={cycle.id} cycle={cycle} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Active / Upcoming Cycles */}
       {activeCycles.length > 0 && (
         <section>
           <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -57,7 +106,7 @@ export default async function AdminCyclesPage() {
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {activeCycles.map((cycle) => (
-              <CycleCard key={cycle.id} cycle={cycle} statusVariant={statusVariant} />
+              <CycleCard key={cycle.id} cycle={cycle} />
             ))}
           </div>
         </section>
@@ -79,29 +128,51 @@ export default async function AdminCyclesPage() {
                       <th className="px-4 py-3 text-left font-medium text-muted">Series</th>
                       <th className="px-4 py-3 text-left font-medium text-muted">Start</th>
                       <th className="px-4 py-3 text-left font-medium text-muted">End</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted">Investments</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted">Total Capital</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted">
+                        Investments
+                      </th>
+                      <th className="px-4 py-3 text-right font-medium text-muted">
+                        Total Capital
+                      </th>
                       <th className="px-4 py-3 text-center font-medium text-muted">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {closedCycles.map((cycle) => {
-                      const totalCapital = cycle.investments.reduce((s, i) => s + i.capital, 0);
+                      const totalCapital = cycle.investments.reduce(
+                        (s, i) => s + i.capital,
+                        0
+                      );
                       return (
-                        <tr key={cycle.id} className="hover:bg-surface-2 transition-colors">
-                          <td className="px-4 py-3 font-medium text-foreground">{cycle.cycle_label}</td>
+                        <tr
+                          key={cycle.id}
+                          className="hover:bg-surface-2 transition-colors"
+                        >
+                          <td className="px-4 py-3 font-medium text-foreground">
+                            {cycle.cycle_label}
+                          </td>
                           <td className="px-4 py-3">
                             <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold bg-primary-100 text-primary-700">
                               {cycle.series?.name}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-muted">{formatDate(cycle.start_date)}</td>
-                          <td className="px-4 py-3 text-muted">{formatDate(cycle.end_date)}</td>
-                          <td className="px-4 py-3 text-right">{cycle.investments.length}</td>
-                          <td className="px-4 py-3 text-right font-medium">{formatCurrency(totalCapital)}</td>
+                          <td className="px-4 py-3 text-muted">
+                            {formatDate(cycle.start_date)}
+                          </td>
+                          <td className="px-4 py-3 text-muted">
+                            {formatDate(cycle.end_date)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {cycle.investments.length}
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium">
+                            {formatCurrency(totalCapital)}
+                          </td>
                           <td className="px-4 py-3 text-center">
-                            <Badge variant={statusVariant[cycle.status] ?? "pending"}>
-                              {cycle.status.charAt(0).toUpperCase() + cycle.status.slice(1)}
+                            <Badge
+                              variant={STATUS_VARIANT[cycle.status] ?? "pending"}
+                            >
+                              {STATUS_LABEL[cycle.status] ?? cycle.status}
                             </Badge>
                           </td>
                         </tr>
@@ -120,7 +191,9 @@ export default async function AdminCyclesPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <RefreshCw className="h-12 w-12 text-border mb-4" />
             <p className="font-medium text-foreground">No cycles yet</p>
-            <p className="text-sm text-muted mt-1">Cycles are created automatically when series are set up.</p>
+            <p className="text-sm text-muted mt-1">
+              Cycles are created automatically when series are set up.
+            </p>
           </CardContent>
         </Card>
       ) : null}
@@ -128,17 +201,12 @@ export default async function AdminCyclesPage() {
   );
 }
 
-function CycleCard({
-  cycle,
-  statusVariant,
-}: {
-  cycle: CycleRow;
-  statusVariant: Record<string, "active" | "completed" | "pending">;
-}) {
+function CycleCard({ cycle }: { cycle: CycleRow }) {
   const totalCapital = cycle.investments.reduce((s, i) => s + i.capital, 0);
+  const isPendingDeclaration = cycle.status === "awaiting_profit_declaration";
 
   return (
-    <Card>
+    <Card className={isPendingDeclaration ? "border-amber-300" : undefined}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -150,8 +218,8 @@ function CycleCard({
               <p className="text-xs text-muted mt-0.5">{cycle.cycle_label}</p>
             </div>
           </div>
-          <Badge variant={statusVariant[cycle.status] ?? "pending"} dot>
-            {cycle.status.charAt(0).toUpperCase() + cycle.status.slice(1)}
+          <Badge variant={STATUS_VARIANT[cycle.status] ?? "pending"} dot>
+            {STATUS_LABEL[cycle.status] ?? cycle.status}
           </Badge>
         </div>
       </CardHeader>
@@ -161,26 +229,34 @@ function CycleCard({
             <p className="text-[10px] text-muted uppercase tracking-wide flex items-center gap-1">
               <Calendar className="h-3 w-3" /> Start
             </p>
-            <p className="font-medium text-foreground mt-0.5">{formatDate(cycle.start_date)}</p>
+            <p className="font-medium text-foreground mt-0.5">
+              {formatDate(cycle.start_date)}
+            </p>
           </div>
           <div className="rounded-lg bg-surface-2 p-2.5">
             <p className="text-[10px] text-muted uppercase tracking-wide flex items-center gap-1">
               <Calendar className="h-3 w-3" /> End
             </p>
-            <p className="font-medium text-foreground mt-0.5">{formatDate(cycle.end_date)}</p>
+            <p className="font-medium text-foreground mt-0.5">
+              {formatDate(cycle.end_date)}
+            </p>
           </div>
         </div>
         <div className="flex items-center justify-between text-xs border-t border-border pt-3">
           <span className="flex items-center gap-1 text-muted">
-            <TrendingUp className="h-3 w-3" /> {cycle.investments.length} investment{cycle.investments.length !== 1 ? "s" : ""}
+            <TrendingUp className="h-3 w-3" /> {cycle.investments.length}{" "}
+            investment{cycle.investments.length !== 1 ? "s" : ""}
           </span>
-          <span className="font-semibold text-foreground">{formatCurrency(totalCapital)}</span>
+          <span className="font-semibold text-foreground">
+            {formatCurrency(totalCapital)}
+          </span>
         </div>
-        {cycle.series?.roi_rate && (
-          <div className="text-xs flex items-center gap-1 text-gold-600">
-            <CheckCircle2 className="h-3 w-3" />
-            ROI Rate: {(cycle.series.roi_rate * 100).toFixed(1)}%
-          </div>
+        {isPendingDeclaration && (
+          <Button asChild size="sm" className="w-full mt-1">
+            <Link href={`/admin/cycles/${cycle.id}/declare-profit`}>
+              Declare Profit
+            </Link>
+          </Button>
         )}
       </CardContent>
     </Card>

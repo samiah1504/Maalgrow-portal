@@ -107,7 +107,7 @@ export type Database = {
           name: "A" | "B" | "C";
           description: string | null;
           start_month_offset: number;
-          roi_rate: number;
+          mudarabah_investor_ratio: number;
           price_per_unit: number;
           min_units: number;
           max_units: number | null;
@@ -120,7 +120,7 @@ export type Database = {
           name: "A" | "B" | "C";
           description?: string | null;
           start_month_offset: number;
-          roi_rate: number;
+          mudarabah_investor_ratio?: number;
           price_per_unit: number;
           min_units?: number;
           max_units?: number | null;
@@ -130,7 +130,7 @@ export type Database = {
         };
         Update: {
           description?: string | null;
-          roi_rate?: number;
+          mudarabah_investor_ratio?: number;
           price_per_unit?: number;
           min_units?: number;
           max_units?: number | null;
@@ -147,7 +147,7 @@ export type Database = {
           cycle_label: string;
           start_date: string;
           end_date: string;
-          status: "upcoming" | "active" | "matured" | "completed";
+          status: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
           total_capital: number;
           total_investors: number;
           maturity_processed_at: string | null;
@@ -161,7 +161,7 @@ export type Database = {
           cycle_label: string;
           start_date: string;
           end_date: string;
-          status?: "upcoming" | "active" | "matured" | "completed";
+          status?: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
           total_capital?: number;
           total_investors?: number;
           maturity_processed_at?: string | null;
@@ -172,7 +172,7 @@ export type Database = {
           cycle_label?: string;
           start_date?: string;
           end_date?: string;
-          status?: "upcoming" | "active" | "matured" | "completed";
+          status?: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
           total_capital?: number;
           total_investors?: number;
           maturity_processed_at?: string | null;
@@ -190,8 +190,7 @@ export type Database = {
           units: number;
           price_per_unit: number;
           capital: number;
-          roi_rate: number;
-          expected_roi: number;
+          declared_profit: number | null;
           investment_date: string;
           maturity_date: string;
           status: "active" | "matured" | "completed";
@@ -213,8 +212,7 @@ export type Database = {
           units: number;
           price_per_unit: number;
           capital: number;
-          roi_rate: number;
-          expected_roi: number;
+          declared_profit?: number | null;
           investment_date: string;
           maturity_date: string;
           status?: "active" | "matured" | "completed";
@@ -232,6 +230,7 @@ export type Database = {
           maturity_decision?: "continue" | "exit" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
+          declared_profit?: number | null;
           notes?: string | null;
           updated_at?: string;
         };
@@ -406,6 +405,47 @@ export type Database = {
         };
         Relationships: [];
       };
+      cycle_profit_declarations: {
+        Row: {
+          id: string;
+          cycle_id: string;
+          total_revenue: number;
+          total_expenses: number;
+          net_profit: number;
+          investor_profit_share: number;
+          company_profit_share: number;
+          profit_per_slot: number;
+          total_slots: number;
+          notes: string | null;
+          declared_by: string | null;
+          declared_at: string;
+        };
+        Insert: {
+          id?: string;
+          cycle_id: string;
+          total_revenue: number;
+          total_expenses: number;
+          net_profit: number;
+          investor_profit_share: number;
+          company_profit_share: number;
+          profit_per_slot: number;
+          total_slots: number;
+          notes?: string | null;
+          declared_by?: string | null;
+          declared_at?: string;
+        };
+        Update: {
+          total_revenue?: number;
+          total_expenses?: number;
+          net_profit?: number;
+          investor_profit_share?: number;
+          company_profit_share?: number;
+          profit_per_slot?: number;
+          total_slots?: number;
+          notes?: string | null;
+        };
+        Relationships: [];
+      };
       announcements: {
         Row: {
           id: string;
@@ -454,7 +494,7 @@ export type Database = {
           cycle_label: string;
           units: number;
           capital: number;
-          expected_roi: number;
+          declared_profit: number | null;
           investment_date: string;
           maturity_date: string;
           status: string;
@@ -469,7 +509,7 @@ export type Database = {
       };
       process_matured_investments: {
         Args: Record<string, never>;
-        Returns: void;
+        Returns: number;
       };
       submit_maturity_decision: {
         Args: {
@@ -493,6 +533,15 @@ export type Database = {
         };
         Returns: string;
       };
+      declare_cycle_profit: {
+        Args: {
+          p_cycle_id: string;
+          p_total_revenue: number;
+          p_total_expenses: number;
+          p_notes?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       user_role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "investor";
@@ -500,7 +549,7 @@ export type Database = {
       payment_status: "pending" | "approved" | "processing" | "paid" | "rejected";
       kyc_status: "pending" | "approved" | "rejected";
       series_name: "A" | "B" | "C";
-      cycle_status: "upcoming" | "active" | "matured" | "completed";
+      cycle_status: "upcoming" | "active" | "awaiting_profit_declaration" | "matured" | "completed";
       payment_type: "roi" | "capital";
       notification_type: "investment" | "roi" | "capital" | "maturity" | "payment" | "document" | "announcement" | "system";
       document_type: "agreement" | "certificate" | "statement" | "receipt" | "report" | "other";

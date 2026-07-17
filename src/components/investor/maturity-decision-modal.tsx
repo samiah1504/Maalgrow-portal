@@ -34,7 +34,7 @@ interface Investment {
   id: string;
   investment_code: string;
   capital: number;
-  expected_roi: number;
+  declared_profit: number | null;
   units: number;
   series?: { name: string };
   cycle?: { cycle_label: string };
@@ -135,18 +135,24 @@ export function MaturityDecisionModal({ investment, open, onClose }: MaturityDec
                   <p className="text-sm font-bold text-foreground mt-0.5">{formatCurrency(investment.capital)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted uppercase tracking-wide">ROI Earned</p>
-                  <p className="text-sm font-bold text-gold-600 mt-0.5">{formatCurrency(investment.expected_roi)}</p>
+                  <p className="text-[10px] text-muted uppercase tracking-wide">Profit Earned</p>
+                  {investment.declared_profit != null ? (
+                    <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatCurrency(investment.declared_profit)}</p>
+                  ) : (
+                    <p className="text-xs text-muted mt-1">Not yet declared</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wide">Total</p>
                   <p className="text-sm font-bold text-primary-700 mt-0.5">
-                    {formatCurrency(investment.capital + investment.expected_roi)}
+                    {investment.declared_profit != null
+                      ? formatCurrency(investment.capital + investment.declared_profit)
+                      : formatCurrency(investment.capital)}
                   </p>
                 </div>
               </div>
               <p className="text-[10px] text-center text-muted mt-3 italic">
-                ✓ ROI is always payable regardless of your capital decision
+                ✓ Profit is payable regardless of your capital decision
               </p>
             </div>
           )}
@@ -171,7 +177,7 @@ export function MaturityDecisionModal({ investment, open, onClose }: MaturityDec
                     <p className="font-semibold text-foreground text-sm">Continue into next cycle</p>
                     <p className="text-xs text-muted mt-1">
                       Roll your capital ({formatCurrency(investment.capital)}) into the next cycle.
-                      ROI ({formatCurrency(investment.expected_roi)}) will be paid separately.
+                      {investment.declared_profit != null ? ` Profit (${formatCurrency(investment.declared_profit)}) will be paid separately.` : " Profit will be paid separately."}
                     </p>
                   </div>
                   <ArrowRight className="h-5 w-5 text-muted group-hover:text-primary-600 transition-colors mt-2.5" />
@@ -190,7 +196,7 @@ export function MaturityDecisionModal({ investment, open, onClose }: MaturityDec
                   <div className="flex-1">
                     <p className="font-semibold text-foreground text-sm">Return my capital</p>
                     <p className="text-xs text-muted mt-1">
-                      Return capital ({formatCurrency(investment.capital)}) and pay ROI ({formatCurrency(investment.expected_roi)}).
+                      Return capital ({formatCurrency(investment.capital)}){investment.declared_profit != null ? ` and profit (${formatCurrency(investment.declared_profit)})` : " and declared profit"}.
                       Both will be paid to your registered bank account.
                     </p>
                   </div>
@@ -218,11 +224,11 @@ export function MaturityDecisionModal({ investment, open, onClose }: MaturityDec
                 )}
                 {decision === "continue"
                   ? "Rolling capital into next cycle"
-                  : "Returning capital + paying ROI"}
+                  : "Returning capital + paying profit"}
               </div>
 
               <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">Payment details for ROI{decision === "exit" ? " & capital" : ""}:</p>
+                <p className="text-sm font-medium text-foreground">Payment details for profit{decision === "exit" ? " & capital" : ""}:</p>
                 <Input
                   {...register("bank_name")}
                   label="Bank Name"
@@ -279,8 +285,8 @@ export function MaturityDecisionModal({ investment, open, onClose }: MaturityDec
                 <p className="font-semibold text-foreground">Decision recorded successfully</p>
                 <p className="text-sm text-muted mt-2">
                   {decision === "continue"
-                    ? "Your capital has been rolled into the next cycle. A ROI payment request has been created and is pending approval."
-                    : "Payment requests for your ROI and capital have been created and are pending approval. You will be notified once processed."}
+                    ? "Your capital has been rolled into the next cycle. A profit payment request has been created and is pending approval."
+                    : "Payment requests for your profit and capital have been created and are pending approval. You will be notified once processed."}
                 </p>
               </div>
               <Button onClick={handleClose} className="w-full">
