@@ -72,8 +72,7 @@ function LoginForm() {
       );
 
       toast.success("Welcome back!");
-      router.push(isAdmin ? "/admin/dashboard" : redirectTo);
-      router.refresh();
+      window.location.href = isAdmin ? "/admin/dashboard" : redirectTo;
     }
   };
 
