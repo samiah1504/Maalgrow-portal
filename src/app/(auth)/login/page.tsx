@@ -28,8 +28,13 @@ export default function LoginPage() {
 }
 
 function mapAuthError(error: { message?: string }): string {
-  const msg = (error.message ?? "").toLowerCase();
+  const raw = error.message ?? "";
+  const msg = raw.toLowerCase().trim();
 
+  // Empty body or "{}" means the Supabase project is paused or misconfigured
+  if (!msg || msg === "{}" || msg === "[]") {
+    return "Authentication service is temporarily unavailable. If this persists, the database may be paused — please contact support.";
+  }
   if (msg.includes("invalid login credentials") || msg.includes("invalid email or password") || msg.includes("user not found")) {
     return "Invalid email or password. Please check your details and try again.";
   }
@@ -42,7 +47,7 @@ function mapAuthError(error: { message?: string }): string {
   if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch") || msg.includes("load failed")) {
     return "Unable to connect to authentication service. Please check your internet connection and try again.";
   }
-  return error.message || "An unexpected error occurred. Please try again.";
+  return raw || "An unexpected error occurred. Please try again.";
 }
 
 function LoginForm() {
