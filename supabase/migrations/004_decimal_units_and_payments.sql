@@ -3,8 +3,10 @@
 -- ============================================================
 
 -- 1. Allow fractional slot quantities (0.5 increments)
--- The inline check constraint created in 001 gets the auto-name
--- investments_units_check; drop it before altering the column type.
+-- The view investment_summary depends on the units column, so we must
+-- drop it before altering the column type and recreate it after.
+
+DROP VIEW IF EXISTS investment_summary;
 
 ALTER TABLE investments DROP CONSTRAINT IF EXISTS investments_units_check;
 
@@ -17,6 +19,26 @@ ALTER TABLE investments
 ALTER TABLE investments
   ADD CONSTRAINT investments_units_check
   CHECK (units >= 0.5 AND FLOOR(units * 2) = units * 2);
+
+-- Recreate the view now that units is NUMERIC(12,2)
+CREATE OR REPLACE VIEW investment_summary AS
+SELECT
+  i.id,
+  i.investment_code,
+  inv.full_name AS investor_name,
+  inv.investor_code,
+  s.name AS series_name,
+  c.cycle_label,
+  i.units,
+  i.capital,
+  i.expected_roi,
+  i.investment_date,
+  i.maturity_date,
+  i.status
+FROM investments i
+JOIN investors inv ON inv.id = i.investor_id
+JOIN series s ON s.id = i.series_id
+JOIN cycles c ON c.id = i.cycle_id;
 
 -- ============================================================
 -- 2. Investment payments table
