@@ -69,20 +69,25 @@ export async function PATCH(
       );
     }
 
-    if (
-      min_units !== undefined &&
-      (typeof min_units !== "number" || min_units <= 0)
-    ) {
-      return NextResponse.json(
-        { error: "Minimum slots must be a positive number" },
-        { status: 400 }
-      );
+    if (min_units !== undefined) {
+      if (typeof min_units !== "number" || min_units < 0.5) {
+        return NextResponse.json(
+          { error: "Minimum slots must be at least 0.5" },
+          { status: 400 }
+        );
+      }
+      if (!Number.isInteger(Math.round(min_units * 2))) {
+        return NextResponse.json(
+          { error: "Minimum slots must be a multiple of 0.5 (e.g. 0.5, 1, 1.5, 2…)" },
+          { status: 400 }
+        );
+      }
     }
 
     if (max_units !== null && max_units !== undefined && typeof max_units === "number") {
-      if (max_units <= 0) {
+      if (max_units < 0.5) {
         return NextResponse.json(
-          { error: "Maximum slots must be a positive number" },
+          { error: "Maximum slots must be at least 0.5" },
           { status: 400 }
         );
       }
