@@ -1,4 +1,4 @@
-import { addMonths, format } from "date-fns";
+import { addMonths, subDays, format } from "date-fns";
 
 /**
  * Parse a YYYY-MM-DD string as a local calendar date.
@@ -37,10 +37,15 @@ export function calcMaturityDateStr(startDateStr: string): string {
 
 /**
  * Build a human-readable cycle label from the start date.
- * e.g. start=2026-01-25 → "Jan 2026 – Mar 2026"
+ * Uses the last day of the cycle (maturity - 1 day) for the end month so
+ * the label is accurate regardless of whether the start date is the 1st or
+ * a mid/end-of-month date.
+ *   start=2026-01-01 → maturity 2026-04-01 → last day Mar 31 → "Jan 2026 – Mar 2026"
+ *   start=2026-06-30 → maturity 2026-09-30 → last day Sep 29 → "Jun 2026 – Sep 2026"
  */
 export function calcCycleLabel(startDateStr: string): string {
   const start = parseCycleDate(startDateStr);
-  const lastMonth = addMonths(start, 2);
-  return `${format(start, "MMM yyyy")} – ${format(lastMonth, "MMM yyyy")}`;
+  const maturity = addMonths(start, 3);
+  const lastDay = subDays(maturity, 1);
+  return `${format(start, "MMM yyyy")} – ${format(lastDay, "MMM yyyy")}`;
 }
