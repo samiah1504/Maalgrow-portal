@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -94,9 +94,10 @@ export default async function AdminInvestorDetailPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const db = await createAdminClient();
   const { id } = await params;
 
-  const { data: rawInvestor } = await supabase
+  const { data: rawInvestor } = await db
     .from("investors")
     .select(`
       *,

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
@@ -28,6 +28,8 @@ export default async function AdminDashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const db = await createAdminClient();
 
   type InvestmentRow = {
     id: string;
@@ -59,18 +61,18 @@ export default async function AdminDashboardPage() {
     { data: pendingPaymentRequestsRaw },
     { data: awaitingDeclarationRaw },
   ] = await Promise.all([
-    supabase.from("investors").select("*", { count: "exact", head: true }),
-    supabase.from("investments").select("*", { count: "exact", head: true }).eq("status", "active"),
-    supabase.from("payment_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("investments").select("capital").eq("status", "active"),
-    supabase.from("payment_requests").select("amount").eq("type", "roi").eq("status", "paid"),
-    supabase
+    db.from("investors").select("*", { count: "exact", head: true }),
+    db.from("investments").select("*", { count: "exact", head: true }).eq("status", "active"),
+    db.from("payment_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    db.from("investments").select("capital").eq("status", "active"),
+    db.from("payment_requests").select("amount").eq("type", "roi").eq("status", "paid"),
+    db
       .from("investments")
       .select("*, investor:investors(full_name, investor_code), series(name), cycle:cycles(cycle_label)")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase
+    db
       .from("investments")
       .select(
         "*, investor:investors(full_name, investor_code), series(name), cycle:cycles(cycle_label, end_date)"
@@ -81,7 +83,7 @@ export default async function AdminDashboardPage() {
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
       )
       .order("maturity_date", { ascending: true }),
-    supabase
+    db
       .from("payment_requests")
       .select(
         "*, investor:investors(full_name, investor_code), investment:investments(investment_code, series:series(name))"
@@ -89,7 +91,7 @@ export default async function AdminDashboardPage() {
       .eq("status", "pending")
       .order("created_at", { ascending: true })
       .limit(5),
-    supabase
+    db
       .from("cycles")
       .select("id, cycle_label, series(name)")
       .eq("status", "awaiting_profit_declaration"),
@@ -114,7 +116,7 @@ export default async function AdminDashboardPage() {
     cycles: { status: string; cycle_label: string; investments: { capital: number }[] }[];
   };
 
-  const { data: seriesDataRaw } = await supabase
+  const { data: seriesDataRaw } = await db
     .from("series")
     .select("name, cycles(status, cycle_label, investments(capital))")
     .eq("is_active", true);

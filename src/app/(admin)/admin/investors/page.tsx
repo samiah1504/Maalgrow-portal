@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Users, Search, ChevronRight, UserPlus } from "lucide-react";
@@ -16,6 +16,9 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Use admin client to bypass RLS — this page is already role-gated by middleware/layout
+  const adminClient = await createAdminClient();
+
   type InvestorRow = {
     id: string;
     full_name: string;
@@ -27,7 +30,7 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
     investments: { id: string; status: string; capital: number }[] | null;
   };
 
-  let query = supabase
+  let query = adminClient
     .from("investors")
     .select(`
       *,

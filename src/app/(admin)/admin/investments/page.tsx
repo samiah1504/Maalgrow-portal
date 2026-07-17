@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { TrendingUp, ChevronRight, Search, Filter } from "lucide-react";
@@ -37,10 +37,11 @@ export default async function AdminInvestmentsPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const db = await createAdminClient();
   const params = await searchParams;
   const { status, series, search } = params;
 
-  let query = supabase
+  let query = db
     .from("investments")
     .select(
       "*, investor:investors(full_name, investor_code), series(name), cycle:cycles(cycle_label)"
@@ -62,7 +63,7 @@ export default async function AdminInvestmentsPage({
       )
     : allInvestments;
 
-  const { data: rawSeries } = await supabase.from("series").select("id, name").order("name");
+  const { data: rawSeries } = await db.from("series").select("id, name").order("name");
   const seriesList = rawSeries as { id: string; name: string }[] | null;
 
   const totalCapital = investments?.reduce((s, i) => s + i.capital, 0) ?? 0;

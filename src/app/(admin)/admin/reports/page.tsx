@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { BarChart3, TrendingUp, DollarSign, Users, Download } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -26,16 +26,18 @@ export default async function AdminReportsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const db = await createAdminClient();
+
   const [
     { count: totalInvestors },
     { count: totalInvestments },
     { data: rawSeries },
     { data: rawPayments },
   ] = await Promise.all([
-    supabase.from("investors").select("*", { count: "exact", head: true }),
-    supabase.from("investments").select("*", { count: "exact", head: true }),
-    supabase.from("series").select("name, mudarabah_investor_ratio, investments(capital, status, declared_profit)"),
-    supabase.from("payment_requests").select("type, status, amount"),
+    db.from("investors").select("*", { count: "exact", head: true }),
+    db.from("investments").select("*", { count: "exact", head: true }),
+    db.from("series").select("name, mudarabah_investor_ratio, investments(capital, status, declared_profit)"),
+    db.from("payment_requests").select("type, status, amount"),
   ]);
 
   const seriesData = rawSeries as unknown as SeriesReport[] | null;
