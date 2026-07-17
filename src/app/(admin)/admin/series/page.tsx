@@ -47,6 +47,7 @@ type CycleRow = {
   total_slots: number;
   total_investors: number;
   amount_received: number;
+  rollover_processed_at?: string | null;
 };
 
 type SeriesRow = {
@@ -244,7 +245,8 @@ export default async function SeriesPage() {
          cycles(
            id, cycle_number, cycle_label, start_date, end_date, status,
            subscription_open_date, subscription_close_date,
-           total_capital, total_slots, total_investors, amount_received
+           total_capital, total_slots, total_investors, amount_received,
+           rollover_processed_at
          )`
       )
       .order("name"),
@@ -273,12 +275,20 @@ export default async function SeriesPage() {
 
   type AlertCycle = CycleRow & { series_name: "A" | "B" | "C" };
   const awaitingDeclaration: AlertCycle[] = [];
+  const rolloverPending: AlertCycle[] = [];
   const subscriptionClosing: (AlertCycle & { daysLeft: number })[] = [];
 
   for (const s of series ?? []) {
     for (const c of s.cycles ?? []) {
       if (c.status === "awaiting_profit_declaration") {
         awaitingDeclaration.push({ ...c, series_name: s.name });
+      }
+      if (
+        c.status === "completed" &&
+        profitMap.has(c.id) &&
+        !c.rollover_processed_at
+      ) {
+        rolloverPending.push({ ...c, series_name: s.name });
       }
       if (c.subscription_close_date) {
         const closeDate = new Date(c.subscription_close_date);
@@ -294,6 +304,7 @@ export default async function SeriesPage() {
 
   const hasAlerts =
     awaitingDeclaration.length > 0 ||
+    rolloverPending.length > 0 ||
     (awaitingRollover ?? 0) > 0 ||
     subscriptionClosing.length > 0;
 
@@ -342,6 +353,31 @@ export default async function SeriesPage() {
                 <Link href={`/admin/cycles/${cycle.id}/declare-profit`}>
                   Declare Profit
                 </Link>
+              </Button>
+            </div>
+          ))}
+
+          {rolloverPending.map((cycle) => (
+            <div
+              key={cycle.id}
+              className="flex items-start gap-3 rounded-xl border border-purple-200 bg-purple-50 p-3.5"
+            >
+              <AlertCircle className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-purple-900">
+                  Series {cycle.series_name}: {cycle.cycle_label} — Rollover Ready
+                </p>
+                <p className="text-xs text-purple-700 mt-0.5">
+                  Profit has been declared. Process the automatic rollover to continue
+                  investors into the next cycle.
+                </p>
+              </div>
+              <Button
+                asChild
+                size="sm"
+                className="shrink-0 bg-purple-600 hover:bg-purple-700 text-white border-0"
+              >
+                <Link href={`/admin/cycles/${cycle.id}/rollover`}>Process Rollover</Link>
               </Button>
             </div>
           ))}

@@ -46,6 +46,10 @@ export default async function InvestmentsPage() {
     units: number;
     investment_date: string;
     maturity_date: string;
+    maturity_decision: "continue" | "exit" | "rollover_all" | null;
+    next_investment_id: string | null;
+    parent_investment_id: string | null;
+    rollover_balance?: number;
     series: { name: string } | null;
     cycle: { cycle_label: string } | null;
   };
@@ -159,6 +163,10 @@ function InvestmentCard({
     units: number;
     investment_date: string;
     maturity_date: string;
+    maturity_decision?: "continue" | "exit" | "rollover_all" | null;
+    next_investment_id?: string | null;
+    parent_investment_id?: string | null;
+    rollover_balance?: number;
     series?: { name: string } | null;
     cycle?: { cycle_label: string } | null;
   };
@@ -200,6 +208,26 @@ function InvestmentCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-xs text-muted">{investment.cycle?.cycle_label}</div>
+
+        {/* Rollover continuity */}
+        {investment.status === "completed" && investment.next_investment_id && (
+          <div className="rounded-lg bg-primary-50 border border-primary-100 px-2.5 py-1.5 text-[11px] font-medium text-primary-700">
+            ✓ Rolled over into the next cycle
+          </div>
+        )}
+        {investment.status === "completed" && investment.maturity_decision === "exit" && (
+          <div className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-[11px] font-medium text-muted">
+            Withdrawn — capital and profit paid out
+          </div>
+        )}
+        {investment.status === "active" && investment.parent_investment_id && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700">
+            ↻ Continued from previous cycle
+            {(investment.rollover_balance ?? 0) > 0
+              ? ` · includes ${formatCurrency(investment.rollover_balance!)} rolled-over profit`
+              : ""}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-surface-2 p-2.5">

@@ -166,6 +166,8 @@ export type Database = {
           total_investors: number;
           amount_received: number;
           maturity_processed_at: string | null;
+          rollover_deadline: string | null;
+          rollover_processed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -186,6 +188,8 @@ export type Database = {
           total_investors?: number;
           amount_received?: number;
           maturity_processed_at?: string | null;
+          rollover_deadline?: string | null;
+          rollover_processed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -203,6 +207,8 @@ export type Database = {
           total_investors?: number;
           amount_received?: number;
           maturity_processed_at?: string | null;
+          rollover_deadline?: string | null;
+          rollover_processed_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -218,10 +224,11 @@ export type Database = {
           price_per_unit: number;
           capital: number;
           declared_profit: number | null;
+          rollover_balance: number;
           investment_date: string;
           maturity_date: string;
           status: "active" | "matured" | "completed";
-          maturity_decision: "continue" | "exit" | null;
+          maturity_decision: "continue" | "exit" | "rollover_all" | null;
           maturity_decided_at: string | null;
           next_investment_id: string | null;
           parent_investment_id: string | null;
@@ -240,10 +247,11 @@ export type Database = {
           price_per_unit: number;
           capital: number;
           declared_profit?: number | null;
+          rollover_balance?: number;
           investment_date: string;
           maturity_date: string;
           status?: "active" | "matured" | "completed";
-          maturity_decision?: "continue" | "exit" | null;
+          maturity_decision?: "continue" | "exit" | "rollover_all" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
           parent_investment_id?: string | null;
@@ -254,7 +262,7 @@ export type Database = {
         };
         Update: {
           status?: "active" | "matured" | "completed";
-          maturity_decision?: "continue" | "exit" | null;
+          maturity_decision?: "continue" | "exit" | "rollover_all" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
           declared_profit?: number | null;
@@ -495,6 +503,108 @@ export type Database = {
         };
         Relationships: [];
       };
+      rollover_decisions: {
+        Row: {
+          id: string;
+          investment_id: string;
+          investor_id: string;
+          source_cycle_id: string;
+          decision: "continue" | "exit" | "rollover_all";
+          bank_name: string | null;
+          account_name: string | null;
+          account_number: string | null;
+          notes: string | null;
+          deadline: string | null;
+          locked: boolean;
+          decided_by: string | null;
+          via: string;
+          submitted_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          investment_id: string;
+          investor_id: string;
+          source_cycle_id: string;
+          decision: "continue" | "exit" | "rollover_all";
+          bank_name?: string | null;
+          account_name?: string | null;
+          account_number?: string | null;
+          notes?: string | null;
+          deadline?: string | null;
+          locked?: boolean;
+          decided_by?: string | null;
+          via?: string;
+          submitted_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          decision?: "continue" | "exit" | "rollover_all";
+          bank_name?: string | null;
+          account_name?: string | null;
+          account_number?: string | null;
+          notes?: string | null;
+          deadline?: string | null;
+          locked?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cycle_rollovers: {
+        Row: {
+          id: string;
+          investor_id: string;
+          previous_investment_id: string;
+          new_investment_id: string | null;
+          source_cycle_id: string;
+          destination_cycle_id: string | null;
+          series_id: string;
+          units: number | null;
+          capital_rolled_over: number;
+          profit_rolled_over: number;
+          total_rollover_amount: number;
+          rollover_balance: number;
+          withdrawal_amount: number;
+          decision: "continue" | "exit" | "rollover_all";
+          method: string;
+          status: string;
+          error: string | null;
+          email_sent: boolean;
+          email_error: string | null;
+          rollover_date: string;
+          processed_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          investor_id: string;
+          previous_investment_id: string;
+          new_investment_id?: string | null;
+          source_cycle_id: string;
+          destination_cycle_id?: string | null;
+          series_id: string;
+          units?: number | null;
+          capital_rolled_over?: number;
+          profit_rolled_over?: number;
+          total_rollover_amount?: number;
+          rollover_balance?: number;
+          withdrawal_amount?: number;
+          decision: "continue" | "exit" | "rollover_all";
+          method: string;
+          status?: string;
+          error?: string | null;
+          email_sent?: boolean;
+          email_error?: string | null;
+          rollover_date?: string;
+          processed_by?: string | null;
+        };
+        Update: {
+          email_sent?: boolean;
+          email_error?: string | null;
+          status?: string;
+          error?: string | null;
+        };
+        Relationships: [];
+      };
       announcements: {
         Row: {
           id: string;
@@ -544,6 +654,7 @@ export type Database = {
           units: number;
           capital: number;
           declared_profit: number | null;
+          rollover_balance: number;
           investment_date: string;
           maturity_date: string;
           status: string;
@@ -563,7 +674,7 @@ export type Database = {
       submit_maturity_decision: {
         Args: {
           p_investment_id: string;
-          p_decision: "continue" | "exit";
+          p_decision: "continue" | "exit" | "rollover_all";
           p_bank_name: string;
           p_account_name: string;
           p_account_number: string;
@@ -580,6 +691,30 @@ export type Database = {
           p_action_url?: string;
           p_metadata?: Json;
         };
+        Returns: string;
+      };
+      submit_rollover_decision: {
+        Args: {
+          p_investment_id: string;
+          p_decision: "continue" | "exit" | "rollover_all";
+          p_bank_name?: string | null;
+          p_account_name?: string | null;
+          p_account_number?: string | null;
+          p_notes?: string | null;
+          p_admin_override?: boolean;
+        };
+        Returns: Json;
+      };
+      process_cycle_rollover: {
+        Args: {
+          p_source_cycle_id: string;
+          p_destination_cycle_id?: string | null;
+          p_convert_profit_to_slots?: boolean;
+        };
+        Returns: Json;
+      };
+      create_next_cycle: {
+        Args: { p_series_id: string };
         Returns: string;
       };
       declare_cycle_profit: {
@@ -603,7 +738,7 @@ export type Database = {
       notification_type: "investment" | "roi" | "capital" | "maturity" | "payment" | "document" | "announcement" | "system";
       document_type: "agreement" | "certificate" | "statement" | "receipt" | "report" | "other";
       target_audience: "all" | "investors" | "admins";
-      maturity_decision: "continue" | "exit";
+      maturity_decision: "continue" | "exit" | "rollover_all";
     };
   };
 };

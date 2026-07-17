@@ -35,11 +35,18 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
     investment_date: string;
     maturity_date: string;
     status: "active" | "matured" | "completed";
-    maturity_decision: "continue" | "exit" | null;
+    maturity_decision: "continue" | "exit" | "rollover_all" | null;
     next_investment_id: string | null;
     parent_investment_id: string | null;
+    rollover_balance?: number;
     series: { id: string; name: "A" | "B" | "C" } | null;
-    cycle: { id: string; cycle_label: string; start_date: string; end_date: string } | null;
+    cycle: {
+      id: string;
+      cycle_label: string;
+      start_date: string;
+      end_date: string;
+      rollover_deadline?: string | null;
+    } | null;
   };
   type LinkedInvestment = { investment_code: string; status: string; cycle: { cycle_label: string } | null };
 
@@ -135,8 +142,8 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
         </div>
       </div>
 
-      {/* Maturity Action Banner */}
-      {isMatured && (
+      {/* Rollover banner: opt-out window while active, decision when matured */}
+      {(isMatured || investment.status === "active") && (
         <InvestmentDetailClient
           investment={{
             ...investment,
