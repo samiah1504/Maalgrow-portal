@@ -253,7 +253,7 @@ ALTER TABLE investments ADD COLUMN IF NOT EXISTS declared_profit NUMERIC(20,2) N
 
 ALTER TABLE series
   ADD COLUMN IF NOT EXISTS mudarabah_investor_ratio NUMERIC(5,4)
-  NOT NULL DEFAULT 0.70;
+  NOT NULL DEFAULT 0.50;
 
 ALTER TABLE series
   ADD CONSTRAINT series_mudarabah_ratio_check

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Layers, ChevronRight, TrendingUp, Users, Calendar } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { SLOT_VALUE_NGN } from "@/lib/investment-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Metadata } from "next";
@@ -111,9 +112,9 @@ export default async function SeriesPage() {
                   </div>
                   <div className={`rounded-lg ${seriesColors.light} ${seriesColors.border} border p-3 text-center`}>
                     <p className={`text-lg font-bold ${seriesColors.text}`}>
-                      {formatCurrency(s.price_per_unit)}
+                      {formatCurrency(SLOT_VALUE_NGN)}
                     </p>
-                    <p className="text-xs text-muted mt-0.5">per unit</p>
+                    <p className="text-xs text-muted mt-0.5">per slot</p>
                   </div>
                   <div className={`rounded-lg ${seriesColors.light} ${seriesColors.border} border p-3 text-center`}>
                     <p className={`text-lg font-bold ${seriesColors.text}`}>{totalCycles}</p>
