@@ -10,17 +10,49 @@ import {
   Clock,
   XCircle,
   Building2,
-  CreditCard,
   ShieldCheck,
+  PlusCircle,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  SLOT_VALUE_NGN,
+  getPaymentStatus,
+  paymentStatusColor,
+  slotLabel,
+} from "@/lib/investment-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { InvestorActions } from "./_components/investor-actions";
+import { AddPaymentDialog } from "./_components/add-payment-dialog";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investor Detail | Admin" };
+
+type InvestmentPayment = {
+  id: string;
+  amount: number;
+  payment_date: string;
+  reference: string | null;
+  created_at: string;
+};
+
+type InvestmentFull = {
+  id: string;
+  investment_code: string;
+  units: number;
+  price_per_unit: number;
+  capital: number;
+  expected_roi: number;
+  roi_rate: number;
+  investment_date: string;
+  maturity_date: string;
+  status: string;
+  notes: string | null;
+  series: { name: string } | null;
+  cycle: { cycle_label: string; start_date: string; end_date: string } | null;
+  investment_payments: InvestmentPayment[];
+};
 
 type InvestorFull = {
   id: string;
@@ -37,21 +69,8 @@ type InvestorFull = {
   kyc_status: string;
   kyc_notes: string | null;
   created_at: string;
-  profile: {
-    id: string;
-    email: string;
-    is_active: boolean;
-  } | null;
-  investments: {
-    id: string;
-    investment_code: string;
-    status: string;
-    capital: number;
-    expected_roi: number;
-    maturity_date: string;
-    series: { name: string } | null;
-    cycle: { cycle_label: string } | null;
-  }[];
+  profile: { id: string; email: string; is_active: boolean } | null;
+  investments: InvestmentFull[];
   payment_requests: {
     id: string;
     type: string;
@@ -80,7 +99,12 @@ export default async function AdminInvestorDetailPage({
     .select(`
       *,
       profile:profiles(id, email, is_active),
-      investments(*, series(*), cycle:cycles(*)),
+      investments(
+        *,
+        series(*),
+        cycle:cycles(cycle_label, start_date, end_date),
+        investment_payments(*)
+      ),
       payment_requests(*)
     `)
     .eq("id", id)
@@ -90,6 +114,7 @@ export default async function AdminInvestorDetailPage({
 
   const investor = rawInvestor as unknown as InvestorFull;
 
+  // Aggregate stats
   const totalCapital = investor.investments.reduce((s, i) => s + i.capital, 0);
   const totalROIPaid = investor.payment_requests
     .filter((p) => p.type === "roi" && p.status === "paid")
@@ -162,13 +187,21 @@ export default async function AdminInvestorDetailPage({
           </div>
         </div>
 
-        {/* Action buttons */}
-        <InvestorActions
-          investorId={investor.id}
-          investorName={investor.full_name}
-          investorEmail={investor.profile?.email ?? investor.email}
-          isActive={isActive}
-        />
+        <div className="flex flex-col gap-2 items-start sm:items-end">
+          <InvestorActions
+            investorId={investor.id}
+            investorName={investor.full_name}
+            investorEmail={investor.profile?.email ?? investor.email}
+            isActive={isActive}
+          />
+          <Link
+            href={`/admin/investors/new?investor_id=${investor.id}`}
+            className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            Add Investment
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -194,29 +227,46 @@ export default async function AdminInvestorDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Investments */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">
-                Investments ({investor.investments.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {investor.investments.length === 0 ? (
-                <p className="px-6 py-8 text-center text-sm text-muted">
-                  No investments yet
-                </p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {investor.investments.map((inv) => (
-                    <div
-                      key={inv.id}
-                      className="flex items-center justify-between px-6 py-3"
-                    >
+        {/* Investments with payment detail */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">
+              Investments ({investor.investments.length})
+            </h2>
+            <Link href="/admin/investors/new" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium">
+              <PlusCircle className="h-3.5 w-3.5" />
+              Add New Investment
+            </Link>
+          </div>
+
+          {investor.investments.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-sm text-muted">
+                No investments yet.{" "}
+                <Link
+                  href="/admin/investors/new"
+                  className="text-primary-600 hover:underline"
+                >
+                  Add the first investment →
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            investor.investments.map((inv) => {
+              const totalPaid = inv.investment_payments.reduce(
+                (s, p) => s + p.amount,
+                0
+              );
+              const balance = inv.capital - totalPaid;
+              const payStatus = getPaymentStatus(inv.capital, totalPaid);
+
+              return (
+                <Card key={inv.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-xs font-mono text-muted">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="font-mono text-xs text-muted">
                             {inv.investment_code}
                           </span>
                           <Badge
@@ -226,48 +276,150 @@ export default async function AdminInvestorDetailPage({
                             {inv.status.charAt(0).toUpperCase() +
                               inv.status.slice(1)}
                           </Badge>
+                          <span
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${paymentStatusColor(payStatus)}`}
+                          >
+                            {payStatus}
+                          </span>
                         </div>
-                        <p className="text-sm text-muted">
+                        <p className="text-sm font-semibold text-foreground">
                           Series {inv.series?.name} · {inv.cycle?.cycle_label}
                         </p>
-                        <p className="text-xs text-muted">
-                          Matures {formatDate(inv.maturity_date)}
+                      </div>
+                      <AddPaymentDialog
+                        investmentId={inv.id}
+                        investmentCode={inv.investment_code}
+                        capital={inv.capital}
+                        units={inv.units}
+                        totalPaid={totalPaid}
+                      />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-3">
+                    {/* Allocation summary */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs text-muted">Slots</p>
+                        <p className="font-semibold">{slotLabel(inv.units)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted">Slot value</p>
+                        <p className="font-semibold">
+                          {formatCurrency(SLOT_VALUE_NGN)}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-foreground">
+                      <div>
+                        <p className="text-xs text-muted">Investment</p>
+                        <p className="font-semibold text-foreground">
                           {formatCurrency(inv.capital)}
                         </p>
-                        <p className="text-xs text-gold-600">
-                          +{formatCurrency(inv.expected_roi)} ROI
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted">Expected ROI</p>
+                        <p className="font-semibold text-gold-600">
+                          +{formatCurrency(inv.expected_roi)}
                         </p>
-                        <Link
-                          href={`/admin/investments/${inv.id}`}
-                          className="text-xs text-primary-600 hover:underline"
-                        >
-                          View →
-                        </Link>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Full payment history */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">
-                Payment History ({investor.payment_requests.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {investor.payment_requests.length === 0 ? (
-                <p className="px-6 py-8 text-center text-sm text-muted">
-                  No payments yet
-                </p>
-              ) : (
+                    {/* Cycle dates */}
+                    {inv.cycle && (
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-muted">Cycle start</p>
+                          <p className="font-medium">
+                            {formatDate(inv.cycle.start_date)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted">Matures</p>
+                          <p className="font-medium">
+                            {formatDate(inv.cycle.end_date)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment summary */}
+                    <div className="rounded-lg bg-surface-2 border border-border p-3 space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted">Total paid</span>
+                        <span className="font-medium text-foreground">
+                          {formatCurrency(totalPaid)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted">Outstanding</span>
+                        <span
+                          className={`font-bold ${
+                            balance > 0
+                              ? "text-amber-600"
+                              : balance === 0
+                              ? "text-green-600"
+                              : "text-blue-600"
+                          }`}
+                        >
+                          {formatCurrency(Math.max(0, balance))}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Individual payment records */}
+                    {inv.investment_payments.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted mb-2">
+                          Payment history
+                        </p>
+                        <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                          {inv.investment_payments
+                            .slice()
+                            .sort(
+                              (a, b) =>
+                                new Date(a.payment_date).getTime() -
+                                new Date(b.payment_date).getTime()
+                            )
+                            .map((p, idx) => (
+                              <div
+                                key={p.id}
+                                className="flex items-center justify-between px-3 py-2 bg-white text-sm"
+                              >
+                                <div>
+                                  <span className="text-xs text-muted mr-2">
+                                    #{idx + 1}
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {formatCurrency(p.amount)}
+                                  </span>
+                                  {p.reference && (
+                                    <span className="ml-2 text-xs text-muted">
+                                      · {p.reference}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted">
+                                  {formatDate(p.payment_date)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+
+          {/* Outgoing payment requests (ROI/Capital returns) */}
+          {investor.payment_requests.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  ROI & Capital Payment Requests (
+                  {investor.payment_requests.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
                 <div className="divide-y divide-border">
                   {investor.payment_requests.map((p) => (
                     <div
@@ -304,9 +456,9 @@ export default async function AdminInvestorDetailPage({
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}

@@ -378,6 +378,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      investment_payments: {
+        Row: {
+          id: string;
+          investment_id: string;
+          investor_id: string;
+          amount: number;
+          payment_date: string;
+          reference: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          investment_id: string;
+          investor_id: string;
+          amount: number;
+          payment_date: string;
+          reference?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          amount?: number;
+          payment_date?: string;
+          reference?: string | null;
+        };
+        Relationships: [];
+      };
       announcements: {
         Row: {
           id: string;

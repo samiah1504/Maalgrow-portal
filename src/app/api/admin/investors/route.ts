@@ -1,46 +1,81 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
+const ADMIN_ROLES = [
+  "super_admin",
+  "administrator",
+  "finance",
+  "operations",
+  "customer_support",
+];
+
+async function requireAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Unauthorized", status: 401 } as const;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !ADMIN_ROLES.includes(profile.role ?? "")) {
+    return { error: "Forbidden", status: 403 } as const;
+  }
+
+  return { user, supabase };
+}
+
+// GET /api/admin/investors?search=email_or_phone
+// Returns up to 5 matching investors for the "existing investor" lookup
+export async function GET(request: Request) {
+  const auth = await requireAdmin();
+  if ("error" in auth) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get("search")?.trim() ?? "";
+
+  if (search.length < 3) {
+    return NextResponse.json({ investors: [] });
+  }
+
+  const { supabase } = auth;
+
+  const { data, error } = await supabase
+    .from("investors")
+    .select("id, full_name, email, phone, investor_code, kyc_status")
+    .or(`email.ilike.%${search}%,phone.ilike.%${search}%`)
+    .limit(5);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ investors: data ?? [] });
+}
+
+// POST /api/admin/investors — create new investor + send invite
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAdmin();
+    if ("error" in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { data: callerProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const adminRoles = [
-      "super_admin",
-      "administrator",
-      "finance",
-      "operations",
-      "customer_support",
-    ];
-    if (!callerProfile || !adminRoles.includes(callerProfile.role ?? "")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { user } = auth;
+    const adminClient = await createAdminClient();
 
     const body = await request.json();
-    const {
-      full_name,
-      email,
-      phone,
-      address,
-      bank_name,
-      account_name,
-      account_number,
-      bvn,
-      nin,
-    } = body as Record<string, string | undefined>;
+    const { full_name, email, phone, address } = body as Record<
+      string,
+      string | undefined
+    >;
 
     if (!full_name?.trim() || !email?.trim()) {
       return NextResponse.json(
@@ -50,7 +85,6 @@ export async function POST(request: Request) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const adminClient = await createAdminClient();
 
     // Prevent duplicate investor records
     const { data: existing } = await adminClient
@@ -111,18 +145,12 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         phone: phone?.trim() || null,
         address: address?.trim() || null,
-        bank_name: bank_name?.trim() || null,
-        account_name: account_name?.trim() || null,
-        account_number: account_number?.trim() || null,
-        bvn: bvn?.trim() || null,
-        nin: nin?.trim() || null,
         created_by: user.id,
       })
       .select()
       .single();
 
     if (investorError) {
-      // Roll back: delete the newly-created auth user so we don't have orphan accounts
       await adminClient.auth.admin.deleteUser(newUserId);
       return NextResponse.json(
         { error: "Failed to create investor record: " + investorError.message },
