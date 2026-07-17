@@ -2,11 +2,11 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, Lock, Mail, TrendingUp } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, TrendingUp, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,27 @@ export default function LoginPage() {
   );
 }
 
+function mapAuthError(error: { message?: string }): string {
+  const msg = (error.message ?? "").toLowerCase();
+
+  if (msg.includes("invalid login credentials") || msg.includes("invalid email or password") || msg.includes("user not found")) {
+    return "Invalid email or password. Please check your details and try again.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Your email address has not been confirmed. Please check your inbox for a confirmation link.";
+  }
+  if (msg.includes("too many requests") || msg.includes("rate limit")) {
+    return "Too many sign-in attempts. Please wait a few minutes and try again.";
+  }
+  if (msg.includes("network") || msg.includes("fetch") || msg.includes("failed to fetch") || msg.includes("load failed")) {
+    return "Unable to connect to authentication service. Please check your internet connection and try again.";
+  }
+  return error.message || "An unexpected error occurred. Please try again.";
+}
+
 function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const router = useRouter();
+  const [loginError, setLoginError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
 
@@ -42,38 +60,57 @@ function LoginForm() {
   });
 
   const onSubmit = async (data: FormData) => {
+    setLoginError(null);
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
-
-    if (error) {
-      toast.error(
-        error.message === "Invalid login credentials"
-          ? "Invalid email or password. Please try again."
-          : error.message
-      );
+    let authError: { message?: string } | null = null;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+      });
+      authError = error;
+    } catch {
+      const message = "Unable to connect to authentication service. Please check your internet connection and try again.";
+      setLoginError(message);
+      toast.error(message);
       return;
     }
 
-    // Get user role to redirect appropriately
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      const isAdmin = ["super_admin", "administrator", "finance", "operations", "customer_support"].includes(
-        profile?.role ?? ""
-      );
-
-      toast.success("Welcome back!");
-      window.location.href = isAdmin ? "/admin/dashboard" : redirectTo;
+    if (authError) {
+      const message = mapAuthError(authError);
+      setLoginError(message);
+      toast.error(message);
+      return;
     }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      const message = "Unable to retrieve account details. Please try again.";
+      setLoginError(message);
+      toast.error(message);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      const message = "Account profile not found. Please contact support at support@maalvest.com.";
+      setLoginError(message);
+      toast.error(message);
+      return;
+    }
+
+    const isAdmin = ["super_admin", "administrator", "finance", "operations", "customer_support"].includes(
+      profile.role ?? ""
+    );
+
+    toast.success("Welcome back!");
+    window.location.href = isAdmin ? "/admin/dashboard" : redirectTo;
   };
 
   return (
@@ -150,6 +187,14 @@ function LoginForm() {
                   </Link>
                 </div>
               </div>
+
+              {/* Inline error — visible even if toast is hidden */}
+              {loginError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{loginError}</p>
+                </div>
+              )}
 
               <Button
                 type="submit"
