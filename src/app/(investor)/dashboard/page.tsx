@@ -44,7 +44,7 @@ export default async function DashboardPage() {
   // Get investor profile
   const { data: rawInvestor } = await supabase
     .from("investors")
-    .select("*, profile:profiles(*)")
+    .select("*, profile:profiles!profile_id(*)")
     .eq("profile_id", user.id)
     .single();
 

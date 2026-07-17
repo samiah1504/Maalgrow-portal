@@ -101,7 +101,7 @@ export default async function AdminInvestorDetailPage({
     .from("investors")
     .select(`
       *,
-      profile:profiles(id, email, is_active),
+      profile:profiles!profile_id(id, email, is_active),
       investments(
         *,
         series(*),

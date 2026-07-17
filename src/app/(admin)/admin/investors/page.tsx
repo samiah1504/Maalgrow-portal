@@ -34,7 +34,7 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
     .from("investors")
     .select(`
       *,
-      profile:profiles(email, is_active),
+      profile:profiles!profile_id(email, is_active),
       investments:investments(id, status, capital)
     `)
     .order("created_at", { ascending: false });
@@ -46,7 +46,10 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
     query = query.eq("kyc_status", kyc as "pending" | "approved" | "rejected");
   }
 
-  const { data: rawInvestors } = await query;
+  const { data: rawInvestors, error: investorsError } = await query;
+  if (investorsError) {
+    console.error("[Admin] Investors list query failed:", investorsError);
+  }
   const investors = rawInvestors as InvestorRow[] | null;
 
   const totalActive = investors?.filter((i) => {

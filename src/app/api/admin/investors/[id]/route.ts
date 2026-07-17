@@ -53,7 +53,7 @@ export async function PATCH(
 
     const { data: investor, error: fetchError } = await adminClient
       .from("investors")
-      .select("*, profile:profiles(id, email, is_active)")
+      .select("*, profile:profiles!profile_id(id, email, is_active)")
       .eq("id", id)
       .single();
 
