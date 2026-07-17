@@ -83,6 +83,13 @@ function LoginForm() {
     }
 
     if (authError) {
+      // Log full error so we can diagnose via browser console
+      console.error("[Login] Auth error:", {
+        name: (authError as { name?: string }).name,
+        message: authError.message,
+        status: (authError as { status?: number }).status,
+        full: authError,
+      });
       const message = mapAuthError(authError);
       setLoginError(message);
       toast.error(message);
