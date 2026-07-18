@@ -1,11 +1,13 @@
 // Fixed slot value — ₦500,000 per slot, constant across all series and cycles
 export const SLOT_VALUE_NGN = 500_000;
 
-// Validate that units is a valid slot quantity (≥ 0.5, multiples of 0.5)
+// Validate that units is a valid slot quantity (≥ 0.5, multiples of 0.5).
+// value * 2 must itself be an integer — do NOT round first, or every
+// number passes (halves are exact in IEEE-754, so this test is precise).
 export function isValidSlots(value: number): boolean {
   if (!isFinite(value) || isNaN(value)) return false;
   if (value < 0.5) return false;
-  return Number.isInteger(Math.round(value * 2));
+  return Number.isInteger(value * 2);
 }
 
 // Calculate investment capital in kobo first, then convert to naira

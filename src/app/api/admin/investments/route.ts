@@ -16,7 +16,7 @@ const SLOT_VALUE_NGN = 500_000;
 function validateUnits(units: unknown): units is number {
   if (typeof units !== "number" || isNaN(units)) return false;
   if (units < 0.5) return false;
-  return Number.isInteger(Math.round(units * 2));
+  return Number.isInteger(units * 2);
 }
 
 export async function POST(request: Request) {

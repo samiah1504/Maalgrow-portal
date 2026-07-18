@@ -76,7 +76,7 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      if (!Number.isInteger(Math.round(min_units * 2))) {
+      if (!Number.isInteger(min_units * 2)) {
         return NextResponse.json(
           { error: "Minimum slots must be a multiple of 0.5 (e.g. 0.5, 1, 1.5, 2…)" },
           { status: 400 }

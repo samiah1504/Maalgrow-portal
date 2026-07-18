@@ -605,6 +605,118 @@ export type Database = {
         };
         Relationships: [];
       };
+      migration_batches: {
+        Row: {
+          id: string;
+          series_id: string;
+          cycle_id: string;
+          source: string;
+          source_name: string | null;
+          status: string;
+          email_mode: string;
+          total_rows: number;
+          imported_count: number;
+          failed_count: number;
+          skipped_count: number;
+          uploaded_by: string | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          series_id: string;
+          cycle_id: string;
+          source: string;
+          source_name?: string | null;
+          status?: string;
+          email_mode?: string;
+          total_rows?: number;
+          imported_count?: number;
+          failed_count?: number;
+          skipped_count?: number;
+          uploaded_by?: string | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          status?: string;
+          email_mode?: string;
+          total_rows?: number;
+          imported_count?: number;
+          failed_count?: number;
+          skipped_count?: number;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      migration_rows: {
+        Row: {
+          id: string;
+          batch_id: string;
+          row_number: number;
+          full_name: string;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          slots: number | null;
+          amount_paid: number;
+          payment_date: string | null;
+          payment_reference: string | null;
+          notes: string | null;
+          status: string;
+          issue: string | null;
+          action: string | null;
+          existing_investor_id: string | null;
+          investor_id: string | null;
+          investment_id: string | null;
+          error: string | null;
+          processed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          batch_id: string;
+          row_number: number;
+          full_name?: string;
+          phone?: string | null;
+          email?: string | null;
+          address?: string | null;
+          slots?: number | null;
+          amount_paid?: number;
+          payment_date?: string | null;
+          payment_reference?: string | null;
+          notes?: string | null;
+          status?: string;
+          issue?: string | null;
+          action?: string | null;
+          existing_investor_id?: string | null;
+          investor_id?: string | null;
+          investment_id?: string | null;
+          error?: string | null;
+          processed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          phone?: string | null;
+          email?: string | null;
+          address?: string | null;
+          slots?: number | null;
+          amount_paid?: number;
+          payment_date?: string | null;
+          payment_reference?: string | null;
+          notes?: string | null;
+          status?: string;
+          issue?: string | null;
+          action?: string | null;
+          existing_investor_id?: string | null;
+          investor_id?: string | null;
+          investment_id?: string | null;
+          error?: string | null;
+          processed_at?: string | null;
+        };
+        Relationships: [];
+      };
       announcements: {
         Row: {
           id: string;
