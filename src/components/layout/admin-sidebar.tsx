@@ -18,6 +18,7 @@ import {
   LogOut,
   X,
   ChevronRight,
+  UploadCloud,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -47,6 +48,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Investors", href: "/admin/investors", icon: <Users className="h-4 w-4" /> },
       { label: "Investments", href: "/admin/investments", icon: <TrendingUp className="h-4 w-4" /> },
+      { label: "Bulk Migration", href: "/admin/migration", icon: <UploadCloud className="h-4 w-4" /> },
     ],
   },
   {
