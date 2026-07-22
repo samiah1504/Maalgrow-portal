@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database.types";
+import { SITE_URL } from "@/lib/site-url";
 
 type InvestorUpdate = Database["public"]["Tables"]["investors"]["Update"];
 
@@ -159,8 +160,7 @@ export async function PATCH(
     // ─── Send password reset email ─────────────────────────────────────────
     if (action === "reset_password") {
       const investorEmail = profile?.email ?? investor.email;
-      const siteUrl =
-        process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app";
+      const siteUrl = SITE_URL;
 
       const { error: resetError } = await adminClient.auth.admin.generateLink({
         type: "recovery",
@@ -178,8 +178,7 @@ export async function PATCH(
     // ─── Resend invitation email ───────────────────────────────────────────
     if (action === "resend_invite") {
       const investorEmail = profile?.email ?? investor.email;
-      const siteUrl =
-        process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app";
+      const siteUrl = SITE_URL;
 
       const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
         investorEmail,

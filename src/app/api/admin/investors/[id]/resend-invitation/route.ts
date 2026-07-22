@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendOnboardingEmail } from "@/lib/email";
 import { getPaymentStatus } from "@/lib/investment-utils";
+import { SITE_URL } from "@/lib/site-url";
 
 const ALLOWED_ROLES = ["super_admin", "administrator"];
 const SLOT_VALUE_NGN = 500_000;
@@ -54,8 +55,7 @@ export async function POST(
       );
     }
 
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app";
+    const siteUrl = SITE_URL;
 
     // Generate a fresh invite link (does NOT send Supabase's email)
     const { data: linkData, error: linkErr } =

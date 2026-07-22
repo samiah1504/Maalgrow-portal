@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendOnboardingEmail } from "@/lib/email";
 import { getPaymentStatus } from "@/lib/investment-utils";
+import { SITE_URL } from "@/lib/site-url";
 
 const ADMIN_ROLES = [
   "super_admin",
@@ -203,9 +204,7 @@ export async function POST(request: Request) {
     let emailError: string | undefined;
 
     if (send_onboarding_email) {
-      const siteUrl =
-        process.env.NEXT_PUBLIC_SITE_URL ??
-        "https://maalgrow-portal.vercel.app";
+      const siteUrl = SITE_URL;
 
       // Generate a fresh invite link (does not send any email on its own)
       const { data: linkData, error: linkErr } =

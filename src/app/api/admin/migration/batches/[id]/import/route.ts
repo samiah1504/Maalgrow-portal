@@ -6,6 +6,7 @@ import { calcCapital, getPaymentStatus, SLOT_VALUE_NGN } from "@/lib/investment-
 import { sendOnboardingEmail } from "@/lib/email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
+import { SITE_URL } from "@/lib/site-url";
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -377,8 +378,7 @@ export async function POST(
       emailMode: batch.email_mode,
       series: batch.series as unknown as BatchCtx["series"],
       cycle: batch.cycle as unknown as BatchCtx["cycle"],
-      siteUrl:
-        process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app",
+      siteUrl: SITE_URL,
     };
 
     let processed = 0;

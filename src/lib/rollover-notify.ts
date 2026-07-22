@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
 import { sendRolloverEmail } from "@/lib/email";
+import { SITE_URL } from "@/lib/site-url";
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -43,8 +44,7 @@ export async function sendRolloverEmails(
     .eq("email_sent", false)
     .in("status", ["completed", "withdrawn"]);
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app";
+  const siteUrl = SITE_URL;
 
   let sent = 0;
   let failed = 0;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { generateUniqueInvestorCode } from "@/lib/investor-code";
+import { SITE_URL } from "@/lib/site-url";
 
 const ADMIN_ROLES = [
   "super_admin",
@@ -118,8 +119,7 @@ export async function POST(request: Request) {
     // Create auth user WITHOUT sending any email.
     // generateLink({ type: "invite" }) creates the user and returns an action_link
     // but does not trigger Supabase's email system.
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ?? "https://maalgrow-portal.vercel.app";
+    const siteUrl = SITE_URL;
 
     const { data: linkData, error: linkError } =
       await adminClient.auth.admin.generateLink({
