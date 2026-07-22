@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database.types";
 import { SITE_URL } from "@/lib/site-url";
+import { sendPasswordResetEmail } from "@/lib/email";
+import { sendInvestorInvitation } from "@/lib/send-invitation";
 
 type InvestorUpdate = Database["public"]["Tables"]["investors"]["Update"];
 
@@ -157,39 +159,56 @@ export async function PATCH(
       return NextResponse.json({ success: true });
     }
 
-    // ─── Send password reset email ─────────────────────────────────────────
+    // ─── Send password reset email (branded, via Resend) ───────────────────
+    // generateLink only creates the link — Supabase sends nothing — so we
+    // must deliver it ourselves or the button silently does nothing.
     if (action === "reset_password") {
       const investorEmail = profile?.email ?? investor.email;
-      const siteUrl = SITE_URL;
 
-      const { error: resetError } = await adminClient.auth.admin.generateLink({
-        type: "recovery",
-        email: investorEmail,
-        options: { redirectTo: `${siteUrl}/api/auth/callback` },
+      const { data: linkData, error: resetError } =
+        await adminClient.auth.admin.generateLink({
+          type: "recovery",
+          email: investorEmail,
+          options: { redirectTo: `${SITE_URL}/api/auth/callback` },
+        });
+
+      if (resetError || !linkData?.properties?.action_link) {
+        return NextResponse.json(
+          { error: resetError?.message ?? "Failed to generate reset link" },
+          { status: 500 }
+        );
+      }
+
+      const emailResult = await sendPasswordResetEmail({
+        to: investorEmail,
+        fullName: investor.full_name,
+        resetLink: linkData.properties.action_link,
+        portalLink: SITE_URL,
       });
 
-      if (resetError) {
-        return NextResponse.json({ error: resetError.message }, { status: 500 });
+      if (!emailResult.success) {
+        return NextResponse.json(
+          {
+            error:
+              "Reset link created but email failed: " +
+              (emailResult.error ?? "unknown error"),
+          },
+          { status: 500 }
+        );
       }
 
       return NextResponse.json({ success: true, message: "Password reset email sent" });
     }
 
-    // ─── Resend invitation email ───────────────────────────────────────────
+    // ─── Resend invitation email (branded, via Resend) ─────────────────────
     if (action === "resend_invite") {
-      const investorEmail = profile?.email ?? investor.email;
-      const siteUrl = SITE_URL;
+      const result = await sendInvestorInvitation(adminClient, id);
 
-      const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-        investorEmail,
-        {
-          data: { full_name: investor.full_name, role: "investor" },
-          redirectTo: `${siteUrl}/api/auth/callback`,
-        }
-      );
-
-      if (inviteError) {
-        return NextResponse.json({ error: inviteError.message }, { status: 500 });
+      if (!result.success) {
+        return NextResponse.json(
+          { error: result.error ?? "Email delivery failed" },
+          { status: 500 }
+        );
       }
 
       return NextResponse.json({ success: true, message: "Invitation email resent" });
