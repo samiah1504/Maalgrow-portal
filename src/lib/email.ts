@@ -44,8 +44,10 @@ function fmtDate(dateStr: string): string {
 }
 
 function payStatusLabel(status: string): string {
-  if (status === "full" || status === "Full Payment") return "Fully Paid";
-  if (status === "partial" || status === "Partial Payment") return "Partially Paid";
+  const s = status.toLowerCase();
+  if (s === "full" || s === "full payment" || s === "fully paid") return "Fully Paid";
+  if (s === "partial" || s === "partial payment" || s === "part paid") return "Partially Paid";
+  if (s === "overpaid") return "Overpaid";
   return "Payment Pending";
 }
 
