@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { SITE_URL } from "@/lib/site-url";
 
 const FROM_EMAIL =
   process.env.EMAIL_FROM ?? "MaalGrow <noreply@maalgrow.com>";
@@ -101,6 +102,8 @@ function buildHtml(p: OnboardingEmailParams): string {
   <!-- Header -->
   <tr>
     <td style="background:#1e3a5f;padding:32px;text-align:center;">
+      <img src="${SITE_URL}/logo-192.png" width="64" height="64" alt="MaalGrow"
+           style="border-radius:14px;margin-bottom:10px;display:inline-block;" />
       <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;">MaalGrow Portal</div>
       <div style="font-size:13px;color:#8fb0d8;margin-top:4px;">Shariah-Compliant Mudārabah Investment Platform</div>
     </td>
@@ -221,6 +224,8 @@ function buildPasswordResetHtml(p: PasswordResetEmailParams): string {
 <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);max-width:600px;width:100%;">
   <tr>
     <td style="background:#1e3a5f;padding:32px;text-align:center;">
+      <img src="${SITE_URL}/logo-192.png" width="64" height="64" alt="MaalGrow"
+           style="border-radius:14px;margin-bottom:10px;display:inline-block;" />
       <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;">MaalGrow Portal</div>
       <div style="font-size:13px;color:#8fb0d8;margin-top:4px;">Shariah-Compliant Mudārabah Investment Platform</div>
     </td>
@@ -381,6 +386,8 @@ function buildRolloverHtml(p: RolloverEmailParams): string {
 <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);max-width:600px;width:100%;">
   <tr>
     <td style="background:#1e3a5f;padding:32px;text-align:center;">
+      <img src="${SITE_URL}/logo-192.png" width="64" height="64" alt="MaalGrow"
+           style="border-radius:14px;margin-bottom:10px;display:inline-block;" />
       <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;">MaalGrow Portal</div>
       <div style="font-size:13px;color:#8fb0d8;margin-top:4px;">Shariah-Compliant Mudārabah Investment Platform</div>
     </td>

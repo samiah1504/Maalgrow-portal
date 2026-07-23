@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -125,11 +126,15 @@ export function AdminSidebar({ isOpen, onClose, pendingPayments = 0 }: AdminSide
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-primary-700">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-500">
-              <span className="text-xs font-black text-primary-900">MV</span>
-            </div>
+            <Image
+              src="/logo-192.png"
+              alt="MaalGrow"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg"
+            />
             <div>
-              <p className="text-sm font-bold tracking-wide">MaalVest</p>
+              <p className="text-sm font-bold tracking-wide">MaalGrow</p>
               <p className="text-[10px] text-primary-400 -mt-0.5">Admin Portal</p>
             </div>
           </div>

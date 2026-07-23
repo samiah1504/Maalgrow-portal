@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -206,9 +207,14 @@ function LoginForm() {
           {/* Header */}
           <div className="bg-gradient-to-r from-primary-700 to-primary-800 px-8 pt-8 pb-6 text-center">
             <div className="flex justify-center mb-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-500 shadow-lg">
-                <TrendingUp className="h-8 w-8 text-primary-900" />
-              </div>
+              <Image
+                src="/logo.png"
+                alt="MaalGrow"
+                width={88}
+                height={88}
+                priority
+                className="h-22 w-22 rounded-2xl shadow-lg"
+              />
             </div>
             <h1 className="text-2xl font-bold text-white">MaalGrow</h1>
             <p className="text-primary-200 text-sm mt-1">MaalVest Investment Limited</p>

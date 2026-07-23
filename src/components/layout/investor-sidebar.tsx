@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -83,12 +84,16 @@ export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: In
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-primary-600">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-500">
-              <span className="text-xs font-black text-primary-900">MV</span>
-            </div>
+            <Image
+              src="/logo-192.png"
+              alt="MaalGrow"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg"
+            />
             <div>
-              <p className="text-sm font-bold tracking-wide">MaalVest</p>
-              <p className="text-[10px] text-primary-300 -mt-0.5">MaalGrow</p>
+              <p className="text-sm font-bold tracking-wide">MaalGrow</p>
+              <p className="text-[10px] text-primary-300 -mt-0.5">A MaalVest Platform</p>
             </div>
           </div>
           <button
