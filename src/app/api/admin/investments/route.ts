@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendOnboardingEmail } from "@/lib/email";
-import { getPaymentStatus } from "@/lib/investment-utils";
 import { SITE_URL } from "@/lib/site-url";
 import { buildPasswordSetupLink } from "@/lib/auth-links";
 
@@ -177,24 +176,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // Record initial payment if provided
+    // Investors pay in full before onboarding — always record the
+    // full capital as a confirmed payment for this investment.
     let paymentWarning: string | undefined;
-    if (payment_amount && payment_amount > 0 && payment_date) {
+    {
       const { error: paymentError } = await adminClient
         .from("investment_payments")
         .insert({
           investment_id: investment.id,
           investor_id,
-          amount: payment_amount,
-          payment_date,
+          series_id: investment.series_id,
+          cycle_id: investment.cycle_id,
+          amount: capital,
+          units,
+          payment_date:
+            payment_date || new Date().toISOString().split("T")[0],
           reference: payment_reference?.trim() || null,
+          status: "confirmed",
           created_by: user.id,
         });
 
       if (paymentError) {
         console.error("[API] investment payment insert error:", paymentError);
         paymentWarning =
-          "Investment created but initial payment record failed: " +
+          "Investment created but the payment record failed: " +
           paymentError.message;
       }
     }
@@ -223,12 +228,6 @@ export async function POST(request: Request) {
         "invite"
       );
 
-      const totalPaid =
-        payment_amount && payment_amount > 0 && !paymentWarning
-          ? payment_amount
-          : 0;
-      const outstandingBalance = Math.max(0, capital - totalPaid);
-      const payStatus = getPaymentStatus(capital, totalPaid);
 
       if (!linkErr) {
         const result = await sendOnboardingEmail({
@@ -243,9 +242,6 @@ export async function POST(request: Request) {
           slots: units,
           slotValue: SLOT_VALUE_NGN,
           totalInvestment: capital,
-          totalPaid,
-          outstandingBalance,
-          paymentStatus: payStatus,
           paymentDate: payment_date,
           cycleStart: cycle.start_date,
           maturityDate: cycle.end_date,

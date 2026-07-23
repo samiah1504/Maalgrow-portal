@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "@/lib/migration-server";
 import { generateUniqueInvestorCode } from "@/lib/investor-code";
-import { calcCapital, getPaymentStatus, SLOT_VALUE_NGN } from "@/lib/investment-utils";
+import { calcCapital, SLOT_VALUE_NGN } from "@/lib/investment-utils";
 import { sendOnboardingEmail } from "@/lib/email";
 import { buildPasswordSetupLink } from "@/lib/auth-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -257,8 +257,6 @@ async function processRow(
         linkData?.properties,
         "invite"
       );
-      const totalPaid = Number(row.amount_paid) || 0;
-
       const result = await sendOnboardingEmail({
         to: email,
         fullName: row.full_name,
@@ -271,9 +269,6 @@ async function processRow(
         slots,
         slotValue: SLOT_VALUE_NGN,
         totalInvestment: capital,
-        totalPaid,
-        outstandingBalance: Math.max(0, capital - totalPaid),
-        paymentStatus: getPaymentStatus(capital, totalPaid),
         paymentDate: row.payment_date ?? undefined,
         cycleStart: ctx.cycle.start_date,
         maturityDate: ctx.cycle.end_date,

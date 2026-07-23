@@ -10,9 +10,6 @@ export type AcknowledgementDetails = {
   slots: number;
   slotValue: number;
   totalInvestment: number;
-  totalPaid: number;
-  outstandingBalance: number;
-  paymentStatus: string;
   investmentDate: string;
   cycleStart: string;
   maturityDate: string;
@@ -36,12 +33,6 @@ function fmtDate(dateStr: string): string {
     month: "long",
     year: "numeric",
   });
-}
-
-function payLabel(status: string): string {
-  if (status === "full" || status === "Full Payment") return "Fully Paid";
-  if (status === "partial" || status === "Partial Payment") return "Partially Paid";
-  return "Payment Pending";
 }
 
 export async function downloadAcknowledgementPDF(
@@ -147,15 +138,10 @@ export async function downloadAcknowledgementPDF(
   row("Maturity Date", fmtDate(d.maturityDate));
   y += 4;
 
-  // Payment summary
+  // Payment summary — investors always pay in full before onboarding
   sectionTitle("Payment Summary");
-  row("Total Amount Paid", fmtNGN(d.totalPaid), [5, 150, 105]);
-  row(
-    "Outstanding Balance",
-    fmtNGN(d.outstandingBalance),
-    d.outstandingBalance > 0 ? [217, 119, 6] : [5, 150, 105]
-  );
-  row("Payment Status", payLabel(d.paymentStatus));
+  row("Total Amount Paid", fmtNGN(d.totalInvestment), [5, 150, 105]);
+  row("Payment Status", "Paid in Full", [5, 150, 105]);
   y += 8;
 
   // Disclaimer box

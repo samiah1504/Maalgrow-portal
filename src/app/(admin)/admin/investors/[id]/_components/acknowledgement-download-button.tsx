@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
-import { getPaymentStatus, SLOT_VALUE_NGN } from "@/lib/investment-utils";
+import { SLOT_VALUE_NGN } from "@/lib/investment-utils";
 
 type InvestmentForAck = {
   id: string;
@@ -21,7 +21,6 @@ interface Props {
   fullName: string;
   email: string;
   investment: InvestmentForAck;
-  totalPaid: number;
 }
 
 export function AcknowledgementDownloadButton({
@@ -29,7 +28,6 @@ export function AcknowledgementDownloadButton({
   fullName,
   email,
   investment,
-  totalPaid,
 }: Props) {
   const [loading, setLoading] = useState(false);
 
@@ -39,9 +37,6 @@ export function AcknowledgementDownloadButton({
       const { downloadAcknowledgementPDF } = await import(
         "@/lib/acknowledgement-pdf"
       );
-      const outstanding = Math.max(0, investment.capital - totalPaid);
-      const payStatus = getPaymentStatus(investment.capital, totalPaid);
-
       await downloadAcknowledgementPDF({
         investorCode,
         fullName,
@@ -52,9 +47,6 @@ export function AcknowledgementDownloadButton({
         slots: investment.units,
         slotValue: SLOT_VALUE_NGN,
         totalInvestment: investment.capital,
-        totalPaid,
-        outstandingBalance: outstanding,
-        paymentStatus: payStatus,
         investmentDate: investment.investment_date,
         cycleStart: investment.cycle?.start_date ?? "",
         maturityDate: investment.maturity_date,

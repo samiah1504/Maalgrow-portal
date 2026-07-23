@@ -48,7 +48,6 @@ export type EnrolmentInfo = {
   cycle_id: string;
   units: number;
   capital: number;
-  outstanding: number;
 };
 
 export type PaymentForEdit = {
@@ -195,10 +194,7 @@ function PaymentDialog({
     if (!amount || isNaN(amountNum) || amountNum <= 0)
       return "Enter a payment amount greater than 0.";
     if (applyToOutstanding) {
-      if (!enrolment)
-        return "This investor has no enrolment in the selected cycle to apply an instalment to.";
-      if (!isEdit && amountNum > enrolment.outstanding + 0.005)
-        return `This instalment exceeds the outstanding balance of ${formatCurrency(enrolment.outstanding)}.`;
+      // Editing a legacy payment record: amount-only change.
       return null;
     }
     if (!validStep)
@@ -418,23 +414,6 @@ function PaymentDialog({
                 </p>
               )}
             </div>
-
-            {/* Instalment toggle */}
-            {enrolment && enrolment.outstanding > 0 && !isEdit && (
-              <label className="flex items-start gap-2 text-sm cursor-pointer rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <input
-                  type="checkbox"
-                  checked={applyToOutstanding}
-                  onChange={(e) => setApplyToOutstanding(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Apply to the outstanding balance of{" "}
-                  <strong>{formatCurrency(enrolment.outstanding)}</strong>{" "}
-                  (instalment — adds no new slots)
-                </span>
-              </label>
-            )}
 
             {/* Amount + slots */}
             <div className="grid grid-cols-2 gap-3">

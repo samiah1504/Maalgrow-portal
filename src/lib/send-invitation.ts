@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
 import { sendOnboardingEmail } from "@/lib/email";
-import { getPaymentStatus, SLOT_VALUE_NGN } from "@/lib/investment-utils";
+import { SLOT_VALUE_NGN } from "@/lib/investment-utils";
 import { SITE_URL } from "@/lib/site-url";
 import { buildPasswordSetupLink } from "@/lib/auth-links";
 
@@ -75,16 +75,7 @@ export async function sendInvestorInvitation(
 
   const investments = (investor.investments ?? []) as unknown as InvRow[];
   const latestInv = investments[0] ?? null;
-
-  // Pre-migration-014 rows have no status — treat them as confirmed
-  const totalPaid = latestInv
-    ? latestInv.investment_payments
-        .filter((p) => (p.status ?? "confirmed") === "confirmed")
-        .reduce((s, p) => s + p.amount, 0)
-    : 0;
   const capital = latestInv?.capital ?? 0;
-  const outstandingBalance = Math.max(0, capital - totalPaid);
-  const payStatus = capital > 0 ? getPaymentStatus(capital, totalPaid) : "pending";
 
   const result = await sendOnboardingEmail({
     to: investor.email,
@@ -98,9 +89,6 @@ export async function sendInvestorInvitation(
     slots: latestInv ? latestInv.units : 0,
     slotValue: SLOT_VALUE_NGN,
     totalInvestment: capital,
-    totalPaid,
-    outstandingBalance,
-    paymentStatus: payStatus,
     cycleStart: latestInv?.cycle?.start_date ?? "",
     maturityDate: latestInv?.cycle?.end_date ?? "",
   });

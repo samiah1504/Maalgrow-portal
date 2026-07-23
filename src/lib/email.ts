@@ -17,9 +17,6 @@ export type OnboardingEmailParams = {
   slots: number;
   slotValue: number;
   totalInvestment: number;
-  totalPaid: number;
-  outstandingBalance: number;
-  paymentStatus: string;
   paymentDate?: string;
   cycleStart: string;
   maturityDate: string;
@@ -44,18 +41,7 @@ function fmtDate(dateStr: string): string {
   });
 }
 
-function payStatusLabel(status: string): string {
-  const s = status.toLowerCase();
-  if (s === "full" || s === "full payment" || s === "fully paid") return "Fully Paid";
-  if (s === "partial" || s === "partial payment" || s === "part paid") return "Partially Paid";
-  if (s === "overpaid") return "Overpaid";
-  return "Payment Pending";
-}
-
 function buildHtml(p: OnboardingEmailParams): string {
-  const outstanding = p.outstandingBalance;
-  const outstandingColor = outstanding > 0 ? "#d97706" : "#059669";
-
   const rows = [
     ["Series", `Series ${p.seriesName}`],
     ["Cycle", p.cycleLabel],
@@ -75,10 +61,11 @@ function buildHtml(p: OnboardingEmailParams): string {
     )
     .join("");
 
+  // Investors always pay in full before onboarding — no partial
+  // payment concept exists on this platform.
   const payRows = [
-    ["Total Paid", fmtNGN(p.totalPaid), "#059669"],
-    ["Outstanding Balance", fmtNGN(outstanding), outstandingColor],
-    ["Payment Status", payStatusLabel(p.paymentStatus), "#111827"],
+    ["Amount Paid", fmtNGN(p.totalInvestment), "#059669"],
+    ["Payment Status", "Paid in Full", "#059669"],
     ...(p.paymentDate ? [["Payment Date", fmtDate(p.paymentDate), "#111827"]] : []),
   ]
     .map(

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { getPaymentStatus, paymentStatusColor, slotLabel, SLOT_VALUE_NGN } from "@/lib/investment-utils";
+import { slotLabel, SLOT_VALUE_NGN } from "@/lib/investment-utils";
 
 export type SuccessData = {
   investor: {
@@ -75,9 +75,6 @@ export function SuccessScreen({ data, onAddAnother }: Props) {
   const [currentInvStatus, setCurrentInvStatus] = useState(invitation_status);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const outstanding = Math.max(0, investment.capital - total_paid);
-  const payStatus = getPaymentStatus(investment.capital, total_paid);
-
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
   const portalLink = `${siteUrl}/login`;
 
@@ -124,9 +121,6 @@ export function SuccessScreen({ data, onAddAnother }: Props) {
         slots: investment.units,
         slotValue: SLOT_VALUE_NGN,
         totalInvestment: investment.capital,
-        totalPaid: total_paid,
-        outstandingBalance: outstanding,
-        paymentStatus: payStatus,
         investmentDate: investment.investment_date,
         cycleStart: cycle_start,
         maturityDate: investment.maturity_date,
@@ -254,7 +248,7 @@ export function SuccessScreen({ data, onAddAnother }: Props) {
             </div>
           </div>
 
-          {/* Payment summary */}
+          {/* Payment summary — always paid in full before onboarding */}
           <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">Amount Paid</span>
@@ -262,23 +256,9 @@ export function SuccessScreen({ data, onAddAnother }: Props) {
                 {formatCurrency(total_paid)}
               </span>
             </div>
-            <div className="flex justify-between border-t border-border pt-2">
-              <span className="font-medium">Outstanding Balance</span>
-              <span
-                className={`font-bold ${
-                  outstanding > 0
-                    ? "text-amber-600"
-                    : "text-green-600"
-                }`}
-              >
-                {formatCurrency(outstanding)}
-              </span>
-            </div>
             <div className="flex justify-end">
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${paymentStatusColor(payStatus)}`}
-              >
-                {payStatus}
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                Paid in Full
               </span>
             </div>
           </div>

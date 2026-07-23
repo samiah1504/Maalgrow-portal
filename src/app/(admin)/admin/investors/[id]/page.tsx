@@ -14,12 +14,7 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import {
-  SLOT_VALUE_NGN,
-  getPaymentStatus,
-  paymentStatusColor,
-  slotLabel,
-} from "@/lib/investment-utils";
+import { SLOT_VALUE_NGN, slotLabel } from "@/lib/investment-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
@@ -191,22 +186,16 @@ export default async function AdminInvestorDetailPage({
     active_slots: activeSlots,
   };
 
-  // Current enrolments with outstanding balances (confirmed payments only)
+  // Current active enrolments (for the payment form)
   const enrolments: EnrolmentInfo[] = investor.investments
     .filter((i) => i.status === "active")
-    .map((i) => {
-      const confirmedPaid = i.investment_payments
-        .filter((p) => p.status === "confirmed")
-        .reduce((s, p) => s + p.amount, 0);
-      return {
-        investment_id: i.id,
-        series_id: i.series_id,
-        cycle_id: i.cycle_id,
-        units: i.units,
-        capital: i.capital,
-        outstanding: Math.max(0, i.capital - confirmedPaid),
-      };
-    });
+    .map((i) => ({
+      investment_id: i.id,
+      series_id: i.series_id,
+      cycle_id: i.cycle_id,
+      units: i.units,
+      capital: i.capital,
+    }));
 
   const isActive = investor.profile?.is_active !== false;
 
@@ -347,12 +336,6 @@ export default async function AdminInvestorDetailPage({
             </Card>
           ) : (
             investor.investments.map((inv) => {
-              const totalPaid = inv.investment_payments
-                .filter((p) => p.status === "confirmed")
-                .reduce((s, p) => s + p.amount, 0);
-              const balance = inv.capital - totalPaid;
-              const payStatus = getPaymentStatus(inv.capital, totalPaid);
-
               return (
                 <Card key={inv.id}>
                   <CardHeader className="pb-3">
@@ -369,11 +352,6 @@ export default async function AdminInvestorDetailPage({
                             {inv.status.charAt(0).toUpperCase() +
                               inv.status.slice(1)}
                           </Badge>
-                          <span
-                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${paymentStatusColor(payStatus)}`}
-                          >
-                            {payStatus}
-                          </span>
                         </div>
                         <p className="text-sm font-semibold text-foreground">
                           Series {inv.series?.name} · {inv.cycle?.cycle_label}
@@ -385,7 +363,6 @@ export default async function AdminInvestorDetailPage({
                           fullName={investor.full_name}
                           email={investor.profile?.email ?? investor.email}
                           investment={inv}
-                          totalPaid={totalPaid}
                         />
                         {inv.status === "active" && (
                           <>
@@ -459,30 +436,6 @@ export default async function AdminInvestorDetailPage({
                         </div>
                       </div>
                     )}
-
-                    {/* Payment summary */}
-                    <div className="rounded-lg bg-surface-2 border border-border p-3 space-y-1.5 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted">Total paid</span>
-                        <span className="font-medium text-foreground">
-                          {formatCurrency(totalPaid)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted">Outstanding</span>
-                        <span
-                          className={`font-bold ${
-                            balance > 0
-                              ? "text-amber-600"
-                              : balance === 0
-                              ? "text-green-600"
-                              : "text-blue-600"
-                          }`}
-                        >
-                          {formatCurrency(Math.max(0, balance))}
-                        </span>
-                      </div>
-                    </div>
 
                     {/* Individual payment records */}
                     {inv.investment_payments.length > 0 && (

@@ -441,9 +441,6 @@ export default async function SeriesPage() {
           const daysUntilMaturity = currentCycle
             ? getDaysUntilMaturity(currentCycle.end_date)
             : 0;
-          const outstanding = currentCycle
-            ? Math.max(0, currentCycle.total_capital - currentCycle.amount_received)
-            : 0;
           const investorPct = Math.round(s.mudarabah_investor_ratio * 100);
           const companyPct = 100 - investorPct;
           const pl = currentCycle
@@ -544,18 +541,6 @@ export default async function SeriesPage() {
                           </div>
                         ))}
                       </div>
-
-                      {/* Outstanding */}
-                      {outstanding > 0 && (
-                        <div className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
-                          <span className="text-xs font-medium text-orange-700">
-                            Outstanding Balance
-                          </span>
-                          <span className="text-sm font-bold text-orange-800">
-                            {formatCurrency(outstanding)}
-                          </span>
-                        </div>
-                      )}
 
                       {/* Profit Status */}
                       {pl && (

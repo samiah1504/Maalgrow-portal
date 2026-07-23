@@ -23,8 +23,6 @@ import {
   SLOT_VALUE_NGN,
   isValidSlots,
   calcCapital,
-  getPaymentStatus,
-  paymentStatusColor,
   slotLabel,
 } from "@/lib/investment-utils";
 import { SuccessScreen, type SuccessData } from "./_success-screen";
@@ -76,10 +74,6 @@ const investmentSchema = z.object({
     }),
   investment_date: z.string().min(1, "Investment date is required"),
   notes: z.string().optional(),
-  payment_amount: z
-    .number({ error: "Enter a number" })
-    .min(0, "Amount cannot be negative")
-    .optional(),
   payment_date: z.string().optional(),
   payment_reference: z.string().optional(),
 });
@@ -108,15 +102,12 @@ function InvestmentSection({
   const selectedSeriesId = watch("series_id");
   const selectedCycleId = watch("cycle_id");
   const units = watch("units");
-  const paymentAmount = watch("payment_amount") ?? 0;
 
   const filteredCycles = cycles.filter((c) => c.series_id === selectedSeriesId);
   const selectedSeries = series.find((s) => s.id === selectedSeriesId);
   const selectedCycle = filteredCycles.find((c) => c.id === selectedCycleId);
 
   const capital = units && isValidSlots(units) ? calcCapital(units) : 0;
-  const balance = capital - (paymentAmount || 0);
-  const payStatus = capital > 0 ? getPaymentStatus(capital, paymentAmount || 0) : null;
 
   useEffect(() => {
     setValue("cycle_id", "");
@@ -286,35 +277,18 @@ function InvestmentSection({
         </CardContent>
       </Card>
 
-      {/* Payment */}
+      {/* Payment — investors always pay in full before onboarding */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Initial Payment (optional)</CardTitle>
+          <CardTitle className="text-sm">Payment</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-muted">
-            Record an upfront payment. You can add further payments later from
-            the investor&apos;s profile.
+            Investors pay in full before onboarding — the full investment
+            amount is recorded as paid automatically.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-foreground">
-                Amount Paid (₦)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                {...register("payment_amount", { valueAsNumber: true })}
-                className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              />
-              {errors.payment_amount && (
-                <p className="text-xs text-danger">{errors.payment_amount.message}</p>
-              )}
-            </div>
-
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-foreground">
                 Payment Date
@@ -325,6 +299,15 @@ function InvestmentSection({
                 className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
             </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-foreground">
+                Amount Paid
+              </label>
+              <div className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm flex items-center font-semibold text-green-700">
+                {capital > 0 ? `${formatCurrency(capital)} · Paid in Full` : "—"}
+              </div>
+            </div>
           </div>
 
           <Input
@@ -332,38 +315,6 @@ function InvestmentSection({
             label="Payment Reference / Note (optional)"
             placeholder="e.g. Bank transfer ref: TXN123456"
           />
-
-          {capital > 0 && (
-            <div className="rounded-lg border border-border p-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted">Investment amount</span>
-                <span className="font-medium">{formatCurrency(capital)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Amount paid</span>
-                <span className="font-medium">
-                  {formatCurrency(paymentAmount || 0)}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-border pt-2">
-                <span className="font-semibold">Outstanding balance</span>
-                <span
-                  className={`font-bold ${balance > 0 ? "text-amber-600" : balance === 0 ? "text-green-600" : "text-blue-600"}`}
-                >
-                  {formatCurrency(Math.max(0, balance))}
-                </span>
-              </div>
-              {payStatus && (
-                <div className="flex justify-end">
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${paymentStatusColor(payStatus)}`}
-                  >
-                    {payStatus}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>
@@ -486,7 +437,6 @@ export function NewInvestorForm({ series, cycles }: Props) {
         units: investmentData.units,
         investment_date: investmentData.investment_date,
         notes: investmentData.notes,
-        payment_amount: investmentData.payment_amount || undefined,
         payment_date: investmentData.payment_date || undefined,
         payment_reference: investmentData.payment_reference || undefined,
         send_onboarding_email: isNewInvestor,
@@ -524,10 +474,8 @@ export function NewInvestorForm({ series, cycles }: Props) {
           email: investorForm.getValues("email"),
         };
 
-    const totalPaid =
-      investmentData.payment_amount && investmentData.payment_amount > 0
-        ? investmentData.payment_amount
-        : 0;
+    // Investors always pay in full before onboarding
+    const totalPaid = inv.capital;
 
     setSuccessData({
       investor: finalInvestorData,

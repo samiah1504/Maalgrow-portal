@@ -141,12 +141,6 @@ export function EditSlotsDialog({
               placeholder="e.g. correcting a data entry error"
             />
 
-            <p className="text-xs text-muted">
-              The payment history is not changed — if the new capital differs
-              from what has been paid, the difference shows as outstanding or
-              overpaid.
-            </p>
-
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-2.5 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
