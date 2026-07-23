@@ -477,6 +477,43 @@ export function CommsCenter({
                     </>
                   )}
                 </div>
+
+                {/* Exactly who is excluded, and why — with a link to fix it */}
+                {!loadingRecips && excludedCount > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-xs font-semibold text-amber-800 mb-2">
+                      {excludedCount} investor{excludedCount !== 1 ? "s" : ""} will NOT
+                      receive this communication:
+                    </p>
+                    <div className="max-h-40 overflow-y-auto space-y-1.5">
+                      {effectiveRecipients
+                        .filter((r) => r.skip_reason)
+                        .map((r) => (
+                          <div
+                            key={r.investor_id}
+                            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs text-amber-900"
+                          >
+                            <span>
+                              <span className="font-medium">{r.full_name}</span>{" "}
+                              <span className="font-mono text-amber-700">
+                                {r.investor_code}
+                              </span>
+                              {" — "}
+                              {r.skip_reason}
+                            </span>
+                            <a
+                              href={`/admin/investors/${r.investor_id}/edit`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary-700 underline hover:text-primary-800 shrink-0"
+                            >
+                              Fix phone →
+                            </a>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
