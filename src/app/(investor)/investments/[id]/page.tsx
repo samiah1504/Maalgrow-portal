@@ -5,7 +5,7 @@ import { ArrowLeft, Calendar, DollarSign, FileText, Clock, TrendingUp, CheckCirc
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { InvestmentDetailClient } from "./investment-detail-client";
+import { MaturityInstructions } from "./investment-detail-client";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investment Details" };
@@ -94,8 +94,26 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
     : { data: null };
   const parentInvestment = rawParentInvestment as unknown as LinkedInvestment | null;
 
+  // Saved maturity instruction (RLS: investor sees only their own)
+  const { data: savedInstructionRaw } = await supabase
+    .from("rollover_decisions")
+    .select("decision, slots_to_withdraw, locked")
+    .eq("investment_id", id)
+    .maybeSingle();
+  const savedInstruction = savedInstructionRaw as {
+    decision: string;
+    slots_to_withdraw: number | null;
+    locked: boolean;
+  } | null;
+
   const daysLeft = getDaysUntilMaturity(investment.maturity_date);
   const isMatured = investment.status === "matured";
+
+  // Visibility rule: completely hidden during the cycle; appears only in
+  // the final 5 days before maturity, and stays visible (locked) once the
+  // investment has matured until it is settled.
+  const showMaturityInstructions =
+    (investment.status === "active" && daysLeft <= 5) || isMatured;
   const totalDays = Math.ceil(
     (new Date(investment.maturity_date).getTime() - new Date(investment.investment_date).getTime()) /
       (1000 * 60 * 60 * 24)
@@ -142,14 +160,26 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
         </div>
       </div>
 
-      {/* Rollover banner: opt-out window while active, decision when matured */}
-      {(isMatured || investment.status === "active") && (
-        <InvestmentDetailClient
+      {/* Maturity Instructions — hidden until the final 5 days of the
+          cycle, then editable until maturity, then locked */}
+      {showMaturityInstructions && (
+        <MaturityInstructions
           investment={{
-            ...investment,
-            investor: { bank_name: investor.bank_name, account_name: investor.account_name, account_number: investor.account_number },
+            id: investment.id,
+            investment_code: investment.investment_code,
+            units: investment.units,
+            capital: investment.capital,
+            declared_profit: investment.declared_profit,
+            status: investment.status,
+            maturity_date: investment.maturity_date,
             series: investment.series ?? undefined,
             cycle: investment.cycle ?? undefined,
+          }}
+          savedInstruction={savedInstruction}
+          investorBank={{
+            bank_name: investor.bank_name,
+            account_name: investor.account_name,
+            account_number: investor.account_number,
           }}
         />
       )}

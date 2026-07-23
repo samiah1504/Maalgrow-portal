@@ -231,7 +231,7 @@ export type Database = {
           investment_date: string;
           maturity_date: string;
           status: "active" | "matured" | "completed";
-          maturity_decision: "continue" | "exit" | "rollover_all" | null;
+          maturity_decision: "continue" | "exit" | "rollover_all" | "partial_exit" | null;
           maturity_decided_at: string | null;
           next_investment_id: string | null;
           parent_investment_id: string | null;
@@ -254,7 +254,7 @@ export type Database = {
           investment_date: string;
           maturity_date: string;
           status?: "active" | "matured" | "completed";
-          maturity_decision?: "continue" | "exit" | "rollover_all" | null;
+          maturity_decision?: "continue" | "exit" | "rollover_all" | "partial_exit" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
           parent_investment_id?: string | null;
@@ -265,7 +265,7 @@ export type Database = {
         };
         Update: {
           status?: "active" | "matured" | "completed";
-          maturity_decision?: "continue" | "exit" | "rollover_all" | null;
+          maturity_decision?: "continue" | "exit" | "rollover_all" | "partial_exit" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
           declared_profit?: number | null;
@@ -512,7 +512,8 @@ export type Database = {
           investment_id: string;
           investor_id: string;
           source_cycle_id: string;
-          decision: "continue" | "exit" | "rollover_all";
+          decision: "continue" | "exit" | "rollover_all" | "partial_exit";
+          slots_to_withdraw: number | null;
           bank_name: string | null;
           account_name: string | null;
           account_number: string | null;
@@ -529,7 +530,8 @@ export type Database = {
           investment_id: string;
           investor_id: string;
           source_cycle_id: string;
-          decision: "continue" | "exit" | "rollover_all";
+          decision: "continue" | "exit" | "rollover_all" | "partial_exit";
+          slots_to_withdraw?: number | null;
           bank_name?: string | null;
           account_name?: string | null;
           account_number?: string | null;
@@ -542,7 +544,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
-          decision?: "continue" | "exit" | "rollover_all";
+          decision?: "continue" | "exit" | "rollover_all" | "partial_exit";
           bank_name?: string | null;
           account_name?: string | null;
           account_number?: string | null;
@@ -568,7 +570,8 @@ export type Database = {
           total_rollover_amount: number;
           rollover_balance: number;
           withdrawal_amount: number;
-          decision: "continue" | "exit" | "rollover_all";
+          slots_withdrawn: number;
+          decision: "continue" | "exit" | "rollover_all" | "partial_exit";
           method: string;
           status: string;
           error: string | null;
@@ -591,7 +594,8 @@ export type Database = {
           total_rollover_amount?: number;
           rollover_balance?: number;
           withdrawal_amount?: number;
-          decision: "continue" | "exit" | "rollover_all";
+          slots_withdrawn?: number;
+          decision: "continue" | "exit" | "rollover_all" | "partial_exit";
           method: string;
           status?: string;
           error?: string | null;
@@ -789,7 +793,7 @@ export type Database = {
       submit_maturity_decision: {
         Args: {
           p_investment_id: string;
-          p_decision: "continue" | "exit" | "rollover_all";
+          p_decision: "continue" | "exit" | "rollover_all" | "partial_exit";
           p_bank_name: string;
           p_account_name: string;
           p_account_number: string;
@@ -811,12 +815,13 @@ export type Database = {
       submit_rollover_decision: {
         Args: {
           p_investment_id: string;
-          p_decision: "continue" | "exit" | "rollover_all";
+          p_decision: "continue" | "exit" | "rollover_all" | "partial_exit";
           p_bank_name?: string | null;
           p_account_name?: string | null;
           p_account_number?: string | null;
           p_notes?: string | null;
           p_admin_override?: boolean;
+          p_slots_to_withdraw?: number | null;
         };
         Returns: Json;
       };
@@ -853,7 +858,7 @@ export type Database = {
       notification_type: "investment" | "roi" | "capital" | "maturity" | "payment" | "document" | "announcement" | "system";
       document_type: "agreement" | "certificate" | "statement" | "receipt" | "report" | "other";
       target_audience: "all" | "investors" | "admins";
-      maturity_decision: "continue" | "exit" | "rollover_all";
+      maturity_decision: "continue" | "exit" | "rollover_all" | "partial_exit";
     };
   };
 };

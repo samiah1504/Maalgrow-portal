@@ -7,7 +7,7 @@ type AdminClient = SupabaseClient<Database>;
 
 type RolloverRow = {
   id: string;
-  decision: "continue" | "exit" | "rollover_all";
+  decision: "continue" | "exit" | "rollover_all" | "partial_exit";
   status: string;
   units: number | null;
   capital_rolled_over: number;

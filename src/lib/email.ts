@@ -316,7 +316,7 @@ export type RolloverEmailParams = {
   newCycleLabel: string;
   newCycleStart: string;
   newCycleEnd: string;
-  decision: "continue" | "exit" | "rollover_all";
+  decision: "continue" | "exit" | "rollover_all" | "partial_exit";
   slots: number;
   actualProfit: number;
   capitalRolledOver: number;

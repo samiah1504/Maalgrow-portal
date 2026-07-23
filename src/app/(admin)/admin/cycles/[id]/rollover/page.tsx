@@ -34,10 +34,11 @@ type InvRow = {
 
 type DecisionRow = {
   investment_id: string;
-  decision: "continue" | "exit" | "rollover_all";
+  decision: "continue" | "exit" | "rollover_all" | "partial_exit";
   via: string;
   submitted_at: string;
   locked: boolean;
+  slots_to_withdraw: number | null;
 };
 
 type RolloverRow = {
@@ -51,9 +52,10 @@ type RolloverRow = {
 };
 
 const DECISION_LABEL: Record<string, string> = {
-  continue: "Withdraw profit · continue capital",
-  exit: "Withdraw everything",
-  rollover_all: "Roll over capital + profit",
+  continue: "Profit paid · capital continues",
+  exit: "Profit + all capital paid out",
+  partial_exit: "Profit paid · partial capital withdrawal",
+  rollover_all: "Roll over capital + profit (legacy)",
 };
 
 export default async function CycleRolloverPage({
@@ -108,7 +110,7 @@ export default async function CycleRolloverPage({
       .order("created_at"),
     db
       .from("rollover_decisions")
-      .select("investment_id, decision, via, submitted_at, locked")
+      .select("investment_id, decision, via, submitted_at, locked, slots_to_withdraw")
       .eq("source_cycle_id", id),
     db
       .from("cycle_rollovers")
@@ -138,13 +140,15 @@ export default async function CycleRolloverPage({
   let autoContinue = 0,
     rollAll = 0,
     profitOnly = 0,
+    partialCount = 0,
     withdrawAll = 0,
-    awaiting = 0,
     failed = 0,
     processed = 0;
   let capitalContinuing = 0,
     profitRolled = 0,
     withdrawalTotal = 0;
+
+  const slotValue = series?.price_per_unit ?? 500000;
 
   for (const inv of investments) {
     const d = decisions.get(inv.id);
@@ -157,24 +161,30 @@ export default async function CycleRolloverPage({
       profitRolled += r.profit_rolled_over;
       withdrawalTotal += r.withdrawal_amount;
     } else if (inv.status === "matured") {
-      // pending processing — project from the decision (default: auto)
-      const dec = d?.decision ?? "rollover_all";
-      if (dec !== "exit") {
+      // pending processing — project from the instruction
+      // (default when none: profit paid, capital continues)
+      const dec = d?.decision ?? "continue";
+      const profit = inv.declared_profit ?? 0;
+      if (dec === "exit") {
+        withdrawalTotal += inv.capital + profit;
+      } else if (dec === "partial_exit") {
+        const capOut = Math.min(inv.capital, (d?.slots_to_withdraw ?? 0) * slotValue);
+        capitalContinuing += inv.capital - capOut;
+        withdrawalTotal += capOut + profit;
+      } else if (dec === "rollover_all") {
         capitalContinuing += inv.capital;
-        if (dec === "rollover_all") profitRolled += inv.declared_profit ?? 0;
-        if (dec === "continue") withdrawalTotal += inv.declared_profit ?? 0;
+        profitRolled += profit;
       } else {
-        withdrawalTotal += inv.capital + (inv.declared_profit ?? 0);
+        capitalContinuing += inv.capital;
+        withdrawalTotal += profit;
       }
     }
 
     if (!d) {
-      if (inv.status === "matured" || inv.status === "active") {
-        awaiting++;
-        autoContinue++;
-      }
+      if (inv.status === "matured" || inv.status === "active") autoContinue++;
     } else if (d.decision === "rollover_all") rollAll++;
     else if (d.decision === "continue") profitOnly++;
+    else if (d.decision === "partial_exit") partialCount++;
     else if (d.decision === "exit") withdrawAll++;
   }
 
@@ -211,9 +221,9 @@ export default async function CycleRolloverPage({
             </Badge>
           </p>
           <p className="text-xs text-muted mt-2">
-            Default rule: investors who did not opt out by{" "}
-            <span className="font-semibold text-foreground">{formatDate(deadline)}</span>{" "}
-            automatically continue into the next cycle (capital + profit rolled over).
+            Instructions lock at maturity ({formatDate(deadline)}). Default for investors
+            with no instruction: declared profit is paid to their bank account and their
+            capital continues into the next cycle.
           </p>
         </div>
       </div>
@@ -244,11 +254,11 @@ export default async function CycleRolloverPage({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Investors in maturing cycle", value: String(total), icon: <Users className="h-4 w-4" /> },
-          { label: "Continuing automatically", value: String(autoContinue), icon: <RefreshCw className="h-4 w-4" /> },
-          { label: "Rolling capital + profit", value: String(rollAll), icon: <RefreshCw className="h-4 w-4" /> },
-          { label: "Withdrawing profit only", value: String(profitOnly), icon: <Wallet className="h-4 w-4" /> },
-          { label: "Withdrawing everything", value: String(withdrawAll), icon: <Wallet className="h-4 w-4" /> },
-          { label: "Awaiting decision (will auto-continue)", value: String(awaiting), icon: <Clock className="h-4 w-4" /> },
+          { label: "No response (default: continue)", value: String(autoContinue), icon: <Clock className="h-4 w-4" /> },
+          { label: "Capital continues (Option 1)", value: String(profitOnly), icon: <RefreshCw className="h-4 w-4" /> },
+          { label: "Partial withdrawals (Option 3)", value: String(partialCount), icon: <Wallet className="h-4 w-4" /> },
+          { label: "Withdrawing everything (Option 2)", value: String(withdrawAll), icon: <Wallet className="h-4 w-4" /> },
+          { label: "Legacy full rollovers", value: String(rollAll), icon: <RefreshCw className="h-4 w-4" /> },
           { label: "Failed / incomplete", value: String(failed), icon: <AlertTriangle className="h-4 w-4" />, alert: failed > 0 },
           { label: "Processed", value: `${processed}/${total}`, icon: <RefreshCw className="h-4 w-4" /> },
         ].map((s) => (
@@ -323,7 +333,7 @@ export default async function CycleRolloverPage({
                   const r = rollovers.get(inv.id);
                   const decisionText = d
                     ? DECISION_LABEL[d.decision]
-                    : "No response — auto-continue (capital + profit)";
+                    : "No response — default: profit paid, capital continues";
                   const statusText = r
                     ? r.status === "failed"
                       ? `Failed: ${r.error}`
