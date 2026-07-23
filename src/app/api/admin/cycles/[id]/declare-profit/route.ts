@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 const ADMIN_ROLES = ["super_admin", "administrator", "finance"];
 
@@ -57,9 +57,9 @@ export async function POST(
       );
     }
 
-    const adminClient = await createAdminClient();
-
-    const { data, error } = await adminClient.rpc("declare_cycle_profit", {
+    // Use the admin's session so declared_by records who declared it
+    // (the function itself is SECURITY DEFINER).
+    const { data, error } = await supabase.rpc("declare_cycle_profit", {
       p_cycle_id: cycleId,
       p_total_revenue: total_revenue,
       p_total_expenses: total_expenses,
