@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database.types";
 import { SITE_URL } from "@/lib/site-url";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { buildPasswordSetupLink } from "@/lib/auth-links";
 import { sendInvestorInvitation } from "@/lib/send-invitation";
 
 type InvestorUpdate = Database["public"]["Tables"]["investors"]["Update"];
@@ -176,7 +177,7 @@ export async function PATCH(
           options: { redirectTo: `${SITE_URL}/reset-password` },
         });
 
-      if (resetError || !linkData?.properties?.action_link) {
+      if (resetError || !linkData?.properties?.hashed_token) {
         return NextResponse.json(
           { error: resetError?.message ?? "Failed to generate reset link" },
           { status: 500 }
@@ -186,7 +187,7 @@ export async function PATCH(
       const emailResult = await sendPasswordResetEmail({
         to: investorEmail,
         fullName: investor.full_name,
-        resetLink: linkData.properties.action_link,
+        resetLink: buildPasswordSetupLink(linkData.properties, "recovery"),
         portalLink: SITE_URL,
       });
 

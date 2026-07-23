@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendOnboardingEmail } from "@/lib/email";
 import { getPaymentStatus } from "@/lib/investment-utils";
 import { SITE_URL } from "@/lib/site-url";
+import { buildPasswordSetupLink } from "@/lib/auth-links";
 
 const ADMIN_ROLES = [
   "super_admin",
@@ -217,8 +218,10 @@ export async function POST(request: Request) {
           },
         });
 
-      const passwordSetupLink =
-        linkData?.properties?.action_link ?? `${siteUrl}/login`;
+      const passwordSetupLink = buildPasswordSetupLink(
+        linkData?.properties,
+        "invite"
+      );
 
       const totalPaid =
         payment_amount && payment_amount > 0 && !paymentWarning

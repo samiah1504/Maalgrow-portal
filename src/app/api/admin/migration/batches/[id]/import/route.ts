@@ -4,6 +4,7 @@ import { requireSuperAdmin } from "@/lib/migration-server";
 import { generateUniqueInvestorCode } from "@/lib/investor-code";
 import { calcCapital, getPaymentStatus, SLOT_VALUE_NGN } from "@/lib/investment-utils";
 import { sendOnboardingEmail } from "@/lib/email";
+import { buildPasswordSetupLink } from "@/lib/auth-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
 import { SITE_URL } from "@/lib/site-url";
@@ -252,8 +253,10 @@ async function processRow(
           redirectTo: `${ctx.siteUrl}/reset-password`,
         },
       });
-      const passwordSetupLink =
-        linkData?.properties?.action_link ?? `${ctx.siteUrl}/login`;
+      const passwordSetupLink = buildPasswordSetupLink(
+        linkData?.properties,
+        "invite"
+      );
       const totalPaid = Number(row.amount_paid) || 0;
 
       const result = await sendOnboardingEmail({

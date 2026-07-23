@@ -3,6 +3,7 @@ import type { Database } from "@/lib/types/database.types";
 import { sendOnboardingEmail } from "@/lib/email";
 import { getPaymentStatus, SLOT_VALUE_NGN } from "@/lib/investment-utils";
 import { SITE_URL } from "@/lib/site-url";
+import { buildPasswordSetupLink } from "@/lib/auth-links";
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -53,8 +54,12 @@ export async function sendInvestorInvitation(
     };
   }
 
-  const passwordSetupLink =
-    linkData?.properties?.action_link ?? `${SITE_URL}/login`;
+  // Link to OUR page with token_hash — never the raw one-time
+  // action_link, which WhatsApp previews / mail scanners consume.
+  const passwordSetupLink = buildPasswordSetupLink(
+    linkData?.properties,
+    "invite"
+  );
 
   type InvRow = {
     id: string;
