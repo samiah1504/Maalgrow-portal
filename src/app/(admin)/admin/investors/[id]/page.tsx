@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { SLOT_VALUE_NGN, slotLabel } from "@/lib/investment-utils";
+import { genderLabel } from "@/lib/kyc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
@@ -77,8 +78,13 @@ type InvestorFull = {
   account_number: string | null;
   bvn: string | null;
   nin: string | null;
+  gender: string | null;
+  nationality: string | null;
+  occupation: string | null;
   kyc_status: string;
   kyc_notes: string | null;
+  kyc_submitted_at: string | null;
+  kyc_approved_at: string | null;
   invitation_status: string | null;
   invitation_sent_at: string | null;
   created_at: string;
@@ -127,6 +133,14 @@ export default async function AdminInvestorDetailPage({
   if (!rawInvestor) notFound();
 
   const investor = rawInvestor as unknown as InvestorFull;
+
+  // Next of kin (individual KYC review); tolerates migration 015 not
+  // being applied yet.
+  const { data: nokRow } = await db
+    .from("next_of_kin")
+    .select("*")
+    .eq("investor_id", investor.id)
+    .maybeSingle();
 
   // Payment rows created before migration 014 have no status/units
   // columns — they are historical confirmed payments of 0 slots.
@@ -607,6 +621,30 @@ export default async function AdminInvestorDetailPage({
                   </p>
                 </div>
               )}
+              {investor.gender && (
+                <div>
+                  <p className="text-xs text-muted">Gender</p>
+                  <p className="font-medium text-foreground">
+                    {genderLabel(investor.gender)}
+                  </p>
+                </div>
+              )}
+              {investor.nationality && (
+                <div>
+                  <p className="text-xs text-muted">Nationality</p>
+                  <p className="font-medium text-foreground">
+                    {investor.nationality}
+                  </p>
+                </div>
+              )}
+              {investor.occupation && (
+                <div>
+                  <p className="text-xs text-muted">Occupation</p>
+                  <p className="font-medium text-foreground">
+                    {investor.occupation}
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-muted">Member Since</p>
                 <p className="font-medium text-foreground">
@@ -625,6 +663,14 @@ export default async function AdminInvestorDetailPage({
                   {investor.kyc_status.charAt(0).toUpperCase() +
                     investor.kyc_status.slice(1)}
                 </Badge>
+                <p className="text-xs text-muted mt-1">
+                  {investor.kyc_submitted_at
+                    ? `Submitted ${formatDate(investor.kyc_submitted_at)}`
+                    : "Not yet submitted"}
+                  {investor.kyc_approved_at
+                    ? ` · Approved ${formatDate(investor.kyc_approved_at)}`
+                    : ""}
+                </p>
               </div>
               {investor.kyc_notes && (
                 <div>
@@ -668,6 +714,50 @@ export default async function AdminInvestorDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {/* Next of kin */}
+          {nokRow && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <User className="h-4 w-4" /> Next of Kin
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted">Name</p>
+                  <p className="font-medium text-foreground">{nokRow.full_name}</p>
+                  <p className="text-xs text-muted">{nokRow.relationship}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted">Phone</p>
+                  <p className="font-medium text-foreground">
+                    {nokRow.phone}
+                    {nokRow.alternative_phone ? ` · ${nokRow.alternative_phone}` : ""}
+                  </p>
+                </div>
+                {nokRow.email && (
+                  <div>
+                    <p className="text-xs text-muted">Email</p>
+                    <p className="font-medium text-foreground break-all">
+                      {nokRow.email}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-muted">Address</p>
+                  <p className="font-medium text-foreground">
+                    {[nokRow.address, nokRow.city, nokRow.state, nokRow.country]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </p>
+                </div>
+                <p className="text-[11px] text-muted">
+                  Contact person only — not automatically a beneficiary.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Bank details */}
           {(investor.bank_name ||

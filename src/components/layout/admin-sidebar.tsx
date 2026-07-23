@@ -49,6 +49,7 @@ const navGroups: NavGroup[] = [
     label: "Investors & Investments",
     items: [
       { label: "Investors", href: "/admin/investors", icon: <Users className="h-4 w-4" /> },
+      { label: "KYC Centre", href: "/admin/kyc", icon: <Shield className="h-4 w-4" /> },
       { label: "Investments", href: "/admin/investments", icon: <TrendingUp className="h-4 w-4" /> },
       { label: "Bulk Migration", href: "/admin/migration", icon: <UploadCloud className="h-4 w-4" /> },
     ],

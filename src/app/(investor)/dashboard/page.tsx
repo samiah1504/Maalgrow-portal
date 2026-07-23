@@ -10,6 +10,7 @@ import {
   Bell,
 } from "lucide-react";
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
+import { kycMissingFields, type KycInvestorFields } from "@/lib/kyc";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,8 @@ export default async function DashboardPage() {
     id: string;
     full_name: string;
     investor_code: string;
+    kyc_status: "pending" | "approved" | "rejected";
+    kyc_submitted_at: string | null;
     profile: { id: string; email: string; full_name: string | null } | null;
   };
   type InvestmentWithDetails = {
@@ -74,6 +77,21 @@ export default async function DashboardPage() {
   const investments = (
     (rawInvestments as unknown as InvestmentWithDetails[] | null) ?? []
   ).filter((i) => i.status !== "cancelled");
+
+  // KYC completeness — flags approved records that predate the new
+  // required fields (gender, nationality, occupation, next of kin).
+  // Skipped gracefully if migration 015 has not been applied yet.
+  const { data: nokRow, error: nokErr } = await supabase
+    .from("next_of_kin")
+    .select("full_name, relationship, phone, address, city, state, country")
+    .eq("investor_id", investor.id)
+    .maybeSingle();
+  const kycUpdateNeeded =
+    !nokErr &&
+    Boolean(investor.kyc_submitted_at) &&
+    investor.kyc_status !== "rejected" &&
+    kycMissingFields(investor as unknown as KycInvestorFields, nokRow ?? null)
+      .length > 0;
 
   // Get recent notifications
   const { data: notifications } = await supabase
@@ -125,6 +143,27 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* KYC update notice */}
+      {kycUpdateNeeded && (
+        <Link
+          href="/kyc"
+          className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 hover:bg-amber-100 transition-colors"
+        >
+          <Bell className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">
+              Your KYC record requires an update
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              Please add your gender, nationality, occupation and next-of-kin
+              details. Your existing information is unchanged — tap here to
+              complete the missing sections.
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-amber-600 ml-auto mt-1" />
+        </Link>
+      )}
+
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

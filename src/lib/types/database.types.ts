@@ -61,6 +61,11 @@ export type Database = {
           kyc_status: "pending" | "approved" | "rejected";
           kyc_notes: string | null;
           kyc_submitted_at: string | null;
+          kyc_approved_at: string | null;
+          kyc_approved_by: string | null;
+          gender: string | null;
+          nationality: string | null;
+          occupation: string | null;
           preferred_channel: "sms" | "whatsapp" | "both";
           onboarded_at: string | null;
           invitation_status: "not_sent" | "sent" | "activated" | "expired" | "failed";
@@ -107,11 +112,61 @@ export type Database = {
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
           kyc_submitted_at?: string | null;
+          kyc_approved_at?: string | null;
+          kyc_approved_by?: string | null;
+          gender?: string | null;
+          nationality?: string | null;
+          occupation?: string | null;
           preferred_channel?: "sms" | "whatsapp" | "both";
           onboarded_at?: string | null;
           invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at?: string | null;
           invitation_expires_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      next_of_kin: {
+        Row: {
+          id: string;
+          investor_id: string;
+          full_name: string;
+          relationship: string;
+          phone: string;
+          alternative_phone: string | null;
+          email: string | null;
+          address: string;
+          city: string;
+          state: string;
+          country: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          investor_id: string;
+          full_name: string;
+          relationship: string;
+          phone: string;
+          alternative_phone?: string | null;
+          email?: string | null;
+          address: string;
+          city: string;
+          state: string;
+          country?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          relationship?: string;
+          phone?: string;
+          alternative_phone?: string | null;
+          email?: string | null;
+          address?: string;
+          city?: string;
+          state?: string;
+          country?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -1072,6 +1127,14 @@ export type Database = {
       };
       reject_investor_payment: {
         Args: { p_payment_id: string; p_reason?: string | null };
+        Returns: Json;
+      };
+      kyc_missing_fields: {
+        Args: { p_investor_id: string };
+        Returns: string[];
+      };
+      bulk_approve_kyc: {
+        Args: { p_investor_ids: string[] };
         Returns: Json;
       };
     };
