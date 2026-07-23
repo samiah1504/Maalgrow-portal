@@ -127,7 +127,7 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         options: {
           data: { full_name: full_name.trim(), role: "investor" },
-          redirectTo: `${siteUrl}/investor/dashboard`,
+          redirectTo: `${siteUrl}/reset-password`,
         },
       });
 

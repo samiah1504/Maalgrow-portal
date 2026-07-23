@@ -213,7 +213,7 @@ export async function POST(request: Request) {
           email: investor.email,
           options: {
             data: { full_name: investor.full_name, role: "investor" },
-            redirectTo: `${siteUrl}/investor/dashboard`,
+            redirectTo: `${siteUrl}/reset-password`,
           },
         });
 

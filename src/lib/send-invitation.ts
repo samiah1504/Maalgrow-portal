@@ -41,7 +41,7 @@ export async function sendInvestorInvitation(
       email: investor.email,
       options: {
         data: { full_name: investor.full_name, role: "investor" },
-        redirectTo: `${SITE_URL}/investor/dashboard`,
+        redirectTo: `${SITE_URL}/reset-password`,
       },
     });
 

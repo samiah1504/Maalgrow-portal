@@ -104,7 +104,7 @@ async function processRow(
             email,
             options: {
               data: { full_name: row.full_name, role: "investor" },
-              redirectTo: `${ctx.siteUrl}/investor/dashboard`,
+              redirectTo: `${ctx.siteUrl}/reset-password`,
             },
           });
 
@@ -249,7 +249,7 @@ async function processRow(
         email,
         options: {
           data: { full_name: row.full_name, role: "investor" },
-          redirectTo: `${ctx.siteUrl}/investor/dashboard`,
+          redirectTo: `${ctx.siteUrl}/reset-password`,
         },
       });
       const passwordSetupLink =

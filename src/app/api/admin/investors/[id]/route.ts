@@ -169,7 +169,7 @@ export async function PATCH(
         await adminClient.auth.admin.generateLink({
           type: "recovery",
           email: investorEmail,
-          options: { redirectTo: `${SITE_URL}/api/auth/callback` },
+          options: { redirectTo: `${SITE_URL}/reset-password` },
         });
 
       if (resetError || !linkData?.properties?.action_link) {

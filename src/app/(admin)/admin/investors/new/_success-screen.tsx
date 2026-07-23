@@ -79,7 +79,7 @@ export function SuccessScreen({ data, onAddAnother }: Props) {
   const payStatus = getPaymentStatus(investment.capital, total_paid);
 
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const portalLink = `${siteUrl}/investor/dashboard`;
+  const portalLink = `${siteUrl}/login`;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => {
