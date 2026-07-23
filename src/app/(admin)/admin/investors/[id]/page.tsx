@@ -132,6 +132,17 @@ export default async function AdminInvestorDetailPage({
 
   const investor = rawInvestor as unknown as InvestorFull;
 
+  // Payment rows created before migration 014 have no status/units
+  // columns — they are historical confirmed payments of 0 slots.
+  // Normalising here keeps totals correct even if the app deploys
+  // before the migration is applied.
+  for (const inv of investor.investments) {
+    for (const p of inv.investment_payments) {
+      p.status = p.status ?? "confirmed";
+      p.units = p.units ?? 0;
+    }
+  }
+
   // Series + cycles for the payment allocation form
   const [{ data: allSeries }, { data: allCycles }] = await Promise.all([
     db

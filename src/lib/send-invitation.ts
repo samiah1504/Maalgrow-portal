@@ -25,7 +25,7 @@ export async function sendInvestorInvitation(
          id, investment_code, units, capital, investment_date, maturity_date,
          series(name),
          cycle:cycles(cycle_label, start_date, end_date),
-         investment_payments(amount)
+         investment_payments(amount, status)
        )`
     )
     .eq("id", investorId)
@@ -70,14 +70,17 @@ export async function sendInvestorInvitation(
     maturity_date: string;
     series: { name: string } | null;
     cycle: { cycle_label: string; start_date: string; end_date: string } | null;
-    investment_payments: { amount: number }[];
+    investment_payments: { amount: number; status?: string | null }[];
   };
 
   const investments = (investor.investments ?? []) as unknown as InvRow[];
   const latestInv = investments[0] ?? null;
 
+  // Pre-migration-014 rows have no status — treat them as confirmed
   const totalPaid = latestInv
-    ? latestInv.investment_payments.reduce((s, p) => s + p.amount, 0)
+    ? latestInv.investment_payments
+        .filter((p) => (p.status ?? "confirmed") === "confirmed")
+        .reduce((s, p) => s + p.amount, 0)
     : 0;
   const capital = latestInv?.capital ?? 0;
   const outstandingBalance = Math.max(0, capital - totalPaid);

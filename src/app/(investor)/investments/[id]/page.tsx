@@ -68,13 +68,20 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
     .eq("investment_id", id)
     .order("created_at", { ascending: false });
 
-  // Payments made into this investment (RLS: investor sees only their own)
-  const { data: myPayments } = await supabase
+  // Payments made into this investment (RLS: investor sees only their own).
+  // select("*") + normalisation keeps this working even if the app is
+  // deployed before migration 014 adds the status/units columns.
+  const { data: rawMyPayments } = await supabase
     .from("investment_payments")
-    .select("id, amount, units, payment_date, method, reference, status")
+    .select("*")
     .eq("investment_id", id)
     .order("payment_date", { ascending: true });
-  const confirmedPaid = (myPayments ?? [])
+  const myPayments = (rawMyPayments ?? []).map((p) => ({
+    ...p,
+    status: p.status ?? "confirmed",
+    units: p.units ?? 0,
+  }));
+  const confirmedPaid = myPayments
     .filter((p) => p.status === "confirmed")
     .reduce((s, p) => s + p.amount, 0);
 
