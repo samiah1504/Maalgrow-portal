@@ -1,4 +1,5 @@
 import type { CommsProvider, SendResult, SmsParams, WhatsAppParams } from "./provider";
+import { isNigerianNumber } from "./util";
 
 /**
  * Sendchamp implementation of CommsProvider.
@@ -77,11 +78,17 @@ export class SendchampProvider implements CommsProvider {
   }
 
   async sendSms({ to, message }: SmsParams): Promise<SendResult> {
+    // Nigerian numbers use the configured route (dnd by default so
+    // messages reach DND-enabled lines); anything else goes over
+    // Sendchamp's international route.
+    const route = isNigerianNumber(to)
+      ? process.env.SENDCHAMP_SMS_ROUTE ?? "dnd"
+      : "international";
     return this.post("/sms/send", {
       to: [to],
       message,
       sender_name: process.env.SENDCHAMP_SMS_SENDER_ID ?? "MaalGrow",
-      route: process.env.SENDCHAMP_SMS_ROUTE ?? "dnd",
+      route,
     });
   }
 

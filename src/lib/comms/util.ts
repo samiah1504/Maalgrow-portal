@@ -7,9 +7,31 @@
 // ── Phone normalisation ──────────────────────────────────────────────
 // Canonical outbound format: 234XXXXXXXXXX (13 digits, no plus).
 // The investor's stored phone number is NEVER modified.
+/**
+ * Normalizes a phone number for sending (stored numbers are never
+ * modified). Nigerian formats are converted to 234XXXXXXXXXX; numbers
+ * with an explicit international prefix (+, 00) or a recognisable
+ * country code are kept in full international format, so investors
+ * outside Nigeria are supported.
+ */
 export function normalizeNigerianPhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  const digits = String(raw).replace(/[\s()+-]/g, "").replace(/\D/g, "");
+  const trimmed = String(raw).trim();
+  const hasIntlPrefix = trimmed.startsWith("+") || trimmed.startsWith("00");
+  const digitsAll = trimmed.replace(/\D/g, "");
+  const digits = trimmed.startsWith("00") ? digitsAll.replace(/^00/, "") : digitsAll;
+
+  // Explicit international number: +<country code><number> or 00<...>
+  if (hasIntlPrefix) {
+    if (digits.length >= 10 && digits.length <= 15 && !digits.startsWith("0")) {
+      // +234 numbers still get canonical Nigerian handling
+      if (digits.startsWith("234") && digits.length === 13) return digits;
+      return digits;
+    }
+    return null;
+  }
+
+  // Nigerian local formats
   if (digits.length === 11 && digits.startsWith("0")) {
     return "234" + digits.slice(1);
   }
@@ -19,7 +41,19 @@ export function normalizeNigerianPhone(raw: string | null | undefined): string |
   if (digits.length === 10 && /^[789]/.test(digits)) {
     return "234" + digits;
   }
+
+  // Bare international number stored without "+" (e.g. 447911123456,
+  // 12025550123): plausible country code + subscriber number.
+  if (digits.length >= 11 && digits.length <= 15 && !digits.startsWith("0")) {
+    return digits;
+  }
+
   return null;
+}
+
+/** True when a normalized number is Nigerian (used for route selection) */
+export function isNigerianNumber(normalized: string): boolean {
+  return normalized.startsWith("234") && normalized.length === 13;
 }
 
 // ── Template variables ───────────────────────────────────────────────

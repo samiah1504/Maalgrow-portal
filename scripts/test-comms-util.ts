@@ -14,6 +14,14 @@ check("bare 234 format", normalizeNigerianPhone("2348012345678") === "2348012345
 check("10-digit form", normalizeNigerianPhone("8012345678") === "2348012345678");
 check("too short rejected", normalizeNigerianPhone("12345") === null);
 check("empty rejected", normalizeNigerianPhone("") === null);
+// International numbers
+check("+44 UK number", normalizeNigerianPhone("+44 7911 123456") === "447911123456");
+check("+1 US number", normalizeNigerianPhone("+1 202 555 0123") === "12025550123");
+check("00 prefix", normalizeNigerianPhone("0044 7911 123456") === "447911123456");
+check("bare UK with country code", normalizeNigerianPhone("447911123456") === "447911123456");
+check("+971 UAE number", normalizeNigerianPhone("+971 50 123 4567") === "971501234567");
+check("intl too short rejected", normalizeNigerianPhone("+44 123") === null);
+check("intl leading zero rejected", normalizeNigerianPhone("+0801234567") === null);
 
 // template resolution
 const r1 = resolveTemplate("Dear {{first_name}}, email: {{registered_email}}", {

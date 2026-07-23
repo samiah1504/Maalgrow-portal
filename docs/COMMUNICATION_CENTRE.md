@@ -88,9 +88,12 @@ Redeploy after adding variables.
   ≥1 active investment; exited/inactive automatically excluded),
   investors in a specific series, or individually searched investors
   (name / code / phone / email, with Select All / Clear).
-- **Phone handling**: Nigerian numbers normalised to `234…` for
-  sending only — the stored number is never modified. Invalid numbers
-  and duplicate numbers are counted, shown, and excluded.
+- **Phone handling**: Nigerian numbers normalised to `234…`;
+  international numbers (e.g. `+44…`, `+1…`, `00…`) are kept in full
+  international format and sent over Sendchamp's **international**
+  SMS route automatically — the stored number is never modified.
+  Invalid numbers and duplicate numbers are counted, listed with the
+  investor and reason, and excluded.
 - **Channels**: SMS, WhatsApp, SMS + WhatsApp (both), and WhatsApp
   with SMS Fallback (SMS fires **only** when WhatsApp fails — never
   duplicates).
