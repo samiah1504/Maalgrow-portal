@@ -36,7 +36,7 @@ export default async function DashboardPage() {
     capital: number;
     declared_profit: number | null;
     maturity_date: string;
-    status: "active" | "matured" | "completed";
+    status: "active" | "matured" | "completed" | "cancelled";
     series: { name: "A" | "B" | "C" } | null;
     cycle: { cycle_label: string } | null;
   };
@@ -65,10 +65,15 @@ export default async function DashboardPage() {
     .from("investments")
     .select("*, series(*), cycle:cycles(*)")
     .eq("investor_id", investor.id)
-    .neq("status", "cancelled")
     .order("created_at", { ascending: false });
 
-  const investments = rawInvestments as unknown as InvestmentWithDetails[] | null;
+  // Cancelled (fully reversed) enrolments are filtered here rather
+  // than in the query: the 'cancelled' enum value only exists once
+  // migration 014 is applied, and an unknown enum value in a filter
+  // makes PostgREST reject the whole query.
+  const investments = (
+    (rawInvestments as unknown as InvestmentWithDetails[] | null) ?? []
+  ).filter((i) => i.status !== "cancelled");
 
   // Get recent notifications
   const { data: notifications } = await supabase

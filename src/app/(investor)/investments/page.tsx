@@ -58,10 +58,15 @@ export default async function InvestmentsPage() {
     .from("investments")
     .select("*, series(*), cycle:cycles(*)")
     .eq("investor_id", investor.id)
-    .neq("status", "cancelled")
     .order("created_at", { ascending: false });
 
-  const investments = rawInvestments as unknown as InvestmentRow[] | null;
+  // Cancelled (fully reversed) enrolments are filtered here rather
+  // than in the query: the 'cancelled' enum value only exists once
+  // migration 014 is applied, and an unknown enum value in a filter
+  // makes PostgREST reject the whole query.
+  const investments = (
+    (rawInvestments as unknown as InvestmentRow[] | null) ?? []
+  ).filter((i) => i.status !== "cancelled");
 
   const active = investments?.filter((i) => i.status === "active") ?? [];
   const matured = investments?.filter((i) => i.status === "matured") ?? [];
