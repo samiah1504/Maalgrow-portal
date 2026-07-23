@@ -29,6 +29,7 @@ const schema = z.object({
     .refine((v) => !v || v.length === 11, "NIN must be 11 digits"),
   kyc_status: z.enum(["pending", "approved", "rejected"]),
   kyc_notes: z.string().optional(),
+  preferred_channel: z.enum(["sms", "whatsapp", "both"]),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -45,6 +46,7 @@ interface Investor {
   nin: string | null;
   kyc_status: string;
   kyc_notes: string | null;
+  preferred_channel: string | null;
 }
 
 export function EditInvestorForm({ investor }: { investor: Investor }) {
@@ -68,6 +70,7 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
       nin: investor.nin ?? "",
       kyc_status: investor.kyc_status as "pending" | "approved" | "rejected",
       kyc_notes: investor.kyc_notes ?? "",
+      preferred_channel: (investor.preferred_channel ?? "sms") as "sms" | "whatsapp" | "both",
     },
   });
 
@@ -192,6 +195,23 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
             {errors.kyc_status && (
               <p className="text-xs text-danger">{errors.kyc_status.message}</p>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground">
+              Preferred Communication Channel
+            </label>
+            <select
+              {...register("preferred_channel")}
+              className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+            >
+              <option value="sms">SMS</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="both">SMS + WhatsApp</option>
+            </select>
+            <p className="text-xs text-muted">
+              Used by the Communication Centre when “respect preferences” is selected.
+            </p>
           </div>
 
           <div className="space-y-1.5">

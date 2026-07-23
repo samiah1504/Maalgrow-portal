@@ -80,6 +80,7 @@ export async function PATCH(
         nin,
         kyc_status,
         kyc_notes,
+        preferred_channel,
       } = body as Record<string, string | undefined>;
 
       const investorUpdate: InvestorUpdate = {};
@@ -93,6 +94,9 @@ export async function PATCH(
       if (nin !== undefined) investorUpdate.nin = nin?.trim() || null;
       if (kyc_status !== undefined) investorUpdate.kyc_status = kyc_status as InvestorUpdate["kyc_status"];
       if (kyc_notes !== undefined) investorUpdate.kyc_notes = kyc_notes?.trim() || null;
+      if (preferred_channel !== undefined && ["sms", "whatsapp", "both"].includes(preferred_channel)) {
+        investorUpdate.preferred_channel = preferred_channel as "sms" | "whatsapp" | "both";
+      }
 
       const { error: updateError } = await adminClient
         .from("investors")

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { processCampaignChunk } from "@/lib/comms/engine";
 
 // Called by a cron job (e.g., daily at midnight via vercel.json cron config)
 // Can also be called manually from admin portal
@@ -69,10 +70,31 @@ export async function GET(request: Request) {
       }
     }
 
+    // Process scheduled communication campaigns that are now due —
+    // one batch per campaign per cron run.
+    const { data: dueCampaigns } = await supabase
+      .from("comm_campaigns")
+      .select("id")
+      .in("status", ["queued", "processing"])
+      .not("scheduled_for", "is", null)
+      .lte("scheduled_for", new Date().toISOString())
+      .limit(5);
+
+    const commsResults: Record<string, unknown>[] = [];
+    for (const c of dueCampaigns ?? []) {
+      try {
+        const r = await processCampaignChunk(supabase, c.id, { limit: 40 });
+        commsResults.push({ campaign_id: c.id, ...r });
+      } catch (commsErr) {
+        console.error("[Cron] scheduled campaign error:", c.id, commsErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       processed: rpcResult,
       matured_cycles: (newlyMatured ?? []).length,
+      scheduled_campaigns: commsResults,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

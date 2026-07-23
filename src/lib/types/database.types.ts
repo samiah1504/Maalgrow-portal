@@ -61,6 +61,7 @@ export type Database = {
           kyc_status: "pending" | "approved" | "rejected";
           kyc_notes: string | null;
           kyc_submitted_at: string | null;
+          preferred_channel: "sms" | "whatsapp" | "both";
           onboarded_at: string | null;
           invitation_status: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at: string | null;
@@ -85,6 +86,7 @@ export type Database = {
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
           kyc_submitted_at?: string | null;
+          preferred_channel?: "sms" | "whatsapp" | "both";
           onboarded_at?: string | null;
           invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at?: string | null;
@@ -105,6 +107,7 @@ export type Database = {
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
           kyc_submitted_at?: string | null;
+          preferred_channel?: "sms" | "whatsapp" | "both";
           onboarded_at?: string | null;
           invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at?: string | null;
@@ -724,6 +727,151 @@ export type Database = {
         };
         Relationships: [];
       };
+      comm_templates: {
+        Row: {
+          id: string;
+          name: string;
+          channel: "sms" | "whatsapp" | "both";
+          body: string;
+          whatsapp_template_code: string | null;
+          header_media_url: string | null;
+          is_builtin: boolean;
+          status: "active" | "archived";
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          channel?: "sms" | "whatsapp" | "both";
+          body: string;
+          whatsapp_template_code?: string | null;
+          header_media_url?: string | null;
+          is_builtin?: boolean;
+          status?: "active" | "archived";
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          channel?: "sms" | "whatsapp" | "both";
+          body?: string;
+          whatsapp_template_code?: string | null;
+          header_media_url?: string | null;
+          status?: "active" | "archived";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      comm_campaigns: {
+        Row: {
+          id: string;
+          name: string;
+          template_id: string | null;
+          channel: "sms" | "whatsapp" | "both" | "whatsapp_fallback";
+          message_body: string;
+          recipient_group: "all_active" | "series" | "individual";
+          series_id: string | null;
+          respect_preferences: boolean;
+          status: "draft" | "queued" | "processing" | "sent" | "partially_sent" | "failed" | "cancelled";
+          total_recipients: number;
+          sent_count: number;
+          failed_count: number;
+          skipped_count: number;
+          estimated_units: number;
+          estimated_cost: number;
+          scheduled_for: string | null;
+          created_by: string | null;
+          created_at: string;
+          started_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          template_id?: string | null;
+          channel: "sms" | "whatsapp" | "both" | "whatsapp_fallback";
+          message_body: string;
+          recipient_group: "all_active" | "series" | "individual";
+          series_id?: string | null;
+          respect_preferences?: boolean;
+          status?: "draft" | "queued" | "processing" | "sent" | "partially_sent" | "failed" | "cancelled";
+          total_recipients?: number;
+          sent_count?: number;
+          failed_count?: number;
+          skipped_count?: number;
+          estimated_units?: number;
+          estimated_cost?: number;
+          scheduled_for?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          name?: string;
+          status?: "draft" | "queued" | "processing" | "sent" | "partially_sent" | "failed" | "cancelled";
+          total_recipients?: number;
+          sent_count?: number;
+          failed_count?: number;
+          skipped_count?: number;
+          estimated_units?: number;
+          estimated_cost?: number;
+          scheduled_for?: string | null;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      comm_recipients: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          investor_id: string;
+          phone_normalized: string | null;
+          channel_used: string | null;
+          message: string;
+          status: "pending" | "sent" | "failed" | "skipped";
+          skip_reason: string | null;
+          sms_fallback_used: boolean;
+          provider_message_id: string | null;
+          provider_response: Json | null;
+          error: string | null;
+          attempts: number;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          campaign_id: string;
+          investor_id: string;
+          phone_normalized?: string | null;
+          channel_used?: string | null;
+          message: string;
+          status?: "pending" | "sent" | "failed" | "skipped";
+          skip_reason?: string | null;
+          sms_fallback_used?: boolean;
+          provider_message_id?: string | null;
+          provider_response?: Json | null;
+          error?: string | null;
+          attempts?: number;
+          sent_at?: string | null;
+        };
+        Update: {
+          phone_normalized?: string | null;
+          channel_used?: string | null;
+          status?: "pending" | "sent" | "failed" | "skipped";
+          skip_reason?: string | null;
+          sms_fallback_used?: boolean;
+          provider_message_id?: string | null;
+          provider_response?: Json | null;
+          error?: string | null;
+          attempts?: number;
+          sent_at?: string | null;
+        };
+        Relationships: [];
+      };
       announcements: {
         Row: {
           id: string;
@@ -800,6 +948,18 @@ export type Database = {
           p_notes?: string | null;
         };
         Returns: Json;
+      };
+      create_audit_log: {
+        Args: {
+          p_action: string;
+          p_entity_type: string;
+          p_entity_id?: string | null;
+          p_old_values?: Json | null;
+          p_new_values?: Json | null;
+          p_ip_address?: string | null;
+          p_user_agent?: string | null;
+        };
+        Returns: string;
       };
       create_notification: {
         Args: {

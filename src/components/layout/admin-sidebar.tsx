@@ -19,6 +19,7 @@ import {
   X,
   ChevronRight,
   UploadCloud,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -63,6 +64,12 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Payment Requests", href: "/admin/payment-requests", icon: <CreditCard className="h-4 w-4" /> },
       { label: "Reports", href: "/admin/reports", icon: <BarChart3 className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "Communication",
+    items: [
+      { label: "Communication Centre", href: "/admin/comms", icon: <MessageSquare className="h-4 w-4" /> },
     ],
   },
   {
