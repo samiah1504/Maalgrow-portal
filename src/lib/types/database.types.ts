@@ -233,7 +233,7 @@ export type Database = {
           rollover_balance: number;
           investment_date: string;
           maturity_date: string;
-          status: "active" | "matured" | "completed";
+          status: "active" | "matured" | "completed" | "cancelled";
           maturity_decision: "continue" | "exit" | "rollover_all" | "partial_exit" | null;
           maturity_decided_at: string | null;
           next_investment_id: string | null;
@@ -256,7 +256,7 @@ export type Database = {
           rollover_balance?: number;
           investment_date: string;
           maturity_date: string;
-          status?: "active" | "matured" | "completed";
+          status?: "active" | "matured" | "completed" | "cancelled";
           maturity_decision?: "continue" | "exit" | "rollover_all" | "partial_exit" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
@@ -267,7 +267,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
-          status?: "active" | "matured" | "completed";
+          status?: "active" | "matured" | "completed" | "cancelled";
           maturity_decision?: "continue" | "exit" | "rollover_all" | "partial_exit" | null;
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
@@ -421,28 +421,52 @@ export type Database = {
       investment_payments: {
         Row: {
           id: string;
-          investment_id: string;
+          investment_id: string | null;
           investor_id: string;
+          series_id: string | null;
+          cycle_id: string | null;
           amount: number;
+          units: number;
           payment_date: string;
+          method: string | null;
           reference: string | null;
+          notes: string | null;
+          status: "pending" | "confirmed" | "rejected" | "reversed";
+          reversed_at: string | null;
+          reversed_by: string | null;
+          reversal_reason: string | null;
           created_by: string | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
-          investment_id: string;
+          investment_id?: string | null;
           investor_id: string;
+          series_id?: string | null;
+          cycle_id?: string | null;
           amount: number;
+          units?: number;
           payment_date: string;
+          method?: string | null;
           reference?: string | null;
+          notes?: string | null;
+          status?: "pending" | "confirmed" | "rejected" | "reversed";
           created_by?: string | null;
           created_at?: string;
         };
         Update: {
           amount?: number;
+          units?: number;
           payment_date?: string;
+          method?: string | null;
           reference?: string | null;
+          notes?: string | null;
+          status?: "pending" | "confirmed" | "rejected" | "reversed";
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          reversal_reason?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -1006,10 +1030,52 @@ export type Database = {
         };
         Returns: Json;
       };
+      record_investor_payment: {
+        Args: {
+          p_investor_id: string;
+          p_series_id: string;
+          p_cycle_id: string;
+          p_amount: number;
+          p_units: number | null;
+          p_payment_date: string;
+          p_method?: string | null;
+          p_reference?: string | null;
+          p_notes?: string | null;
+          p_status?: "pending" | "confirmed";
+          p_apply_to_outstanding?: boolean;
+        };
+        Returns: Json;
+      };
+      edit_investor_payment: {
+        Args: {
+          p_payment_id: string;
+          p_series_id: string;
+          p_cycle_id: string;
+          p_amount: number;
+          p_units: number | null;
+          p_payment_date: string;
+          p_method?: string | null;
+          p_reference?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: Json;
+      };
+      reverse_investor_payment: {
+        Args: { p_payment_id: string; p_reason: string };
+        Returns: Json;
+      };
+      confirm_investor_payment: {
+        Args: { p_payment_id: string };
+        Returns: Json;
+      };
+      reject_investor_payment: {
+        Args: { p_payment_id: string; p_reason?: string | null };
+        Returns: Json;
+      };
     };
     Enums: {
       user_role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "investor";
-      investment_status: "active" | "matured" | "completed";
+      investment_status: "active" | "matured" | "completed" | "cancelled";
       payment_status: "pending" | "approved" | "processing" | "paid" | "rejected";
       kyc_status: "pending" | "approved" | "rejected";
       series_name: "A" | "B" | "C";

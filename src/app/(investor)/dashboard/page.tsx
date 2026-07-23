@@ -65,6 +65,7 @@ export default async function DashboardPage() {
     .from("investments")
     .select("*, series(*), cycle:cycles(*)")
     .eq("investor_id", investor.id)
+    .neq("status", "cancelled")
     .order("created_at", { ascending: false });
 
   const investments = rawInvestments as unknown as InvestmentWithDetails[] | null;

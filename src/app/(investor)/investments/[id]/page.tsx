@@ -68,6 +68,16 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
     .eq("investment_id", id)
     .order("created_at", { ascending: false });
 
+  // Payments made into this investment (RLS: investor sees only their own)
+  const { data: myPayments } = await supabase
+    .from("investment_payments")
+    .select("id, amount, units, payment_date, method, reference, status")
+    .eq("investment_id", id)
+    .order("payment_date", { ascending: true });
+  const confirmedPaid = (myPayments ?? [])
+    .filter((p) => p.status === "confirmed")
+    .reduce((s, p) => s + p.amount, 0);
+
   // Get documents
   const { data: documents } = await supabase
     .from("documents")
@@ -351,6 +361,68 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
           </CardContent>
         </Card>
       </div>
+
+      {/* My Payments — capital paid into this investment */}
+      {myPayments && myPayments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CheckCircle2 className="h-4 w-4 text-primary-600" />
+              My Payments
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+              {myPayments.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 px-3 py-2.5 bg-white text-sm"
+                >
+                  <div className="min-w-0">
+                    <span
+                      className={`font-semibold ${
+                        p.status === "reversed" || p.status === "rejected"
+                          ? "text-muted line-through"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {formatCurrency(p.amount)}
+                    </span>
+                    {p.units > 0 && (
+                      <span className="ml-2 text-xs text-muted">
+                        {p.units} slot{p.units === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    <span
+                      className={`ml-2 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                        p.status === "confirmed"
+                          ? "bg-green-50 text-green-700"
+                          : p.status === "pending"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-red-50 text-red-600"
+                      }`}
+                    >
+                      {p.status}
+                    </span>
+                    {p.reference && (
+                      <span className="ml-2 text-xs text-muted">· {p.reference}</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted flex-shrink-0">
+                    {formatDate(p.payment_date)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-sm mt-3 px-1">
+              <span className="text-muted">Total confirmed payments</span>
+              <span className="font-bold text-foreground">
+                {formatCurrency(confirmedPaid)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Documents */}
       {documents && documents.length > 0 && (

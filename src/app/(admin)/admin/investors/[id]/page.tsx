@@ -24,7 +24,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { InvestorActions } from "./_components/investor-actions";
-import { AddPaymentDialog } from "./_components/add-payment-dialog";
+import {
+  AddPaymentButton,
+  PaymentRowActions,
+  type SeriesOption,
+  type CycleOption,
+  type EnrolmentInfo,
+  type InvestorSummary,
+} from "./_components/payment-dialog";
 import { AcknowledgementDownloadButton } from "./_components/acknowledgement-download-button";
 import type { Metadata } from "next";
 
@@ -33,14 +40,22 @@ export const metadata: Metadata = { title: "Investor Detail | Admin" };
 type InvestmentPayment = {
   id: string;
   amount: number;
+  units: number;
   payment_date: string;
+  method: string | null;
   reference: string | null;
+  notes: string | null;
+  status: "pending" | "confirmed" | "rejected" | "reversed";
+  series_id: string | null;
+  cycle_id: string | null;
   created_at: string;
 };
 
 type InvestmentFull = {
   id: string;
   investment_code: string;
+  series_id: string;
+  cycle_id: string;
   units: number;
   price_per_unit: number;
   capital: number;
@@ -117,14 +132,69 @@ export default async function AdminInvestorDetailPage({
 
   const investor = rawInvestor as unknown as InvestorFull;
 
-  // Aggregate stats
-  const totalCapital = investor.investments.reduce((s, i) => s + i.capital, 0);
+  // Series + cycles for the payment allocation form
+  const [{ data: allSeries }, { data: allCycles }] = await Promise.all([
+    db
+      .from("series")
+      .select("id, name, price_per_unit, is_active")
+      .order("name"),
+    db
+      .from("cycles")
+      .select("id, series_id, cycle_label, cycle_number, start_date, end_date, status")
+      .order("cycle_number"),
+  ]);
+
+  const seriesOptions: SeriesOption[] = (allSeries ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    price_per_unit: s.price_per_unit,
+    is_active: s.is_active,
+  }));
+  const cycleOptions: CycleOption[] = (allCycles ?? []) as CycleOption[];
+
+  // Aggregate stats (cancelled = fully reversed, excluded everywhere)
+  const liveInvestments = investor.investments.filter(
+    (i) => i.status !== "cancelled"
+  );
+  const totalCapital = liveInvestments.reduce((s, i) => s + i.capital, 0);
   const totalProfitPaid = investor.payment_requests
     .filter((p) => p.type === "roi" && p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
   const activeCount = investor.investments.filter(
     (i) => i.status === "active"
   ).length;
+  const activeCapital = investor.investments
+    .filter((i) => i.status === "active")
+    .reduce((s, i) => s + i.capital, 0);
+  const activeSlots = investor.investments
+    .filter((i) => i.status === "active")
+    .reduce((s, i) => s + i.units, 0);
+
+  const investorSummary: InvestorSummary = {
+    id: investor.id,
+    full_name: investor.full_name,
+    investor_code: investor.investor_code,
+    email: investor.profile?.email ?? investor.email,
+    active_capital: activeCapital,
+    active_slots: activeSlots,
+  };
+
+  // Current enrolments with outstanding balances (confirmed payments only)
+  const enrolments: EnrolmentInfo[] = investor.investments
+    .filter((i) => i.status === "active")
+    .map((i) => {
+      const confirmedPaid = i.investment_payments
+        .filter((p) => p.status === "confirmed")
+        .reduce((s, p) => s + p.amount, 0);
+      return {
+        investment_id: i.id,
+        series_id: i.series_id,
+        cycle_id: i.cycle_id,
+        units: i.units,
+        capital: i.capital,
+        outstanding: Math.max(0, i.capital - confirmedPaid),
+      };
+    });
 
   const isActive = investor.profile?.is_active !== false;
 
@@ -136,11 +206,12 @@ export default async function AdminInvestorDetailPage({
 
   const statusVariant: Record<
     string,
-    "active" | "matured" | "completed" | "pending"
+    "active" | "matured" | "completed" | "pending" | "rejected"
   > = {
     active: "active",
     matured: "matured",
     completed: "completed",
+    cancelled: "rejected",
   };
 
   return (
@@ -191,12 +262,20 @@ export default async function AdminInvestorDetailPage({
         </div>
 
         <div className="flex flex-col gap-2 items-start sm:items-end">
-          <InvestorActions
-            investorId={investor.id}
-            investorName={investor.full_name}
-            investorEmail={investor.profile?.email ?? investor.email}
-            isActive={isActive}
-          />
+          <div className="flex items-center gap-2">
+            <AddPaymentButton
+              investor={investorSummary}
+              series={seriesOptions}
+              cycles={cycleOptions}
+              enrolments={enrolments}
+            />
+            <InvestorActions
+              investorId={investor.id}
+              investorName={investor.full_name}
+              investorEmail={investor.profile?.email ?? investor.email}
+              isActive={isActive}
+            />
+          </div>
           <Link
             href={`/admin/investors/new?investor_id=${investor.id}`}
             className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium"
@@ -256,10 +335,9 @@ export default async function AdminInvestorDetailPage({
             </Card>
           ) : (
             investor.investments.map((inv) => {
-              const totalPaid = inv.investment_payments.reduce(
-                (s, p) => s + p.amount,
-                0
-              );
+              const totalPaid = inv.investment_payments
+                .filter((p) => p.status === "confirmed")
+                .reduce((s, p) => s + p.amount, 0);
               const balance = inv.capital - totalPaid;
               const payStatus = getPaymentStatus(inv.capital, totalPaid);
 
@@ -297,13 +375,18 @@ export default async function AdminInvestorDetailPage({
                           investment={inv}
                           totalPaid={totalPaid}
                         />
-                        <AddPaymentDialog
-                          investmentId={inv.id}
-                          investmentCode={inv.investment_code}
-                          capital={inv.capital}
-                          units={inv.units}
-                          totalPaid={totalPaid}
-                        />
+                        {inv.status === "active" && (
+                          <AddPaymentButton
+                            investor={investorSummary}
+                            series={seriesOptions}
+                            cycles={cycleOptions}
+                            enrolments={enrolments}
+                            preselectSeriesId={inv.series_id}
+                            preselectCycleId={inv.cycle_id}
+                            variant="outline"
+                            label="Add Payment"
+                          />
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -397,14 +480,37 @@ export default async function AdminInvestorDetailPage({
                             .map((p, idx) => (
                               <div
                                 key={p.id}
-                                className="flex items-center justify-between px-3 py-2 bg-white text-sm"
+                                className="flex items-center justify-between gap-2 px-3 py-2 bg-white text-sm"
                               >
-                                <div>
+                                <div className="min-w-0">
                                   <span className="text-xs text-muted mr-2">
                                     #{idx + 1}
                                   </span>
-                                  <span className="font-medium text-foreground">
+                                  <span
+                                    className={`font-medium ${
+                                      p.status === "reversed" ||
+                                      p.status === "rejected"
+                                        ? "text-muted line-through"
+                                        : "text-foreground"
+                                    }`}
+                                  >
                                     {formatCurrency(p.amount)}
+                                  </span>
+                                  {p.units > 0 && (
+                                    <span className="ml-2 text-xs text-muted">
+                                      {slotLabel(p.units)}
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`ml-2 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                                      p.status === "confirmed"
+                                        ? "bg-green-50 text-green-700"
+                                        : p.status === "pending"
+                                        ? "bg-amber-50 text-amber-700"
+                                        : "bg-red-50 text-red-600"
+                                    }`}
+                                  >
+                                    {p.status}
                                   </span>
                                   {p.reference && (
                                     <span className="ml-2 text-xs text-muted">
@@ -412,9 +518,29 @@ export default async function AdminInvestorDetailPage({
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-xs text-muted">
-                                  {formatDate(p.payment_date)}
-                                </span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-xs text-muted">
+                                    {formatDate(p.payment_date)}
+                                  </span>
+                                  <PaymentRowActions
+                                    investor={investorSummary}
+                                    series={seriesOptions}
+                                    cycles={cycleOptions}
+                                    enrolments={enrolments}
+                                    payment={{
+                                      id: p.id,
+                                      series_id: p.series_id ?? inv.series_id,
+                                      cycle_id: p.cycle_id ?? inv.cycle_id,
+                                      amount: p.amount,
+                                      units: p.units,
+                                      payment_date: p.payment_date,
+                                      method: p.method,
+                                      reference: p.reference,
+                                      notes: p.notes,
+                                      status: p.status,
+                                    }}
+                                  />
+                                </div>
                               </div>
                             ))}
                         </div>
