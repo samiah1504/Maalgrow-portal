@@ -272,6 +272,8 @@ export type Database = {
           maturity_decided_at?: string | null;
           next_investment_id?: string | null;
           declared_profit?: number | null;
+          units?: number;
+          capital?: number;
           notes?: string | null;
           updated_at?: string;
         };

@@ -33,6 +33,7 @@ import {
   type InvestorSummary,
 } from "./_components/payment-dialog";
 import { AcknowledgementDownloadButton } from "./_components/acknowledgement-download-button";
+import { EditSlotsDialog } from "./_components/edit-slots-dialog";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investor Detail | Admin" };
@@ -387,16 +388,25 @@ export default async function AdminInvestorDetailPage({
                           totalPaid={totalPaid}
                         />
                         {inv.status === "active" && (
-                          <AddPaymentButton
-                            investor={investorSummary}
-                            series={seriesOptions}
-                            cycles={cycleOptions}
-                            enrolments={enrolments}
-                            preselectSeriesId={inv.series_id}
-                            preselectCycleId={inv.cycle_id}
-                            variant="outline"
-                            label="Add Payment"
-                          />
+                          <>
+                            <EditSlotsDialog
+                              investmentId={inv.id}
+                              investmentCode={inv.investment_code}
+                              currentUnits={inv.units}
+                              currentCapital={inv.capital}
+                              pricePerUnit={inv.price_per_unit}
+                            />
+                            <AddPaymentButton
+                              investor={investorSummary}
+                              series={seriesOptions}
+                              cycles={cycleOptions}
+                              enrolments={enrolments}
+                              preselectSeriesId={inv.series_id}
+                              preselectCycleId={inv.cycle_id}
+                              variant="outline"
+                              label="Add Payment"
+                            />
+                          </>
                         )}
                       </div>
                     </div>
