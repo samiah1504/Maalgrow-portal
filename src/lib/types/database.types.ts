@@ -60,6 +60,7 @@ export type Database = {
           account_number: string | null;
           kyc_status: "pending" | "approved" | "rejected";
           kyc_notes: string | null;
+          kyc_submitted_at: string | null;
           onboarded_at: string | null;
           invitation_status: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at: string | null;
@@ -83,6 +84,7 @@ export type Database = {
           account_number?: string | null;
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
+          kyc_submitted_at?: string | null;
           onboarded_at?: string | null;
           invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at?: string | null;
@@ -102,6 +104,7 @@ export type Database = {
           account_number?: string | null;
           kyc_status?: "pending" | "approved" | "rejected";
           kyc_notes?: string | null;
+          kyc_submitted_at?: string | null;
           onboarded_at?: string | null;
           invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
           invitation_sent_at?: string | null;
