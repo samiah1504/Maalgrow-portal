@@ -69,32 +69,61 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const csvUrl = googleSheetsCsvUrl(sheetUrl);
-      if (!csvUrl) {
+      const csvUrls = googleSheetsCsvUrl(sheetUrl);
+      if (csvUrls === null) {
         return NextResponse.json(
           { error: "That does not look like a Google Sheets link. Paste the sheet's share URL (docs.google.com/spreadsheets/…)." },
+          { status: 400 }
+        );
+      }
+      if (csvUrls === "published_link") {
+        return NextResponse.json(
+          {
+            error:
+              "This is a “Publish to web” link, which cannot be imported. Open the sheet in your browser, copy the address from the address bar (it looks like docs.google.com/spreadsheets/d/…/edit), and paste that instead.",
+          },
           { status: 400 }
         );
       }
       source = "google_sheets";
       sourceName = sheetUrl;
 
-      const res = await fetch(csvUrl, { redirect: "follow" });
-      if (!res.ok) {
-        return NextResponse.json(
-          {
-            error:
-              "Could not read the Google Sheet. Make sure sharing is set to “Anyone with the link can view”, then try again.",
-          },
-          { status: 400 }
-        );
+      // Google occasionally rejects one endpoint but not the other, so
+      // try /export first and fall back to the gviz CSV endpoint.
+      const headers = {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "text/csv,text/plain,*/*",
+      };
+
+      let text: string | null = null;
+      let lastStatus = 0;
+      for (const url of [csvUrls.primary, csvUrls.fallback]) {
+        try {
+          const res = await fetch(url, { redirect: "follow", headers, cache: "no-store" });
+          lastStatus = res.status;
+          const body = await res.text();
+          if (res.ok && !body.trimStart().startsWith("<")) {
+            text = body;
+            break;
+          }
+          console.error(
+            `[Migration] Google Sheets fetch failed: ${url} → HTTP ${res.status}, ` +
+              `starts with: ${JSON.stringify(body.slice(0, 120))}`
+          );
+        } catch (fetchErr) {
+          console.error(`[Migration] Google Sheets fetch error for ${url}:`, fetchErr);
+        }
       }
-      const text = await res.text();
-      if (text.trimStart().startsWith("<")) {
+
+      if (text === null) {
         return NextResponse.json(
           {
             error:
-              "Google returned a sign-in page instead of the sheet. Set the sheet's sharing to “Anyone with the link can view” and try again.",
+              `Could not read the Google Sheet (Google responded with HTTP ${lastStatus || "error"}). ` +
+              "Check that: 1) sharing is “Anyone with the link can view” (not “Restricted” or organisation-only), " +
+              "2) you copied the address-bar URL of the sheet, and 3) the sheet is not too large. " +
+              "If it still fails, download the sheet as CSV (File → Download → CSV) and upload it with the CSV option.",
           },
           { status: 400 }
         );

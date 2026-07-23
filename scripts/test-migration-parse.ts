@@ -52,12 +52,20 @@ const bad = parseSpreadsheet(Buffer.from("Name Only\nJoe", "utf8"));
 check("missing slots column reported", bad.errors.some(e => /Number of Slots/.test(e)), bad.errors);
 
 // ── Google Sheets URL ──
-check("gsheet url basic",
-  googleSheetsCsvUrl("https://docs.google.com/spreadsheets/d/1AbC_d-EF/edit#gid=123456")
-  === "https://docs.google.com/spreadsheets/d/1AbC_d-EF/export?format=csv&gid=123456");
-check("gsheet url no gid",
-  googleSheetsCsvUrl("https://docs.google.com/spreadsheets/d/XYZ/edit")
-  === "https://docs.google.com/spreadsheets/d/XYZ/export?format=csv&gid=0");
+const LONG_ID = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
+const gs1 = googleSheetsCsvUrl(`https://docs.google.com/spreadsheets/d/${LONG_ID}/edit#gid=123456`);
+check("gsheet url with gid",
+  typeof gs1 === "object" && gs1 !== null &&
+  gs1.primary === `https://docs.google.com/spreadsheets/d/${LONG_ID}/export?format=csv&gid=123456` &&
+  gs1.fallback.includes("gviz/tq?tqx=out:csv&gid=123456"), gs1);
+const gs2 = googleSheetsCsvUrl(`https://docs.google.com/spreadsheets/d/${LONG_ID}/edit?usp=sharing`);
+check("gsheet url no gid → first tab (no gid param)",
+  typeof gs2 === "object" && gs2 !== null &&
+  gs2.primary === `https://docs.google.com/spreadsheets/d/${LONG_ID}/export?format=csv`, gs2);
+check("published link detected",
+  googleSheetsCsvUrl("https://docs.google.com/spreadsheets/d/e/2PACX-abc123/pubhtml") === "published_link");
+check("short/invalid id rejected",
+  googleSheetsCsvUrl("https://docs.google.com/spreadsheets/d/XYZ/edit") === null);
 check("non-gsheet url rejected", googleSheetsCsvUrl("https://example.com/foo.csv") === null);
 
 // ── Phone normalization ──

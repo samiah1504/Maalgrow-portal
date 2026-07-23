@@ -258,16 +258,31 @@ export function parseSpreadsheet(buffer: Buffer): {
 // ============================================================
 
 /**
- * Converts any Google Sheets share link into its CSV export URL.
+ * Converts a Google Sheets share link into its CSV export URLs.
  * Works for sheets shared as "Anyone with the link can view".
+ *
+ * Returns null for links that are not normal spreadsheet URLs, and
+ * an error marker for "Publish to web" links (/d/e/2PACX-…), which
+ * do not contain the real spreadsheet id.
  */
-export function googleSheetsCsvUrl(link: string): string | null {
-  const m = link.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+export function googleSheetsCsvUrl(
+  link: string
+): { primary: string; fallback: string } | "published_link" | null {
+  if (/docs\.google\.com\/spreadsheets\/d\/e\//.test(link)) {
+    return "published_link";
+  }
+  // Real spreadsheet ids are long (typically 40+ chars)
+  const m = link.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/);
   if (!m) return null;
   const id = m[1];
   const gidMatch = link.match(/[#?&]gid=(\d+)/);
-  const gid = gidMatch ? gidMatch[1] : "0";
-  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+  // No gid in the link → omit it entirely: Google then exports the
+  // first tab, which is correct even when the first tab's gid ≠ 0.
+  const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : "";
+  return {
+    primary: `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gidParam}`,
+    fallback: `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${gidParam}`,
+  };
 }
 
 // ============================================================
