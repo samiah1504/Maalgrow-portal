@@ -14,3 +14,4 @@ done
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/rollover_scenarios.sql
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/payment_allocation_scenarios.sql
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/kyc_extension_scenarios.sql
+psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/chat_scenarios.sql

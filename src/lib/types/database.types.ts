@@ -66,6 +66,7 @@ export type Database = {
           gender: string | null;
           nationality: string | null;
           occupation: string | null;
+          assigned_manager_id: string | null;
           preferred_channel: "sms" | "whatsapp" | "both";
           onboarded_at: string | null;
           invitation_status: "not_sent" | "sent" | "activated" | "expired" | "failed";
@@ -117,6 +118,7 @@ export type Database = {
           gender?: string | null;
           nationality?: string | null;
           occupation?: string | null;
+          assigned_manager_id?: string | null;
           preferred_channel?: "sms" | "whatsapp" | "both";
           onboarded_at?: string | null;
           invitation_status?: "not_sent" | "sent" | "activated" | "expired" | "failed";
@@ -124,6 +126,102 @@ export type Database = {
           invitation_expires_at?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      chat_conversations: {
+        Row: {
+          id: string;
+          investor_id: string;
+          assigned_manager_id: string | null;
+          category: string;
+          related_series_id: string | null;
+          related_cycle_id: string | null;
+          status: "open" | "awaiting_admin" | "awaiting_investor" | "resolved" | "archived";
+          priority: "normal" | "high";
+          investor_unread: number;
+          admin_unread: number;
+          last_message_at: string | null;
+          last_investor_message_at: string | null;
+          last_admin_message_at: string | null;
+          first_admin_reply_at: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          sender_type: "investor" | "admin";
+          body: string | null;
+          attachment_path: string | null;
+          attachment_name: string | null;
+          attachment_mime: string | null;
+          attachment_size: number | null;
+          is_internal_note: boolean;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      chat_assignments: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          assigned_from: string | null;
+          assigned_to: string | null;
+          assigned_by: string | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      chat_quick_replies: {
+        Row: {
+          id: string;
+          title: string;
+          message: string;
+          category: string | null;
+          active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          message: string;
+          category?: string | null;
+          active?: boolean;
+          created_by?: string | null;
+        };
+        Update: {
+          title?: string;
+          message?: string;
+          category?: string | null;
+          active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      chat_settings: {
+        Row: {
+          id: boolean;
+          support_notice: string;
+          updated_at: string;
+        };
+        Insert: { id?: boolean; support_notice?: string };
+        Update: { support_notice?: string; updated_at?: string };
         Relationships: [];
       };
       next_of_kin: {
@@ -1135,6 +1233,44 @@ export type Database = {
       };
       bulk_approve_kyc: {
         Args: { p_investor_ids: string[] };
+        Returns: Json;
+      };
+      chat_start_conversation: {
+        Args: {
+          p_category: string;
+          p_body: string;
+          p_related_series_id?: string | null;
+          p_related_cycle_id?: string | null;
+        };
+        Returns: Json;
+      };
+      chat_send_message: {
+        Args: {
+          p_conversation_id: string;
+          p_body: string | null;
+          p_attachment_path?: string | null;
+          p_attachment_name?: string | null;
+          p_attachment_mime?: string | null;
+          p_attachment_size?: number | null;
+          p_internal_note?: boolean;
+        };
+        Returns: Json;
+      };
+      chat_mark_read: {
+        Args: { p_conversation_id: string };
+        Returns: undefined;
+      };
+      chat_update_conversation: {
+        Args: {
+          p_conversation_id: string;
+          p_action: string;
+          p_manager_id?: string | null;
+          p_reason?: string | null;
+        };
+        Returns: Json;
+      };
+      chat_bulk_assign_manager: {
+        Args: { p_investor_ids: string[]; p_manager_id: string | null };
         Returns: Json;
       };
     };

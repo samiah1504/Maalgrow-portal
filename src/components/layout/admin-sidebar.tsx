@@ -71,7 +71,8 @@ const navGroups: NavGroup[] = [
   {
     label: "Communication",
     items: [
-      { label: "Communication Centre", href: "/admin/comms", icon: <MessageSquare className="h-4 w-4" /> },
+      { label: "Investor Chats", href: "/admin/chats", icon: <MessageSquare className="h-4 w-4" /> },
+      { label: "Communication Centre", href: "/admin/comms", icon: <Megaphone className="h-4 w-4" /> },
     ],
   },
   {

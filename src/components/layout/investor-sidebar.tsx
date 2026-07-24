@@ -10,6 +10,7 @@ import {
   CreditCard,
   Bell,
   FileText,
+  MessageCircle,
   User,
   Settings,
   HelpCircle,
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { label: "Profit History", href: "/roi-history", icon: <BarChart3 className="h-5 w-5" /> },
   { label: "Payment Requests", href: "/payment-requests", icon: <CreditCard className="h-5 w-5" /> },
   { label: "Notifications", href: "/notifications", icon: <Bell className="h-5 w-5" /> },
+  { label: "Chat with Manager", href: "/chat", icon: <MessageCircle className="h-5 w-5" /> },
   { label: "Documents", href: "/documents", icon: <FileText className="h-5 w-5" /> },
 ];
 

@@ -8,6 +8,7 @@ import {
   Clock,
   ChevronRight,
   Bell,
+  MessageCircle,
 } from "lucide-react";
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
 import { kycMissingFields, type KycInvestorFields } from "@/lib/kyc";
@@ -93,6 +94,15 @@ export default async function DashboardPage() {
     kycMissingFields(investor as unknown as KycInvestorFields, nokRow ?? null)
       .length > 0;
 
+  // Chat unread count (tolerates migration 016 not applied yet)
+  const { data: chatConv } = await supabase
+    .from("chat_conversations")
+    .select("investor_unread")
+    .eq("investor_id", investor.id)
+    .neq("status", "archived")
+    .maybeSingle();
+  const chatUnread = chatConv?.investor_unread ?? 0;
+
   // Get recent notifications
   const { data: notifications } = await supabase
     .from("notifications")
@@ -163,6 +173,36 @@ export default async function DashboardPage() {
           <ChevronRight className="h-4 w-4 text-amber-600 ml-auto mt-1" />
         </Link>
       )}
+
+      {/* Chat with Investor Manager */}
+      <Link
+        href="/chat"
+        className="flex items-start gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4 hover:bg-primary-100 transition-colors"
+      >
+        <div className="relative shrink-0">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-700 text-white">
+            <MessageCircle className="h-5 w-5" />
+          </div>
+          {chatUnread > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-500 px-1 text-[10px] font-bold text-primary-900">
+              {chatUnread > 9 ? "9+" : chatUnread}
+            </span>
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-primary-900">
+            Chat With Your Investor Manager
+          </p>
+          <p className="text-xs text-primary-700 mt-0.5">
+            Have a question about your investment, payment, maturity instruction
+            or portal account? Send a message to your Investor Manager.
+            {chatUnread > 0 && (
+              <span className="font-semibold"> You have {chatUnread} unread repl{chatUnread === 1 ? "y" : "ies"}.</span>
+            )}
+          </p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-primary-600 ml-auto mt-1 shrink-0" />
+      </Link>
 
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
