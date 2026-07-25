@@ -64,10 +64,21 @@ export const TEMPLATE_VARIABLES = [
   "registered_email",
   "investor_code",
   "series_name",
-  "maturity_date",
+  "cycle_name",
+  "capital_amount",
   "total_slots",
+  "profit_amount",
+  "maturity_value",
+  "maturity_date",
+  "maturity_instruction_deadline",
+  "kyc_status",
   "portal_url",
 ] as const;
+
+export function isValidEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+}
 
 export type TemplateVars = Partial<Record<(typeof TEMPLATE_VARIABLES)[number], string>>;
 

@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/types/database.types";
-import { getCommsProvider, type SendResult } from "./provider";
+import { getCommsProvider } from "./provider";
 import { resolveTemplate, smsUnits, smsCostNgn } from "./util";
-import { loadCommRecipients } from "./server";
+import { loadCommRecipients, type CommGroup } from "./server";
+import { sendCampaignEmail } from "./resend-email";
 
 type AdminClient = SupabaseClient<Database>;
 type Campaign = Database["public"]["Tables"]["comm_campaigns"]["Row"];
@@ -18,13 +19,16 @@ export async function buildCampaignRecipients(
   campaign: Pick<
     Campaign,
     "id" | "message_body" | "recipient_group" | "series_id"
-  >,
+  > & { channel?: string; cycle_id?: string | null; email_subject?: string | null },
   investorIds: string[] | null
 ): Promise<{ total: number; sendable: number; skipped: number; units: number; cost: number }> {
+  const isEmail = campaign.channel === "email";
   const { recipients } = await loadCommRecipients(adminClient, {
-    group: campaign.recipient_group,
+    group: campaign.recipient_group as CommGroup,
     seriesId: campaign.series_id,
+    cycleId: campaign.cycle_id ?? null,
     investorIds,
+    forEmail: isEmail,
   });
 
   let sendable = 0;
@@ -33,20 +37,28 @@ export async function buildCampaignRecipients(
 
   const rows = recipients.map((r) => {
     const { text, unresolved } = resolveTemplate(campaign.message_body, r.vars);
+    // Email subjects are personalised too, and validated the same way
+    const subjectRes = isEmail
+      ? resolveTemplate(campaign.email_subject ?? "", r.vars)
+      : { text: null as string | null, unresolved: [] as string[] };
+
     let skipReason = r.skip_reason;
-    if (!skipReason && unresolved.length > 0) {
+    const allUnresolved = [...unresolved, ...subjectRes.unresolved];
+    if (!skipReason && allUnresolved.length > 0) {
       // A message with a raw {{placeholder}} is never sent.
-      skipReason = `Missing data for variable(s): ${unresolved.join(", ")}`;
+      skipReason = `Missing data for variable(s): ${[...new Set(allUnresolved)].join(", ")}`;
     }
     if (skipReason) skipped++;
     else {
       sendable++;
-      totalUnits += smsUnits(text);
+      if (!isEmail) totalUnits += smsUnits(text);
     }
     return {
       campaign_id: campaign.id,
       investor_id: r.investor_id,
       phone_normalized: r.phone_normalized,
+      email_address: isEmail ? r.email : null,
+      personalised_subject: subjectRes.text,
       message: text,
       status: (skipReason ? "skipped" : "pending") as "skipped" | "pending",
       skip_reason: skipReason,
@@ -82,7 +94,7 @@ export async function buildCampaignRecipients(
 type EffectiveChannel = "sms" | "whatsapp" | "both" | "whatsapp_fallback";
 
 function effectiveChannel(campaign: Campaign, pref: string | null): EffectiveChannel {
-  if (!campaign.respect_preferences) return campaign.channel;
+  if (!campaign.respect_preferences) return campaign.channel as EffectiveChannel;
   if (pref === "whatsapp") return "whatsapp";
   if (pref === "both") return "both";
   return "sms";
@@ -202,6 +214,25 @@ export async function processCampaignChunk(
     investor: { preferred_channel: string } | null;
   })[];
 
+  const isEmail = campaign.channel === "email";
+
+  // Shared attachment: loaded ONCE per chunk from private storage
+  let attachment: { filename: string; content: Buffer } | null = null;
+  if (isEmail && campaign.attachment_mode === "shared" && campaign.attachment_path) {
+    const { data: file, error: dlErr } = await adminClient.storage
+      .from("comm-attachments")
+      .download(campaign.attachment_path);
+    if (dlErr || !file) {
+      throw new Error(
+        "Could not load the campaign attachment: " + (dlErr?.message ?? "not found")
+      );
+    }
+    attachment = {
+      filename: campaign.attachment_name ?? "report.pdf",
+      content: Buffer.from(await file.arrayBuffer()),
+    };
+  }
+
   let processed = 0;
   let sentNow = 0;
   let failedNow = 0;
@@ -218,6 +249,46 @@ export async function processCampaignChunk(
     if (!claimed || claimed.length === 0) continue; // another worker took it
 
     processed++;
+
+    if (isEmail) {
+      if (!row.email_address) {
+        await adminClient
+          .from("comm_recipients")
+          .update({ status: "skipped", skip_reason: "No valid email address" })
+          .eq("id", row.id);
+        continue;
+      }
+      const emailResult = await sendCampaignEmail({
+        to: row.email_address,
+        subject: row.personalised_subject ?? campaign.email_subject ?? campaign.name,
+        bodyText: row.message,
+        previewText: campaign.email_preview_text,
+        emailType: (campaign.email_type as "operational" | "general") ?? "operational",
+        fromName: campaign.from_name,
+        fromEmail: campaign.from_email,
+        replyTo: campaign.reply_to_email,
+        attachment,
+      });
+
+      await adminClient
+        .from("comm_recipients")
+        .update({
+          status: emailResult.success ? "sent" : "failed",
+          channel_used: "email",
+          provider_message_id: emailResult.providerMessageId ?? null,
+          provider_response: emailResult.response as Json,
+          error: emailResult.error ?? null,
+          sent_at: emailResult.success ? new Date().toISOString() : null,
+        })
+        .eq("id", row.id);
+
+      if (emailResult.success) sentNow++;
+      else failedNow++;
+
+      // Resend's default rate limit is ~2 requests/second
+      await new Promise((r) => setTimeout(r, 600));
+      continue;
+    }
 
     if (!row.phone_normalized) {
       await adminClient

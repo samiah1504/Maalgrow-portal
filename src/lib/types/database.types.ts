@@ -910,8 +910,11 @@ export type Database = {
         Row: {
           id: string;
           name: string;
-          channel: "sms" | "whatsapp" | "both";
+          channel: "sms" | "whatsapp" | "both" | "email";
           body: string;
+          email_subject: string | null;
+          email_preview_text: string | null;
+          email_type: "operational" | "general";
           whatsapp_template_code: string | null;
           header_media_url: string | null;
           is_builtin: boolean;
@@ -923,8 +926,11 @@ export type Database = {
         Insert: {
           id?: string;
           name: string;
-          channel?: "sms" | "whatsapp" | "both";
+          channel?: "sms" | "whatsapp" | "both" | "email";
           body: string;
+          email_subject?: string | null;
+          email_preview_text?: string | null;
+          email_type?: "operational" | "general";
           whatsapp_template_code?: string | null;
           header_media_url?: string | null;
           is_builtin?: boolean;
@@ -935,8 +941,11 @@ export type Database = {
         };
         Update: {
           name?: string;
-          channel?: "sms" | "whatsapp" | "both";
+          channel?: "sms" | "whatsapp" | "both" | "email";
           body?: string;
+          email_subject?: string | null;
+          email_preview_text?: string | null;
+          email_type?: "operational" | "general";
           whatsapp_template_code?: string | null;
           header_media_url?: string | null;
           status?: "active" | "archived";
@@ -949,9 +958,9 @@ export type Database = {
           id: string;
           name: string;
           template_id: string | null;
-          channel: "sms" | "whatsapp" | "both" | "whatsapp_fallback";
+          channel: "sms" | "whatsapp" | "both" | "whatsapp_fallback" | "email";
           message_body: string;
-          recipient_group: "all_active" | "series" | "individual";
+          recipient_group: "all_active" | "series" | "cycle" | "individual" | "kyc_incomplete" | "kyc_approved" | "portal_not_activated" | "maturity_pending" | "profit_published";
           series_id: string | null;
           respect_preferences: boolean;
           status: "draft" | "queued" | "processing" | "sent" | "partially_sent" | "failed" | "cancelled";
@@ -962,6 +971,23 @@ export type Database = {
           estimated_units: number;
           estimated_cost: number;
           scheduled_for: string | null;
+          cycle_id: string | null;
+          email_type: "operational" | "general" | null;
+          email_subject: string | null;
+          email_preview_text: string | null;
+          from_name: string | null;
+          from_email: string | null;
+          reply_to_email: string | null;
+          attachment_mode: "none" | "shared";
+          attachment_path: string | null;
+          attachment_name: string | null;
+          attachment_mime: string | null;
+          attachment_size: number | null;
+          delivered_count: number;
+          opened_count: number;
+          clicked_count: number;
+          bounced_count: number;
+          complained_count: number;
           created_by: string | null;
           created_at: string;
           started_at: string | null;
@@ -971,9 +997,9 @@ export type Database = {
           id?: string;
           name: string;
           template_id?: string | null;
-          channel: "sms" | "whatsapp" | "both" | "whatsapp_fallback";
+          channel: "sms" | "whatsapp" | "both" | "whatsapp_fallback" | "email";
           message_body: string;
-          recipient_group: "all_active" | "series" | "individual";
+          recipient_group: "all_active" | "series" | "cycle" | "individual" | "kyc_incomplete" | "kyc_approved" | "portal_not_activated" | "maturity_pending" | "profit_published";
           series_id?: string | null;
           respect_preferences?: boolean;
           status?: "draft" | "queued" | "processing" | "sent" | "partially_sent" | "failed" | "cancelled";
@@ -984,6 +1010,18 @@ export type Database = {
           estimated_units?: number;
           estimated_cost?: number;
           scheduled_for?: string | null;
+          cycle_id?: string | null;
+          email_type?: "operational" | "general" | null;
+          email_subject?: string | null;
+          email_preview_text?: string | null;
+          from_name?: string | null;
+          from_email?: string | null;
+          reply_to_email?: string | null;
+          attachment_mode?: "none" | "shared";
+          attachment_path?: string | null;
+          attachment_name?: string | null;
+          attachment_mime?: string | null;
+          attachment_size?: number | null;
           created_by?: string | null;
           created_at?: string;
           started_at?: string | null;
@@ -999,6 +1037,11 @@ export type Database = {
           estimated_units?: number;
           estimated_cost?: number;
           scheduled_for?: string | null;
+          delivered_count?: number;
+          opened_count?: number;
+          clicked_count?: number;
+          bounced_count?: number;
+          complained_count?: number;
           started_at?: string | null;
           completed_at?: string | null;
         };
@@ -1010,6 +1053,8 @@ export type Database = {
           campaign_id: string;
           investor_id: string;
           phone_normalized: string | null;
+          email_address: string | null;
+          personalised_subject: string | null;
           channel_used: string | null;
           message: string;
           status: "pending" | "sent" | "failed" | "skipped";
@@ -1020,12 +1065,19 @@ export type Database = {
           error: string | null;
           attempts: number;
           sent_at: string | null;
+          delivered_at: string | null;
+          opened_at: string | null;
+          clicked_at: string | null;
+          bounced_at: string | null;
+          bounce_reason: string | null;
         };
         Insert: {
           id?: string;
           campaign_id: string;
           investor_id: string;
           phone_normalized?: string | null;
+          email_address?: string | null;
+          personalised_subject?: string | null;
           channel_used?: string | null;
           message: string;
           status?: "pending" | "sent" | "failed" | "skipped";
@@ -1048,6 +1100,11 @@ export type Database = {
           error?: string | null;
           attempts?: number;
           sent_at?: string | null;
+          delivered_at?: string | null;
+          opened_at?: string | null;
+          clicked_at?: string | null;
+          bounced_at?: string | null;
+          bounce_reason?: string | null;
         };
         Relationships: [];
       };

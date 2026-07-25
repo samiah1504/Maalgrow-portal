@@ -1,23 +1,25 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { requireCommsAdmin, loadCommRecipients } from "@/lib/comms/server";
+import { requireCommsAdmin, loadCommRecipients, type CommGroup } from "@/lib/comms/server";
 
-// GET ?group=all_active|series|individual&series_id=…&ids=a,b,c
+// GET ?group=…&series_id=…&cycle_id=…&ids=a,b,c&for_email=1
 // Returns the resolved recipient preview with validity stats.
 export async function GET(request: Request) {
   const auth = await requireCommsAdmin();
   if (!auth.ok) return auth.response;
 
   const url = new URL(request.url);
-  const group = (url.searchParams.get("group") ?? "all_active") as
-    | "all_active"
-    | "series"
-    | "individual";
+  const group = (url.searchParams.get("group") ?? "all_active") as CommGroup;
   const seriesId = url.searchParams.get("series_id");
+  const cycleId = url.searchParams.get("cycle_id");
+  const forEmail = url.searchParams.get("for_email") === "1";
   const ids = url.searchParams.get("ids")?.split(",").filter(Boolean) ?? null;
 
-  if (group === "series" && !seriesId) {
+  if (["series", "cycle"].includes(group) && !seriesId) {
     return NextResponse.json({ error: "series_id is required" }, { status: 400 });
+  }
+  if (group === "cycle" && !cycleId) {
+    return NextResponse.json({ error: "cycle_id is required" }, { status: 400 });
   }
   if (group === "individual" && (!ids || ids.length === 0)) {
     return NextResponse.json({ recipients: [], stats: { total_selected: 0, valid_phones: 0, invalid_phones: 0, duplicates_removed: 0 } });
@@ -27,7 +29,9 @@ export async function GET(request: Request) {
   const { recipients, stats } = await loadCommRecipients(db, {
     group,
     seriesId,
+    cycleId,
     investorIds: ids,
+    forEmail,
   });
 
   return NextResponse.json({

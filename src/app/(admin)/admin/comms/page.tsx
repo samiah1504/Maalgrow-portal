@@ -59,6 +59,18 @@ export default async function CommsPage() {
     }[];
   };
 
+  const allCycles = ((rawSeries ?? []) as unknown as SeriesRow[]).flatMap((s) =>
+    (s.cycles ?? []).map((c) => ({
+      id: c.id,
+      series_id: s.id,
+      cycle_label: c.cycle_label,
+      start_date: c.start_date,
+      end_date: c.end_date,
+      status: c.status,
+      investors: c.total_investors,
+    }))
+  );
+
   const series = ((rawSeries ?? []) as unknown as SeriesRow[]).map((s) => {
     const active =
       s.cycles?.find((c) => c.status === "active") ??
@@ -84,7 +96,7 @@ export default async function CommsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Communication Centre</h1>
           <p className="text-sm text-muted mt-0.5">
-            SMS &amp; WhatsApp updates to existing MaalGrow investors — maturity
+            SMS, WhatsApp &amp; Email updates to existing MaalGrow investors — maturity
             notices, payment notifications, portal migration and announcements
           </p>
         </div>
@@ -92,9 +104,24 @@ export default async function CommsPage() {
 
       <CommsCenter
         series={series}
+        cycles={allCycles}
         initialTemplates={rawTemplates ?? []}
         initialCampaigns={(rawCampaigns ?? []) as never[]}
         isSuperAdmin={profile.role === "super_admin"}
+        emailDefaults={{
+          fromName:
+            process.env.RESEND_FROM_NAME ??
+            (process.env.EMAIL_FROM?.match(/^\s*(.*?)\s*</)?.[1] || "MaalGrow Investor Relations"),
+          fromEmail:
+            process.env.RESEND_FROM_EMAIL?.match(/<([^>]+)>/)?.[1] ??
+            process.env.RESEND_FROM_EMAIL ??
+            process.env.EMAIL_FROM?.match(/<([^>]+)>/)?.[1] ??
+            "noreply@maalvest.com",
+          replyTo:
+            process.env.RESEND_REPLY_TO_EMAIL ??
+            process.env.SUPPORT_EMAIL ??
+            "support@maalvest.com",
+        }}
       />
     </div>
   );

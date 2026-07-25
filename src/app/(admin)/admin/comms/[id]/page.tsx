@@ -121,7 +121,13 @@ export default async function CampaignPage({
           { label: "Successful", value: String(campaign.sent_count), cls: "text-emerald-600" },
           { label: "Failed", value: String(campaign.failed_count), cls: campaign.failed_count > 0 ? "text-red-600" : "" },
           { label: "Skipped", value: String(campaign.skipped_count) },
-          { label: "Estimated Cost", value: formatCurrency(campaign.estimated_cost) },
+          ...(campaign.channel === "email"
+            ? [
+                { label: "Delivered", value: String(campaign.delivered_count ?? 0), cls: "text-emerald-600" },
+                { label: "Opened", value: String(campaign.opened_count ?? 0) },
+                { label: "Bounced", value: String(campaign.bounced_count ?? 0), cls: (campaign.bounced_count ?? 0) > 0 ? "text-red-600" : "" },
+              ]
+            : [{ label: "Estimated Cost", value: formatCurrency(campaign.estimated_cost) }]),
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-3">

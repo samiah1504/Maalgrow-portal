@@ -84,14 +84,42 @@ type PreviewRecipient = {
   sample_vars: Record<string, string | undefined>;
 };
 
-type Group = "all_active" | "series" | "individual";
-type Channel = "sms" | "whatsapp" | "both" | "whatsapp_fallback";
+type Group =
+  | "all_active"
+  | "series"
+  | "cycle"
+  | "individual"
+  | "kyc_incomplete"
+  | "kyc_approved"
+  | "portal_not_activated"
+  | "maturity_pending"
+  | "profit_published";
+
+const SMART_GROUPS: { key: Group; label: string }[] = [
+  { key: "kyc_incomplete", label: "Investors with incomplete KYC" },
+  { key: "kyc_approved", label: "Investors with approved KYC" },
+  { key: "portal_not_activated", label: "Investors who have not activated the portal" },
+  { key: "maturity_pending", label: "Maturity within 30 days (instruction due)" },
+  { key: "profit_published", label: "Investors with published profit" },
+];
+type Channel = "sms" | "whatsapp" | "both" | "whatsapp_fallback" | "email";
 
 const CHANNEL_LABEL: Record<Channel, string> = {
   sms: "SMS",
   whatsapp: "WhatsApp",
   both: "SMS + WhatsApp",
   whatsapp_fallback: "WhatsApp with SMS Fallback",
+  email: "Email (Resend)",
+};
+
+type CycleOption = {
+  id: string;
+  series_id: string;
+  cycle_label: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  investors: number;
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -108,14 +136,18 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function CommsCenter({
   series,
+  cycles,
   initialTemplates,
   initialCampaigns,
   isSuperAdmin,
+  emailDefaults,
 }: {
   series: SeriesOption[];
+  cycles: CycleOption[];
   initialTemplates: Template[];
   initialCampaigns: Campaign[];
   isSuperAdmin: boolean;
+  emailDefaults: { fromName: string; fromEmail: string; replyTo: string };
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"compose" | "history" | "templates">("compose");
@@ -135,6 +167,17 @@ export function CommsCenter({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [loadingRecips, setLoadingRecips] = useState(false);
+  const [cycleId, setCycleId] = useState("");
+  // ── Email channel state ──
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailPreview, setEmailPreview] = useState("");
+  const [emailType, setEmailType] = useState<"operational" | "general">("operational");
+  const [fromName, setFromName] = useState(emailDefaults.fromName);
+  const [replyTo, setReplyTo] = useState(emailDefaults.replyTo);
+  const [attachment, setAttachment] = useState<{ path: string; name: string; mime: string; size: number } | null>(null);
+  const [uploadingAtt, setUploadingAtt] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null);
@@ -149,11 +192,16 @@ export function CommsCenter({
         params.set("group", "all_active"); // full searchable pool
       } else {
         params.set("group", group);
-        if (group === "series") {
+        if (group === "series" || group === "cycle") {
           if (!seriesId) { setRecips([]); return; }
           params.set("series_id", seriesId);
         }
+        if (group === "cycle") {
+          if (!cycleId) { setRecips([]); return; }
+          params.set("cycle_id", cycleId);
+        }
       }
+      if (channel === "email") params.set("for_email", "1");
       const res = await fetch(`/api/admin/comms/recipients?${params.toString()}`);
       const json = await res.json();
       if (res.ok) {
@@ -165,7 +213,7 @@ export function CommsCenter({
     } finally {
       setLoadingRecips(false);
     }
-  }, [group, seriesId]);
+  }, [group, seriesId, cycleId, channel]);
 
   useEffect(() => {
     loadRecipients();
@@ -193,7 +241,7 @@ export function CommsCenter({
 
   // ── SMS estimation (uses the raw template; personalised lengths vary) ──
   const units = smsUnits(message);
-  const smsInvolved = channel !== "whatsapp";
+  const smsInvolved = channel !== "whatsapp" && channel !== "email";
   const estUnits = smsInvolved ? units * sendableCount : 0;
   const estCost = estUnits * 4; // display estimate; server computes authoritative figure
 
@@ -231,10 +279,22 @@ export function CommsCenter({
         channel,
         message_body: message,
         recipient_group: group,
-        series_id: group === "series" ? seriesId : null,
+        series_id: group === "series" || group === "cycle" ? seriesId : null,
+        cycle_id: group === "cycle" ? cycleId : null,
         investor_ids: group === "individual" ? [...selected] : null,
         respect_preferences: respectPrefs,
         status,
+        ...(channel === "email"
+          ? {
+              email_type: emailType,
+              email_subject: emailSubject,
+              email_preview_text: emailPreview || null,
+              from_name: fromName || null,
+              from_email: emailDefaults.fromEmail,
+              reply_to_email: replyTo || null,
+              attachment,
+            }
+          : {}),
       }),
     });
     const json = await res.json();
@@ -301,11 +361,14 @@ export function CommsCenter({
     }
   };
 
+  const KNOWN_VARS = "first_name|full_name|registered_email|investor_code|series_name|cycle_name|capital_amount|total_slots|profit_amount|maturity_value|maturity_date|maturity_instruction_deadline|kyc_status|portal_url";
+  const unknownVarRe = new RegExp(`\\{\\{\\s*(?!(?:${KNOWN_VARS})\\s*\\}\\})[a-z_]+\\s*\\}\\}`, "i");
   const composerValid =
     name.trim().length >= 3 &&
     message.trim().length >= 10 &&
     sendableCount > 0 &&
-    !/\{\{\s*(?!first_name|full_name|registered_email|investor_code|series_name|maturity_date|total_slots|portal_url)[a-z_]+\s*\}\}/i.test(message);
+    !unknownVarRe.test(message) &&
+    (channel !== "email" || emailSubject.trim().length >= 3);
 
   // ─────────────────────────────────────────────────────────────────
   return (
@@ -363,6 +426,7 @@ export function CommsCenter({
                     [
                       { key: "all_active", label: "All Active Investors", icon: <Users className="h-4 w-4" /> },
                       { key: "series", label: "Investors in a Series", icon: <Layers className="h-4 w-4" /> },
+                      { key: "cycle", label: "Investors in a Cycle", icon: <Layers className="h-4 w-4" /> },
                       { key: "individual", label: "Individual Investors", icon: <UserSearch className="h-4 w-4" /> },
                     ] as { key: Group; label: string; icon: React.ReactNode }[]
                   ).map((g) => (
@@ -382,7 +446,20 @@ export function CommsCenter({
                   ))}
                 </div>
 
-                {group === "series" && (
+                <select
+                  value={SMART_GROUPS.some((g) => g.key === group) ? group : ""}
+                  onChange={(e) => {
+                    if (e.target.value) setGroup(e.target.value as Group);
+                  }}
+                  className="h-9 w-full rounded-lg border border-border bg-white px-2 text-sm"
+                >
+                  <option value="">Smart groups (KYC, portal activation, maturity, profit)…</option>
+                  {SMART_GROUPS.map((g) => (
+                    <option key={g.key} value={g.key}>{g.label}</option>
+                  ))}
+                </select>
+
+                {(group === "series" || group === "cycle") && (
                   <div className="space-y-2">
                     {series.map((s) => (
                       <button
@@ -405,6 +482,26 @@ export function CommsCenter({
                         </div>
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {group === "cycle" && seriesId && (
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-foreground">Select Cycle</label>
+                    <select
+                      value={cycleId}
+                      onChange={(e) => setCycleId(e.target.value)}
+                      className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm"
+                    >
+                      <option value="">— Choose a cycle —</option>
+                      {cycles
+                        .filter((c) => c.series_id === seriesId)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.cycle_label} · {formatDate(c.start_date)} → {formatDate(c.end_date)} · {c.status.replaceAll("_", " ")} · {c.investors} investor{c.investors !== 1 ? "s" : ""}
+                          </option>
+                        ))}
+                    </select>
                   </div>
                 )}
 
@@ -507,7 +604,7 @@ export function CommsCenter({
                               rel="noreferrer"
                               className="text-primary-700 underline hover:text-primary-800 shrink-0"
                             >
-                              Fix phone →
+                              Fix →
                             </a>
                           </div>
                         ))}
@@ -546,17 +643,170 @@ export function CommsCenter({
                     number cannot receive WhatsApp. Duplicates are never sent.
                   </p>
                 )}
-                <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={respectPrefs}
-                    onChange={(e) => setRespectPrefs(e.target.checked)}
-                  />
-                  Respect each investor's preferred channel (untick to override for critical
-                  operational notices)
-                </label>
+                {channel !== "email" && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={respectPrefs}
+                      onChange={(e) => setRespectPrefs(e.target.checked)}
+                    />
+                    Respect each investor's preferred channel (untick to override for critical
+                    operational notices)
+                  </label>
+                )}
               </CardContent>
             </Card>
+
+            {/* Email settings (Resend) */}
+            {channel === "email" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Email Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Input
+                    label="Email Subject"
+                    placeholder="e.g. Important: Access Your New MaalGrow Investor Portal"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Preview Text (shown after the subject in inboxes)"
+                    placeholder="Optional short summary"
+                    value={emailPreview}
+                    onChange={(e) => setEmailPreview(e.target.value)}
+                  />
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-foreground">Email Type</label>
+                      <select
+                        value={emailType}
+                        onChange={(e) => setEmailType(e.target.value === "general" ? "general" : "operational")}
+                        className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm"
+                      >
+                        <option value="operational">Operational — about their account/investment</option>
+                        <option value="general">General announcement / newsletter</option>
+                      </select>
+                    </div>
+                    <Input
+                      label="From Name"
+                      value={fromName}
+                      onChange={(e) => setFromName(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-sm font-medium text-foreground">From Address</label>
+                      <div className="h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm flex items-center text-muted">
+                        {emailDefaults.fromEmail}
+                      </div>
+                      <p className="text-[11px] text-muted">Verified Resend sending domain (configured in Vercel)</p>
+                    </div>
+                    <Input
+                      label="Reply-To Address"
+                      value={replyTo}
+                      onChange={(e) => setReplyTo(e.target.value)}
+                      placeholder="support@maalvest.com"
+                    />
+                  </div>
+
+                  {/* Shared report attachment */}
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-foreground">
+                      Attachment — shared report (optional)
+                    </label>
+                    {attachment ? (
+                      <div className="flex items-center justify-between rounded-lg border border-border p-2.5 text-sm">
+                        <span className="truncate">{attachment.name} · {(attachment.size / 1024).toFixed(0)} KB</span>
+                        <button onClick={() => setAttachment(null)} className="text-xs text-red-600 hover:underline shrink-0">Remove</button>
+                      </div>
+                    ) : (
+                      <input
+                        type="file"
+                        accept="application/pdf,.csv,.xlsx,.xls"
+                        disabled={uploadingAtt}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          setUploadingAtt(true);
+                          try {
+                            const form = new FormData();
+                            form.append("file", f);
+                            const res = await fetch("/api/admin/comms/attachment", { method: "POST", body: form });
+                            const json = await res.json();
+                            if (!res.ok) throw new Error(json.error);
+                            setAttachment(json.attachment);
+                            toast.success("Attachment uploaded");
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Upload failed");
+                          } finally {
+                            setUploadingAtt(false);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-primary-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-700"
+                      />
+                    )}
+                    <p className="text-[11px] text-muted">
+                      PDF, Excel or CSV, max 10 MB. The same report is sent to every selected
+                      investor — stored privately, never via a public link.
+                    </p>
+                  </div>
+
+                  {/* Test email */}
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <p className="text-xs font-semibold text-foreground">Send a test email first</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={testTo}
+                        onChange={(e) => setTestTo(e.target.value)}
+                        placeholder="your@email.com"
+                        className="h-9 flex-1 rounded-lg border border-border bg-white px-3 text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={sendingTest || !testTo.includes("@") || !emailSubject.trim() || message.trim().length < 10}
+                        onClick={async () => {
+                          setSendingTest(true);
+                          try {
+                            const res = await fetch("/api/admin/comms/test-email", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                to: testTo.trim(),
+                                subject: emailSubject,
+                                message: previewText,
+                                preview_text: emailPreview || null,
+                                email_type: emailType,
+                                from_name: fromName || null,
+                                reply_to_email: replyTo || null,
+                                attachment_path: attachment?.path ?? null,
+                                attachment_name: attachment?.name ?? null,
+                              }),
+                            });
+                            const json = await res.json();
+                            if (!res.ok) throw new Error(json.error);
+                            toast.success("Test email sent — no investor campaign status was updated");
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Test failed");
+                          } finally {
+                            setSendingTest(false);
+                          }
+                        }}
+                      >
+                        {sendingTest ? "Sending…" : "Send Test"}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted">
+                      Uses the first selected investor's sample data. Marked clearly as a test;
+                      does not count as a campaign delivery.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Message */}
             <Card>
@@ -740,6 +990,15 @@ export function CommsCenter({
                 ["Campaign Name", name],
                 ["Recipient Group", group === "series" ? `Series ${series.find((s) => s.id === seriesId)?.name ?? ""}` : group === "all_active" ? "All Active Investors" : `${selected.size} selected investors`],
                 ["Delivery Method", CHANNEL_LABEL[channel]],
+                ...(channel === "email"
+                  ? ([
+                      ["Email Type", emailType === "general" ? "General announcement" : "Operational"],
+                      ["Subject", emailSubject],
+                      ["From", `${fromName} <${emailDefaults.fromEmail}>`],
+                      ["Reply-To", replyTo],
+                      ["Attachment", attachment ? `${attachment.name} (shared)` : "None"],
+                    ] as [string, string][])
+                  : []),
                 ["Recipients", String(sendableCount)],
                 ["Excluded Investors", String(excludedCount + stats.invalid_phones + stats.duplicates_removed)],
                 ["Estimated SMS Units", smsInvolved ? String(estUnits) : "— (WhatsApp only)"],
