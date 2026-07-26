@@ -130,6 +130,24 @@ export type MudarabahCycleEventRow = {
   created_at: string;
 };
 
+/** A generated document: the file an investor downloads AND is emailed. */
+export type MudarabahStatementRow = {
+  id: string;
+  cycle_id: string;
+  settlement_id: string;
+  investment_id: string;
+  investor_id: string;
+  kind: string;
+  storage_path: string | null;
+  state: string;
+  attempts: number;
+  last_error: string | null;
+  bytes: number | null;
+  generated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** A frozen credit note. The document renders this and computes nothing. */
 export type WhtCreditNoteRow = {
   id: string;
@@ -152,6 +170,15 @@ export type WhtCreditNoteRow = {
   filed_on: string | null;
   issued_at: string;
   reissue_count: number;
+};
+
+/** Read-only: the few investor columns a statement needs to be addressed. */
+export type InvestorRow = {
+  id: string;
+  full_name: string;
+  investor_code: string;
+  tin: string | null;
+  address: string | null;
 };
 
 /**
@@ -187,6 +214,8 @@ export type MudarabahDatabase = {
       wht_issuer_settings: Table<WhtIssuerSettingsRow>;
       rollover_decisions: Table<RolloverDecisionRow>;
       wht_credit_notes: Table<WhtCreditNoteRow>;
+      mudarabah_statements: Table<MudarabahStatementRow>;
+      investors: Table<InvestorRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -238,6 +267,36 @@ export type MudarabahDatabase = {
           p_remittance_reference: string;
           p_filed_on?: string;
         };
+        Returns: unknown;
+      };
+      mudarabah_queue_statements: {
+        Args: { p_settlement_id: string };
+        Returns: number;
+      };
+      mudarabah_requeue_statements: {
+        Args: { p_cycle_id: string };
+        Returns: number;
+      };
+      mudarabah_mark_statement: {
+        Args: {
+          p_id: string;
+          p_state: string;
+          p_path?: string | null;
+          p_bytes?: number | null;
+          p_error?: string | null;
+        };
+        Returns: undefined;
+      };
+      mudarabah_my_statement: {
+        Args: { p_cycle_id: string };
+        Returns: unknown;
+      };
+      mudarabah_statement_status: {
+        Args: { p_cycle_id: string };
+        Returns: unknown;
+      };
+      mudarabah_investor_cycle_history: {
+        Args: { p_investor_id: string };
         Returns: unknown;
       };
       mudarabah_record_payment: {

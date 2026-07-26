@@ -15,6 +15,7 @@ import {
 } from "@/lib/mudarabah/settlement";
 import { buildSettlement, buildSettlementProducts } from "@/lib/mudarabah/figures";
 import { compute, ENGINE_VERSION } from "@/lib/mudarabah/compute";
+import { generateStatements } from "@/lib/mudarabah/statements";
 
 const ADMIN_ROLES = ["super_admin", "administrator"];
 
@@ -176,12 +177,35 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    /* ── The documents, AFTER the money ────────────────────────── */
+    //
+    // Settlement has committed. Nothing below can undo it: if Chromium
+    // times out or storage refuses the upload, the cycle is still
+    // settled, the failure is recorded per document, and an
+    // administrator can retry from the ledger. An investor briefly
+    // sees that their statement is being prepared rather than a
+    // settlement that never happened.
+    let documents: { queued: number; generated: number; failed: number } | null = null;
+    let documentError: string | null = null;
+    try {
+      await supabase.rpc("mudarabah_queue_statements", {
+        p_settlement_id: settlementId as unknown as string,
+      });
+      const admin = await createAdminClient();
+      const gen = await generateStatements(admin, id);
+      documents = { queued: gen.total, generated: gen.generated, failed: gen.failed };
+    } catch (e) {
+      documentError = e instanceof Error ? e.message : String(e);
+    }
+
     return NextResponse.json({
       ok: true,
       settlementId,
       engineVersion: ENGINE_VERSION,
       holders: preview.holders.length,
       cashNeeded: preview.totals.cashNeeded,
+      documents,
+      documentError,
     });
   } catch (err) {
     return NextResponse.json(
