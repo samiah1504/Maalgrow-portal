@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mudarabah Cycle Ledger &amp; Investor Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#241238; --plum:#57268C; --plum-soft:#7A4FB0;
+  --gold:#C2952F; --gold-lite:#E8C86A;
+  --parch:#FBF6EC; --card:#FFFFFF; --line:#E6DDCB;
+  --green:#1C6E52; --rose:#9E3535; --amber:#8A5A0B; --muted:#6E6076;
+  --display:'Marcellus',Georgia,serif;
+  --body:'Karla','Segoe UI',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--parch);color:var(--ink);font-family:var(--body);
+  font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+.wrap{max-width:820px;margin:0 auto;padding:0 16px 96px}
+
+.masthead{background:linear-gradient(160deg,#2E1547 0%,#57268C 78%,#6B33A6 100%);
+  color:#fff;padding:22px 16px 20px;margin-bottom:22px;border-bottom:3px solid var(--gold)}
+.masthead .inner{max-width:820px;margin:0 auto}
+.masthead h1{font-family:var(--display);font-weight:400;font-size:26px;margin:0 0 4px}
+.masthead p{margin:0;font-size:13px;color:#DCC9F2}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--gold-lite);margin:0 0 8px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(36,18,56,.05)}
+.card > h2{font-family:var(--display);font-weight:400;font-size:19px;margin:0 0 2px}
+.card > .hint{font-size:13px;color:var(--muted);margin:0 0 16px}
+.step{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--gold);display:block;margin-bottom:6px}
+
+label{display:block;font-size:11.5px;font-weight:700;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+input,select{width:100%;padding:10px 12px;font-family:var(--body);font-size:16px;
+  color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:9px}
+input[type=number]{font-family:var(--mono);text-align:right}
+input:focus,select:focus,button:focus-visible{outline:2.5px solid var(--plum-soft);
+  outline-offset:1px;border-color:var(--plum-soft)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.field{margin-bottom:12px}
+.fhint{font-size:12px;color:var(--muted);margin:5px 0 0;line-height:1.45;text-transform:none;letter-spacing:0}
+@media (max-width:540px){.grid2{grid-template-columns:1fr}}
+
+button{font-family:var(--body);font-size:14.5px;font-weight:700;cursor:pointer;
+  border-radius:9px;border:1px solid var(--plum);background:var(--plum);color:#fff;padding:11px 16px}
+button:hover{background:#4A2079}
+button.ghost{background:#fff;color:var(--plum);border-color:var(--line)}
+button.ghost:hover{background:#F6F1FA}
+button.gold{background:var(--gold);border-color:var(--gold);color:#2B1D00}
+button.gold:hover{background:#AD8323}
+.btnrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:6px}
+
+.raise{background:linear-gradient(120deg,#F4EDFA,#FBF6EC);border:1px solid var(--line);
+  border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;
+  align-items:baseline;gap:12px}
+.raise .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.raise .v{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--plum)}
+
+.splitbar{display:flex;height:52px;border-radius:9px;overflow:hidden;
+  border:1px solid var(--line);margin-bottom:8px}
+.splitbar div{display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:15px;font-weight:600;transition:flex-basis .18s ease}
+.split-inv{background:linear-gradient(180deg,var(--gold-lite),var(--gold));color:#2B1D00}
+.split-mud{background:linear-gradient(180deg,#6B33A6,#3E1B66);color:#F0E4FF}
+.splitlabels{display:flex;justify-content:space-between;font-size:11.5px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+input[type=range]{padding:0;accent-color:var(--plum);height:28px}
+
+.month{border:1px solid var(--line);border-radius:13px;overflow:hidden;margin-bottom:16px}
+.month-head{background:linear-gradient(120deg,#F0E7F8,#FBF6EC);padding:13px 15px;
+  border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+  align-items:baseline;gap:10px}
+.month-head .m{font-family:var(--display);font-size:17.5px}
+.month-head .p{font-family:var(--mono);font-size:14px;font-weight:600}
+.month-body{padding:15px}
+.sub{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--gold);border-bottom:1px solid var(--line);padding-bottom:5px;margin:4px 0 13px}
+.sub:not(:first-child){margin-top:20px}
+.calc{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:9px 12px;background:#F7F3FA;border-radius:8px;margin-bottom:9px;font-size:13px}
+.calc .k{color:#4A3B55}
+.calc .v{font-family:var(--mono);font-size:14.5px;font-weight:600;text-align:right}
+.calc.key{background:linear-gradient(120deg,#FBF2DC,#FDF9F0);
+  border:1px solid var(--gold-lite);padding:11px 13px}
+.calc.key .k{font-weight:700;color:#5C3D06}
+.calc.key .v{font-size:16px;color:#5C3D06}
+.calc.carry{background:#F2F6F4}
+.mstats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border-top:1px solid var(--line)}
+.mstat{background:#FCFAF6;padding:11px}
+.mstat .k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.mstat .v{font-family:var(--mono);font-size:13.5px;font-weight:600;margin-top:2px}
+@media (max-width:540px){.mstats{grid-template-columns:1fr 1fr}}
+.strip-note{background:#FCFAF6;border-top:1px solid var(--line);padding:10px 14px;
+  font-size:12px;color:var(--muted);line-height:1.5}
+.strip-note b{color:var(--plum)}
+.flag{margin:10px 0 0;padding:9px 12px;border-radius:8px;font-size:12.5px;line-height:1.45}
+.flag.warn{background:#FDF4E3;color:#5C3D06;border-left:3px solid var(--amber)}
+.flag.bad{background:#FBEDED;color:#5E2020;border-left:3px solid var(--rose)}
+
+.chart{display:flex;gap:10px;align-items:flex-end;height:120px;padding:10px 4px 0;margin-bottom:6px}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;
+  align-items:center;gap:3px;height:100%}
+.chart .bars{display:flex;gap:3px;align-items:flex-end;width:100%;height:100%;justify-content:center}
+.chart .bar{width:26%;border-radius:4px 4px 0 0;min-height:2px}
+.bar-rev{background:var(--plum-soft)} .bar-cost{background:#D9CBE8} .bar-prof{background:var(--gold)}
+.chart .lab{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:14px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+.totals{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:16px}
+.tot{background:#fff;padding:13px 12px}
+.tot .k{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tot .v{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:3px}
+@media (max-width:540px){.totals{grid-template-columns:1fr 1fr}}
+.pos{color:var(--green)} .neg{color:var(--rose)}
+.note{background:#F6F1FA;border-left:3px solid var(--plum-soft);border-radius:0 8px 8px 0;
+  padding:11px 13px;font-size:13.5px;color:#43305A;margin-top:14px}
+.note strong{color:var(--plum)}
+.note.warn{background:#FDF4E3;border-left-color:var(--amber);color:#5C3D06}
+.note.warn strong{color:var(--amber)}
+.note.bad{background:#FBEDED;border-left-color:var(--rose);color:#5E2020}
+.note.bad strong{color:var(--rose)}
+
+/* ==================== REPORT ==================== */
+.rep{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:16px}
+.page + .page{border-top:6px double var(--line)}
+.rhead{background:linear-gradient(155deg,#2E1547,#57268C 70%,#6B33A6);color:#fff;padding:26px 24px 24px}
+.rhead .brand{font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--gold-lite);margin-bottom:10px}
+.rhead h3{font-family:var(--display);font-weight:400;font-size:28px;margin:0 0 5px;line-height:1.15}
+.rhead .sub2{font-size:14.5px;color:#DCC9F2;margin:0}
+.rule{height:3px;background:linear-gradient(90deg,var(--gold),var(--gold-lite),transparent)}
+.rbody{padding:24px}
+
+.headline{background:var(--parch);border:1.5px solid var(--gold-lite);border-radius:14px;
+  padding:22px;text-align:center;margin-bottom:22px}
+.headline .k{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.headline .big{font-family:var(--mono);font-size:40px;font-weight:600;color:var(--green);
+  margin:8px 0 4px;letter-spacing:-.015em}
+.headline .big.neg{color:var(--rose)}
+.headline .pct{font-size:15.5px;color:#4A3B55}
+
+.lines{border-top:1.5px solid var(--line)}
+.line{display:flex;justify-content:space-between;align-items:baseline;
+  padding:13px 2px;border-bottom:1px solid #F1EAdb;gap:14px}
+.line .k{font-size:15.5px;color:#3E2F4A}
+.line .v{font-family:var(--mono);font-size:16.5px;font-weight:500;text-align:right;white-space:nowrap}
+.line.hi .k{font-weight:700;color:var(--ink)}
+.line.hi .v{font-weight:600;color:var(--plum);font-size:18px}
+
+/* the two choices */
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:24px}
+.choice{border-radius:13px;padding:18px 17px;border:2px solid}
+.choice.a{border-color:var(--gold);background:linear-gradient(145deg,#FDF9EE,#F7EDD6)}
+.choice.b{border-color:var(--plum-soft);background:linear-gradient(145deg,#F7F1FC,#EBE1F6)}
+.choice .lab{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+  font-weight:600;margin-bottom:10px}
+.choice.a .lab{color:#8A6212}
+.choice.b .lab{color:var(--plum)}
+.choice .big{font-family:var(--mono);font-size:25px;font-weight:600;margin-bottom:5px;color:var(--ink)}
+.choice .d{font-size:13.5px;line-height:1.55;color:#4A3B55}
+@media (max-width:540px){.choices{grid-template-columns:1fr}}
+
+.slotcard{margin-top:24px;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.slotcard .cap{background:#F0E6F8;padding:11px 16px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--plum);font-weight:600}
+.slottable{width:100%;border-collapse:collapse}
+.slottable td,.slottable th{padding:11px 13px;border-top:1px solid #F1EAdb;
+  font-family:var(--mono);font-size:14.5px;text-align:right;white-space:nowrap}
+.slottable th{font-family:var(--body);font-size:11.5px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);font-weight:700;border-top:none;line-height:1.3;
+  white-space:normal}
+.slottable td:first-child,.slottable th:first-child{text-align:left;font-family:var(--body);color:#3E2F4A}
+.slottable td.gold{color:#8A6212;font-weight:600}
+.slotnote{padding:12px 16px;background:var(--parch);border-top:1px solid var(--line);
+  font-size:13px;color:#4A3B55;line-height:1.55}
+@media (max-width:540px){.slottable td,.slottable th{padding:9px 7px;font-size:13px}}
+
+.fig{margin:0 0 30px;page-break-inside:avoid;break-inside:avoid}
+.fig h4{font-family:var(--display);font-weight:400;font-size:21px;margin:0 0 5px}
+.fig .cap2{font-size:14px;color:#5A4B66;margin:0 0 16px;line-height:1.55}
+
+.journey{display:flex;align-items:stretch;gap:7px}
+.jstep{flex:1;background:var(--parch);border:1.5px solid var(--line);border-radius:11px;
+  padding:15px 10px;text-align:center}
+.jstep .n{font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--gold);
+  text-transform:uppercase;font-weight:600}
+.jstep .icon{margin:9px auto 8px}
+.jstep .t{font-size:13.5px;font-weight:700;color:var(--plum);line-height:1.3}
+.jstep .v{font-family:var(--mono);font-size:12.5px;color:#4A3B55;margin-top:6px;line-height:1.4}
+.jarrow{align-self:center;color:var(--gold);font-size:19px;flex:0 0 auto}
+@media (max-width:600px){.journey{flex-direction:column}.jarrow{transform:rotate(90deg)}}
+
+.stackwrap{border-radius:10px;overflow:hidden;border:1.5px solid var(--line);margin-bottom:14px}
+.legtable{width:100%;border-collapse:collapse}
+.legtable td{padding:9px 6px;border-bottom:1px solid #F1EAdb;font-size:14px;vertical-align:middle}
+.legtable td.sw{width:20px;padding-right:0}
+.legtable td.sw i{display:block;width:13px;height:13px;border-radius:4px}
+.legtable td.nm{color:#3E2F4A}
+.legtable td.pv{text-align:right;font-family:var(--mono);font-weight:600;white-space:nowrap;width:1%}
+.legtable td.am{text-align:right;font-family:var(--mono);white-space:nowrap;width:1%;
+  padding-left:16px;color:#5A4B66}
+.legtable tr.tot td{border-bottom:none;border-top:2px solid var(--ink);font-weight:700;padding-top:11px}
+
+.mcard{border:1.5px solid var(--line);border-radius:13px;overflow:hidden;margin-bottom:22px;
+  page-break-inside:avoid;break-inside:avoid}
+.mcard-h{background:linear-gradient(120deg,#EFE4F8,#FBF6EC);padding:14px 18px;
+  border-bottom:1.5px solid var(--line);display:flex;justify-content:space-between;
+  align-items:baseline;gap:12px}
+.mcard-h .t{font-family:var(--display);font-size:20px}
+.mcard-h .p{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--green);white-space:nowrap}
+.mcard-h .p.neg{color:var(--rose)}
+.mcard-b{padding:16px 18px 6px}
+.mgrp{margin-bottom:17px}
+.mgrp > .h{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--gold);font-weight:600;border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:9px}
+.mline{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;
+  font-size:14.5px;gap:12px}
+.mline .k{color:#3E2F4A}
+.mline .v{font-family:var(--mono);font-weight:500;white-space:nowrap}
+.mline.ind{padding-left:20px;font-size:14px;position:relative}
+.mline.ind i{position:absolute;left:2px;top:9px;width:10px;height:10px;border-radius:3px}
+.mline.ind .k{color:#5A4B66}
+.mline.sumline{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;font-weight:700}
+.mbar{margin:2px 0 4px;border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+.mcard-f{background:var(--parch);border-top:1.5px solid var(--line);padding:13px 18px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.mcard-f > div{text-align:center}
+.mcard-f .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.mcard-f .v{font-family:var(--mono);font-size:15.5px;font-weight:600;margin-top:3px}
+@media (max-width:540px){.mcard-f{grid-template-columns:1fr;gap:8px}
+  .mcard-f > div{display:flex;justify-content:space-between;text-align:left}
+  .mcard-f .v{margin-top:0}}
+
+.figrow{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+@media (max-width:600px){.figrow{grid-template-columns:1fr}}
+.ringwrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.ringleg{font-size:14px}
+.ringleg div{display:flex;align-items:baseline;gap:9px;margin-bottom:9px}
+.ringleg i{width:13px;height:13px;border-radius:4px;flex:0 0 auto}
+
+.months3{display:flex;gap:8px;margin:24px 0 4px}
+.months3 div{flex:1;text-align:center;padding:11px 4px;border-radius:9px;background:#F0E6F8;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--plum);font-weight:600}
+
+.plain{background:var(--parch);border-left:4px solid var(--gold);border-radius:0 11px 11px 0;
+  padding:18px 20px;font-size:14.5px;line-height:1.7;color:#3E2F4A;margin-bottom:22px}
+.plain b{color:var(--plum)}
+.plain p{margin:0 0 13px}
+.plain p:last-child{margin:0}
+
+.seal{margin:26px auto 6px;width:124px;height:124px;border-radius:50%;border:2.5px solid var(--gold);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  background:radial-gradient(circle at 50% 32%,#FDF8EC,#F4E9CF);
+  box-shadow:inset 0 0 0 5px #fff, inset 0 0 0 6px #EBDDBB}
+.seal .ar{font-family:var(--display);font-size:21px;color:var(--plum);line-height:1}
+.seal .en{font-family:var(--mono);font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--gold);margin-top:7px;line-height:1.5}
+.rfoot{text-align:center;font-size:13px;color:#5A4B66;padding:0 26px 28px;line-height:1.65}
+.rfoot .ay{font-family:var(--display);font-size:15px;color:var(--plum);margin-bottom:9px}
+
+@media print{
+  @page{size:A4 portrait;margin:11mm}
+  body{background:#fff}
+  .masthead,.no-print,.card{display:none !important}
+  .wrap{padding:0;max-width:none}
+  #printArea{display:block !important}
+  .rep{border:none;border-radius:0;margin:0}
+  .page{page-break-after:always}
+  .page:last-child{page-break-after:auto}
+  .page + .page{border-top:none}
+  .rhead,.headline,.seal,.months3 div,.jstep,.plain,.slotcard .cap,.slotnote,.stackwrap,
+  .mcard-h,.mcard-f,.mbar,.choice,svg{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .choices,.slotcard{page-break-inside:avoid;break-inside:avoid}
+}
+#printArea{display:none}
+</style>
+</head>
+<body>
+
+<header class="masthead no-print">
+  <div class="inner">
+    <p class="eyebrow">One pooled cycle · fixed slots</p>
+    <h1>Mudarabah Trading Ledger</h1>
+    <p>Three months of buying and selling, and the report that explains it.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="card no-print">
+    <span class="step">Step one</span>
+    <h2>The cycle</h2>
+    <p class="hint">Slots are equal. Month 1 opens clean — slot capital and nothing else.</p>
+    <div class="field"><label for="roundName">Cycle name</label>
+      <input id="roundName" type="text" value="MaalRise Cycle 1" style="text-align:left"></div>
+    <div class="field"><label for="productName">What the cycle trades in</label>
+      <input id="productName" type="text" value="home furniture" style="text-align:left"></div>
+    <div class="grid2">
+      <div class="field"><label for="startDate">Month 1 begins</label><input id="startDate" type="date"></div>
+      <div class="field"><label for="currency">Currency symbol</label>
+        <input id="currency" type="text" value="₦" maxlength="4" style="text-align:left"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="slotPrice">Value of one slot</label>
+        <input id="slotPrice" type="number" step="any" value="100000"></div>
+      <div class="field"><label for="slots">Slots taken</label>
+        <input id="slots" type="number" step="1" min="1" value="20"></div>
+    </div>
+    <div class="raise"><span class="k">Capital raised</span><span class="v" id="raised">—</span></div>
+  </section>
+
+  <section class="card no-print">
+    <span class="step">Step two</span>
+    <h2>Profit-sharing terms</h2>
+    <p class="hint">The ratio applies to profit the trade actually earns — never to the slot value.</p>
+    <div class="field">
+      <div class="splitbar">
+        <div class="split-inv" id="barInv" style="flex:0 0 70%">70</div>
+        <div class="split-mud" id="barMud" style="flex:0 0 30%">30</div>
+      </div>
+      <div class="splitlabels"><span>Slot holders · rabb al-māl</span><span>You · muḍārib</span></div>
+      <input id="ratio" type="range" min="0" max="100" step="5" value="70" aria-label="Profit-sharing ratio">
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="wht">Withholding tax on profit (%)</label>
+        <input id="wht" type="number" step="any" value="0"></div>
+      <div class="field"><label for="withdrawSlots">Slots withdrawing capital</label>
+        <input id="withdrawSlots" type="number" step="1" min="0" value="20">
+        <p class="fhint">How many slots are taking their capital out rather than rolling it into the next cycle. Used only to check you have the cash — the report always shows both options.</p></div>
+    </div>
+  </section>
+
+  <section class="card no-print">
+    <span class="step">Step three</span>
+    <h2>Month by month</h2>
+    <p class="hint">Enter quantities and prices. Cost price per unit, revenue, stock value, cash and profit all work themselves out and roll into the next month.</p>
+    <div id="months"></div>
+  </section>
+
+  <section class="card no-print">
+    <span class="step">Step four</span>
+    <h2>Cycle summary</h2>
+    <p class="hint">Your working view.</p>
+    <div class="chart" id="chart"></div>
+    <div class="legend">
+      <span><i class="bar-rev"></i>Revenue</span>
+      <span><i class="bar-cost"></i>Cost of goods + expenses</span>
+      <span><i class="bar-prof"></i>Net profit</span>
+    </div>
+    <div class="totals" id="totals"></div>
+    <div id="notes"></div>
+  </section>
+
+  <section class="card no-print">
+    <span class="step">Step five</span>
+    <h2>Investor report</h2>
+    <p class="hint">Three pages: the result, the month-by-month record, then the whole cycle in pictures. No names — one PDF for every holder.</p>
+    <div class="field">
+      <label for="disclose">Figures shown in the report</label>
+      <select id="disclose" style="text-align:left">
+        <option value="full">Full cycle figures — the real totals</option>
+        <option value="slot">Per slot — every figure divided by the number of slots</option>
+      </select>
+    </div>
+    <div class="btnrow">
+      <button class="gold" id="printBtn">Download report as PDF</button>
+      <button class="ghost" id="csvBtn">Export full ledger to CSV</button>
+    </div>
+    <div id="preview"></div>
+  </section>
+
+</div>
+<div id="printArea"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  function blank(){ return {qty:0,unitCost:0,purchExp:0,soldQty:0,sellPrice:0,
+    ads:0,logi:0,misc:0,bank:0,stockLeft:0}; }
+  var state={months:[blank(),blank(),blank()]};
+
+  var C={cogs:'#57268C',ads:'#8455B8',logi:'#A886CC',bank:'#C6AEDD',
+         misc:'#DFD1EC',loss:'#9E3535',profit:'#C2952F'};
+
+  var $=function(id){ return document.getElementById(id); };
+  function cur(){ return ($('currency').value||"").trim()||"₦"; }
+  function num(v){ var n=parseFloat(v); return isFinite(n)?n:0; }
+  function int(v){ var n=parseFloat(v); return isFinite(n)?Math.round(n):0; }
+  function money(n){ var neg=n<-0.004;
+    return (neg?"−":"")+cur()+Math.abs(n).toLocaleString('en-NG',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function M(n){ var neg=n<-0.5;
+    return (neg?"−":"")+cur()+Math.round(Math.abs(n)).toLocaleString('en-NG'); }
+  function pct(n){ return (isFinite(n)?n.toFixed(2):"0.00")+"%"; }
+  function pct1(n){ return (isFinite(n)?n.toFixed(1):"0.0")+"%"; }
+  function N(n){ return n.toLocaleString('en-NG'); }
+  function units(n){ return N(n)+' unit'+(Math.abs(n)===1?'':'s'); }
+  function esc(s){ return String(s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function addMonths(iso,n){ if(!iso) return null;
+    var d=new Date(iso+"T00:00:00"); if(isNaN(d)) return null;
+    return new Date(d.getFullYear(),d.getMonth()+n,d.getDate()); }
+  function fmt(d){ return d?d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):"—"; }
+  function mLong(k){ var d=addMonths($('startDate').value,k);
+    return d?d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}):''; }
+  function mShort(k){ var d=addMonths($('startDate').value,k);
+    return d?d.toLocaleDateString('en-GB',{month:'short'}):'M'+(k+1); }
+  function endDate(){ var d=addMonths($('startDate').value,3); if(d) d.setDate(d.getDate()-1); return d; }
+
+  /* ==================== engine ==================== */
+  function compute(){
+    var slotPrice=num($('slotPrice').value);
+    var slots=Math.max(0,int($('slots').value));
+    var capital=slotPrice*slots;
+    var invRatio=num($('ratio').value)/100;
+    var whtRate=num($('wht').value)/100;
+    var withdraw=Math.min(slots,Math.max(0,int($('withdrawSlots').value)));
+
+    var cash=0,openUnits=0,openValue=0,months=[];
+    for(var k=0;k<3;k++){
+      var d=state.months[k];
+      var oCash=cash,oUnits=openUnits,oValue=openValue;
+      var fundsIn=(k===0)?capital:0;
+      var openTotal=oCash+fundsIn;
+
+      var qty=int(d.qty),unitCost=num(d.unitCost),purchExp=num(d.purchExp);
+      var goodsCost=qty*unitCost,purchCost=goodsCost+purchExp;
+      var availUnits=oUnits+qty,availValue=oValue+purchCost;
+      var unitCP=availUnits>0?availValue/availUnits:0;
+
+      var soldQty=int(d.soldQty),sellPrice=num(d.sellPrice);
+      var revenue=soldQty*sellPrice,cogs=soldQty*unitCP;
+
+      var ads=num(d.ads),logi=num(d.logi),misc=num(d.misc),bank=num(d.bank);
+      var sellExp=ads+logi+misc+bank;
+
+      var expectClose=availUnits-soldQty,closeUnits=int(d.stockLeft);
+      var lostUnits=expectClose-closeUnits,lostValue=lostUnits*unitCP;
+      var closeValue=closeUnits*unitCP;
+
+      var gross=revenue-cogs,net=gross-sellExp-lostValue;
+      cash=openTotal+revenue-(goodsCost+purchExp+sellExp);
+      openUnits=closeUnits; openValue=closeValue;
+
+      months.push({i:k+1,fundsIn:fundsIn,openCash:oCash,openTotal:openTotal,
+        openUnits:oUnits,openValue:oValue,qty:qty,unitCost:unitCost,purchExp:purchExp,
+        goodsCost:goodsCost,purchCost:purchCost,availUnits:availUnits,availValue:availValue,
+        unitCP:unitCP,soldQty:soldQty,sellPrice:sellPrice,revenue:revenue,cogs:cogs,
+        ads:ads,logi:logi,misc:misc,bank:bank,sellExp:sellExp,expectClose:expectClose,
+        closeUnits:closeUnits,closeValue:closeValue,lostUnits:lostUnits,lostValue:lostValue,
+        gross:gross,net:net,cash:cash,working:cash+closeValue,oversold:soldQty>availUnits});
+    }
+
+    var sum=function(f){ return months.reduce(function(s,m){ return s+m[f]; },0); };
+    var profit=sum('net'),isLoss=profit<0;
+    var holderPot=isLoss?profit:profit*invRatio;
+    var mudaribPot=isLoss?0:profit*(1-invRatio);
+    var grossPerSlot=slots>0?holderPot/slots:0;
+    var whtPerSlot=grossPerSlot>0?grossPerSlot*whtRate:0;
+    var netPerSlot=grossPerSlot-whtPerSlot;
+
+    return {months:months,slotPrice:slotPrice,slots:slots,capital:capital,
+      withdraw:withdraw,rollover:slots-withdraw,
+      profit:profit,isLoss:isLoss,holderPot:holderPot,mudaribPot:mudaribPot,
+      grossPerSlot:grossPerSlot,whtPerSlot:whtPerSlot,netPerSlot:netPerSlot,
+      whtTotal:whtPerSlot*slots,netTotal:netPerSlot*slots,
+      slotReturn:slotPrice>0?(netPerSlot/slotPrice)*100:0,
+      payoutPerSlot:slotPrice+netPerSlot,
+      revenue:sum('revenue'),cogsTotal:sum('cogs'),sellExpTotal:sum('sellExp'),
+      adsTotal:sum('ads'),logiTotal:sum('logi'),miscTotal:sum('misc'),bankTotal:sum('bank'),
+      purchTotal:sum('purchCost'),lostTotal:sum('lostValue'),
+      unitsSold:sum('soldQty'),unitsBought:sum('qty'),
+      endCash:months[2].cash,endStock:months[2].closeValue,endUnits:months[2].closeUnits,
+      cashNeeded:(netPerSlot*slots)+(withdraw*slotPrice),
+      invRatio:num($('ratio').value)};
+  }
+
+  /* ==================== admin UI ==================== */
+  var F=[['qty','Quantity purchased','1'],['unitCost','Cost of each product','any'],
+    ['purchExp','Purchase expenses (logistics etc.)','any'],
+    ['soldQty','Number of products sold','1'],['sellPrice','Selling price per product','any'],
+    ['ads','Ads','any'],['logi','Logistics','any'],
+    ['misc','Miscellaneous','any'],['bank','Bank charges','any'],
+    ['stockLeft','Units left unsold at month end','1']];
+
+  function buildMonths(){
+    var host=$('months'); host.innerHTML="";
+    state.months.forEach(function(d,k){
+      var f=function(key){
+        var s=F.filter(function(x){ return x[0]===key; })[0];
+        return '<div class="field"><label for="'+key+k+'">'+s[1]+'</label>'
+          +'<input id="'+key+k+'" type="number" step="'+s[2]+'" placeholder="0"></div>'; };
+      var box=document.createElement('div'); box.className='month';
+      box.innerHTML='<div class="month-head"><span class="m" id="mtitle'+k+'">Month '+(k+1)+'</span>'
+        +'<span class="p" id="mprofit'+k+'">—</span></div><div class="month-body">'
+        +'<div class="sub">'+(k===0?'Opening':'Carried in from month '+k)+'</div>'
+        +'<div id="carry'+k+'"></div><div class="sub">Purchases</div>'
+        +'<div class="grid2">'+f('qty')+f('unitCost')+'</div>'+f('purchExp')
+        +'<div class="calc"><span class="k">Total purchase cost</span><span class="v" id="cPurch'+k+'">—</span></div>'
+        +'<div class="calc key"><span class="k">Cost price per unit</span><span class="v" id="cCP'+k+'">—</span></div>'
+        +'<div class="sub">Sales</div><div class="grid2">'+f('soldQty')+f('sellPrice')+'</div>'
+        +'<div class="calc"><span class="k">Total revenue</span><span class="v" id="cRev'+k+'">—</span></div>'
+        +'<div class="sub">Expenses on sales</div><div class="grid2">'+f('ads')+f('logi')+'</div>'
+        +'<div class="grid2">'+f('misc')+f('bank')+'</div>'
+        +'<div class="calc"><span class="k">Total selling expenses</span><span class="v" id="cExp'+k+'">—</span></div>'
+        +'<div class="sub">Closing stock</div>'+f('stockLeft')
+        +'<div class="calc"><span class="k">Value of stock left</span><span class="v" id="cStock'+k+'">—</span></div>'
+        +'<div id="flags'+k+'"></div></div><div class="mstats" id="mstats'+k+'"></div>'
+        +'<div class="strip-note"><b>Gross profit</b> is revenue less the cost of the goods sold, nothing else. '
+        +'Ads, logistics, bank charges and miscellaneous come off after it to give <b>net profit</b> — '
+        +'that is the figure shared with slot holders, and the one your expenses move.</div>';
+      host.appendChild(box);
+      F.forEach(function(s){
+        $(s[0]+k).addEventListener('input',function(){ d[s[0]]=this.value; refresh(); }); });
+    });
+  }
+
+  function paintMonths(m){
+    m.months.forEach(function(x,k){
+      $('mtitle'+k).textContent='Month '+(k+1)+(mLong(k)?' · '+mLong(k):'');
+      var p=$('mprofit'+k);
+      p.textContent=money(x.net);
+      p.className='p'+(x.net<0?' neg':(x.net>0?' pos':''));
+      $('carry'+k).innerHTML=(k===0)
+        ?'<div class="calc carry"><span class="k">Slot capital received</span><span class="v">'+money(x.fundsIn)+'</span></div>'
+         +'<div class="calc carry"><span class="k">Stock carried in</span><span class="v">none</span></div>'
+        :'<div class="calc carry"><span class="k">Cash carried in</span><span class="v">'+money(x.openCash)+'</span></div>'
+         +'<div class="calc carry"><span class="k">Stock carried in</span><span class="v">'+units(x.openUnits)+' · '+money(x.openValue)+'</span></div>';
+      $('cPurch'+k).textContent=money(x.purchCost)+(x.qty>0?'  ·  '+units(x.qty):'');
+      $('cCP'+k).textContent=money(x.unitCP)+(x.availUnits>0?'  ·  across '+units(x.availUnits):'');
+      $('cRev'+k).textContent=money(x.revenue);
+      $('cExp'+k).textContent=money(x.sellExp);
+      $('cStock'+k).textContent=money(x.closeValue)+(x.closeUnits>0?'  ·  at '+money(x.unitCP)+' each':'');
+      var fl=[];
+      if(x.oversold) fl.push('<div class="flag bad"><b>More sold than available.</b> You had '+units(x.availUnits)
+        +' but recorded '+units(x.soldQty)+' sold. Check the figures.</div>');
+      else if(x.lostUnits>0) fl.push('<div class="flag warn"><b>'+units(x.lostUnits)+' unaccounted for.</b> '
+        +units(x.availUnits)+' available less '+units(x.soldQty)+' sold leaves '+units(x.expectClose)
+        +', but you entered '+units(x.closeUnits)+'. Charged as a loss of '+money(x.lostValue)+'.</div>');
+      else if(x.lostUnits<0) fl.push('<div class="flag bad"><b>'+units(-x.lostUnits)+' more than possible.</b> '
+        +'Closing stock exceeds what was available less what was sold.</div>');
+      if(x.cash<-0.004) fl.push('<div class="flag bad"><b>Cash ran out this month by '+money(Math.abs(x.cash))
+        +'.</b> Either a figure is wrong, or the month was funded from outside the cycle.</div>');
+      $('flags'+k).innerHTML=fl.join('');
+      $('mstats'+k).innerHTML=[['Cost of goods sold',money(x.cogs),''],
+        ['Gross profit — goods only',money(x.gross),x.gross<0?'neg':'pos'],
+        ['Net profit — after expenses',money(x.net),x.net<0?'neg':'pos'],
+        ['Cash at month end',money(x.cash),x.cash<0?'neg':'']]
+        .map(function(t){ return '<div class="mstat"><div class="k">'+t[0]+'</div><div class="v '+t[2]+'">'+t[1]+'</div></div>'; }).join('');
+    });
+  }
+
+  function paintChart(m){
+    var max=0;
+    m.months.forEach(function(x){ max=Math.max(max,x.revenue,x.cogs+x.sellExp,Math.abs(x.net)); });
+    if(max<=0) max=1;
+    $('chart').innerHTML=m.months.map(function(x){
+      var h=function(v){ return Math.max(2,(Math.abs(v)/max)*100)+'%'; };
+      return '<div class="col"><div class="bars">'
+        +'<div class="bar bar-rev" style="height:'+h(x.revenue)+'"></div>'
+        +'<div class="bar bar-cost" style="height:'+h(x.cogs+x.sellExp)+'"></div>'
+        +'<div class="bar bar-prof" style="height:'+h(x.net)+'"></div>'
+        +'</div><div class="lab">M'+x.i+'</div></div>'; }).join('');
+  }
+
+  function paintSummary(m){
+    $('raised').textContent=M(m.capital)+'  ·  '+m.slots+' slot'+(m.slots===1?'':'s');
+    var rows=[['Capital raised',money(m.capital),''],
+      ['Units bought / sold',N(m.unitsBought)+' / '+N(m.unitsSold),''],
+      ['Revenue',money(m.revenue),''],['Cost of goods sold',money(m.cogsTotal),''],
+      ['Selling expenses',money(m.sellExpTotal),'']];
+    if(m.lostTotal>0.004) rows.push(['Stock unaccounted for',money(m.lostTotal),'neg']);
+    rows=rows.concat([['Net profit',money(m.profit),m.isLoss?'neg':'pos'],
+      ['Slot holders\u2019 share',money(m.holderPot),m.isLoss?'neg':'pos'],
+      [m.isLoss?'Your share (nil on loss)':'Your share · muḍārib',money(m.mudaribPot),''],
+      ['Profit per slot',money(m.netPerSlot),m.isLoss?'neg':'pos'],
+      ['Return per slot',pct(m.slotReturn),m.isLoss?'neg':'pos'],
+      ['Capital to return',M(m.withdraw*m.slotPrice)+' · '+m.withdraw+' slot'+(m.withdraw===1?'':'s'),''],
+      ['Capital rolling over',M(m.rollover*m.slotPrice)+' · '+m.rollover+' slot'+(m.rollover===1?'':'s'),''],
+      ['Total cash needed',money(m.cashNeeded),''],
+      ['Cash at close',money(m.endCash),m.endCash<0?'neg':''],
+      ['Unsold stock at close',money(m.endStock)+' · '+units(m.endUnits),'']]);
+    $('totals').innerHTML=rows.map(function(t){
+      return '<div class="tot"><div class="k">'+t[0]+'</div><div class="v '+t[2]+'">'+t[1]+'</div></div>'; }).join('');
+
+    var out=[];
+    if(m.slots<=0) out.push('<div class="note warn"><strong>Set the number of slots taken</strong> before the per-slot figures mean anything.</div>');
+    if(m.isLoss) out.push('<div class="note bad"><strong>This cycle closed at a loss.</strong> Under Mudarabah '
+      +'you take no profit share, and slot holders bear the financial loss equally, '+money(Math.abs(m.netPerSlot))
+      +' per slot. Their capital is only protected where the loss came from your negligence or a breach of terms.</div>');
+    if(m.cashNeeded>m.endCash+0.004)
+      out.push('<div class="note warn"><strong>'+money(m.cashNeeded)+' is due out, but only '+money(m.endCash)
+      +' is in cash.</strong> '+(m.endUnits>0?units(m.endUnits)+' worth '+money(m.endStock)+' is still on the shelf. ':'')
+      +'Sell it down before the payout date, or ask more holders to roll their capital over. Don\u2019t settle it '
+      +'from another business\u2019s cash — that quietly turns a profit-share into a guarantee.</div>');
+    else if(m.cashNeeded>0)
+      out.push('<div class="note"><strong>Cash covers the payout.</strong> '+money(m.cashNeeded)+' is due out '
+      +'against '+money(m.endCash)+' in hand — '+money(m.endCash-m.cashNeeded)+' spare.</div>');
+    if(!m.isLoss && m.revenue>0 && m.slots>0)
+      out.push('<div class="note"><strong>Ratio, not rate.</strong> The '+m.invRatio+' : '+(100-m.invRatio)
+      +' split applies to the '+money(m.profit)+' the cycle actually earned. Net margin was '
+      +pct((m.profit/m.revenue)*100)+' of revenue, giving '+money(m.netPerSlot)+' profit per slot.</div>');
+    $('notes').innerHTML=out.join('');
+  }
+
+  /* ==================== SVG ==================== */
+  function svgStack(segs,total,h){
+    h=h||50; var W=1000,x=0,out='';
+    segs.forEach(function(s){
+      var w=total>0?(Math.max(0,s.value)/total)*W:0;
+      if(w<=0.4) return;
+      out+='<rect x="'+x.toFixed(2)+'" y="0" width="'+w.toFixed(2)+'" height="'+h+'" fill="'+s.color+'"/>';
+      if(w>92) out+='<text x="'+(x+w/2).toFixed(2)+'" y="'+(h/2+6)+'" text-anchor="middle" '
+        +'font-family="IBM Plex Mono, monospace" font-size="18" font-weight="600" '
+        +'fill="'+(s.dark?'#3B2400':'#FFFFFF')+'">'+pct1(total>0?(s.value/total)*100:0)+'</text>';
+      x+=w; });
+    return '<svg viewBox="0 0 '+W+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" role="img">'+out+'</svg>';
+  }
+  function svgRing(a,b){
+    var R=64,CX=82,CY=82,circ=2*Math.PI*R,tot=a+b,pa=tot>0?a/tot:0,lenA=circ*pa;
+    return '<svg viewBox="0 0 164 164" width="160" height="160" role="img" aria-label="Profit split">'
+      +'<g transform="rotate(-90 82 82)">'
+      +'<circle cx="'+CX+'" cy="'+CY+'" r="'+R+'" fill="none" stroke="'+C.cogs+'" stroke-width="28"/>'
+      +'<circle cx="'+CX+'" cy="'+CY+'" r="'+R+'" fill="none" stroke="'+C.profit+'" stroke-width="28" '
+      +'stroke-dasharray="'+lenA.toFixed(2)+' '+(circ-lenA).toFixed(2)+'"/></g>'
+      +'<text x="82" y="77" text-anchor="middle" font-family="Marcellus, serif" font-size="30" fill="#241238">'
+      +Math.round(pa*100)+':'+Math.round((1-pa)*100)+'</text>'
+      +'<text x="82" y="98" text-anchor="middle" font-family="IBM Plex Mono, monospace" '
+      +'font-size="10" letter-spacing="1.8" fill="#6E6076">RATIO</text></svg>';
+  }
+  function svgBars(vals,labels,fmtFn,color){
+    var W=340,H=160,pad=28,n=vals.length;
+    var bw=Math.min(62,(W-2*pad)/(n*1.55)),gap=(W-2*pad-n*bw)/Math.max(1,n-1);
+    var max=Math.max.apply(null,vals.map(Math.abs).concat([1]));
+    var out='<line x1="'+pad+'" y1="'+(H-26)+'" x2="'+(W-pad)+'" y2="'+(H-26)+'" stroke="#E6DDCB" stroke-width="1.5"/>';
+    vals.forEach(function(v,i){
+      var h=Math.max(3,(Math.abs(v)/max)*(H-66));
+      var x=pad+i*(bw+gap),y=H-26-h;
+      out+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)
+        +'" rx="5" fill="'+(color||C.cogs)+'" opacity="'+(0.6+0.16*i).toFixed(2)+'"/>'
+        +'<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-8).toFixed(1)+'" text-anchor="middle" '
+        +'font-family="IBM Plex Mono, monospace" font-size="15" font-weight="600" fill="#241238">'+esc(fmtFn(v))+'</text>'
+        +'<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" '
+        +'font-family="IBM Plex Mono, monospace" font-size="12.5" fill="#6E6076">'+esc(labels[i])+'</text>'; });
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="160" role="img">'+out+'</svg>';
+  }
+  function svgGrouped(months,labels){
+    var W=440,H=190,pad=34,gw=(W-2*pad)/3,bw=gw/4.4;
+    var vals=[];
+    months.forEach(function(x){ vals.push(x.revenue,x.cogs+x.sellExp+x.lostValue,Math.abs(x.net)); });
+    var max=Math.max.apply(null,vals.concat([1]));
+    var out='<line x1="'+pad+'" y1="'+(H-30)+'" x2="'+(W-pad)+'" y2="'+(H-30)+'" stroke="#E6DDCB" stroke-width="1.5"/>';
+    months.forEach(function(x,i){
+      var set=[[x.revenue,C.cogs],[x.cogs+x.sellExp+x.lostValue,C.logi],[x.net,x.net<0?C.loss:C.profit]];
+      var gx=pad+i*gw+(gw-3*bw-10)/2;
+      set.forEach(function(s,j){
+        var h=Math.max(3,(Math.abs(s[0])/max)*(H-76));
+        out+='<rect x="'+(gx+j*(bw+5)).toFixed(1)+'" y="'+(H-30-h).toFixed(1)+'" width="'+bw.toFixed(1)
+          +'" height="'+h.toFixed(1)+'" rx="4" fill="'+s[1]+'"/>'; });
+      out+='<text x="'+(pad+i*gw+gw/2).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle" '
+        +'font-family="IBM Plex Mono, monospace" font-size="13" fill="#6E6076">'+esc(labels[i])+'</text>'; });
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="190" role="img">'+out+'</svg>';
+  }
+  function icon(kind){
+    var s='<svg viewBox="0 0 40 40" width="36" height="36" fill="none" stroke="'+C.cogs
+      +'" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+    if(kind==='coins') s+='<ellipse cx="20" cy="12" rx="11" ry="4.5"/><path d="M9 12v7c0 2.5 4.9 4.5 11 4.5s11-2 11-4.5v-7"/><path d="M9 19v7c0 2.5 4.9 4.5 11 4.5s11-2 11-4.5v-7"/>';
+    if(kind==='box') s+='<path d="M20 5 33 11v18L20 35 7 29V11z"/><path d="M7 11l13 6 13-6"/><path d="M20 17v18"/>';
+    if(kind==='cart') s+='<circle cx="16" cy="32" r="2.6"/><circle cx="28" cy="32" r="2.6"/><path d="M5 6h4l4 18h17l3-12H12"/>';
+    if(kind==='share') s+='<circle cx="20" cy="20" r="13"/><path d="M20 7v26"/><path d="M20 20h13"/>';
+    return s+'</svg>';
+  }
+
+  /* ==================== report ==================== */
+  function reportHTML(m){
+    var mode=$('disclose').value;
+    var d=(mode==='slot'&&m.slots>0)?1/m.slots:1;
+    var V=function(v){ return M(v*d); };
+    var product=($('productName').value||'').trim();
+    var isLoss=m.netPerSlot<0;
+    var scaleNote=(mode==='slot')
+      ? 'All figures on this page are shown for a single slot.'
+      : 'All figures on this page cover the whole cycle across every slot.';
+
+    /* ---- page 1 ---- */
+    var whtLine=m.whtPerSlot>0
+      ? '<div class="line"><span class="k">Less withholding tax</span><span class="v">'+M(-m.whtPerSlot)+'</span></div>':'';
+    var counts=[1,2,3,5,10].filter(function(n){ return m.slots<=0||n<=m.slots; });
+    if(!counts.length) counts=[1];
+    var slotRows=counts.map(function(n){
+      return '<tr><td>'+n+' slot'+(n===1?'':'s')+'</td>'
+        +'<td>'+M(m.slotPrice*n)+'</td>'
+        +'<td class="gold">'+M(m.netPerSlot*n)+'</td>'
+        +'<td><strong>'+M(m.payoutPerSlot*n)+'</strong></td></tr>'; }).join('');
+
+    var choices = isLoss ? '' :
+      '<div class="choices">'
+      +'<div class="choice a"><div class="lab">If you take everything out</div>'
+      +'<div class="big">'+M(m.payoutPerSlot)+' per slot</div>'
+      +'<div class="d">Your capital of '+M(m.slotPrice)+' plus your profit of '+M(m.netPerSlot)
+      +', paid together.</div></div>'
+      +'<div class="choice b"><div class="lab">If you leave your capital in</div>'
+      +'<div class="big">'+M(m.netPerSlot)+' paid to you</div>'
+      +'<div class="d">Your profit is paid out and your '+M(m.slotPrice)
+      +' capital continues into the next cycle as a full slot.</div></div>'
+      +'</div>';
+
+    var page1='<div class="page">'
+      +'<div class="rhead"><div class="brand">Mudarabah cycle report</div>'
+      +'<h3>'+esc($('roundName').value||'Investment cycle')+'</h3>'
+      +'<p class="sub2">'+fmt(addMonths($('startDate').value,0))+' to '+fmt(endDate())
+      +' &nbsp;·&nbsp; three months, now settled</p></div><div class="rule"></div>'
+      +'<div class="rbody">'
+      +'<div class="headline"><div class="k">'+(isLoss?'Shortfall per slot':'Profit earned per slot')+'</div>'
+      +'<div class="big'+(isLoss?' neg':'')+'">'+M(m.netPerSlot)+'</div>'
+      +'<div class="pct">'+pct(m.slotReturn)+' on one slot over three months</div></div>'
+      +'<div class="lines">'
+      +'<div class="line"><span class="k">Your capital — one slot</span><span class="v">'+M(m.slotPrice)+'</span></div>'
+      +'<div class="line"><span class="k">Slots in this cycle</span><span class="v">'+m.slots+'</span></div>'
+      +'<div class="line"><span class="k">Agreed profit-sharing ratio</span><span class="v">'+m.invRatio+' : '+(100-m.invRatio)+'</span></div>'
+      +'<div class="line"><span class="k">Your share of profit per slot</span><span class="v">'+M(m.grossPerSlot)+'</span></div>'
+      +whtLine
+      +'<div class="line hi"><span class="k">Profit earned per slot</span><span class="v">'+M(m.netPerSlot)+'</span></div>'
+      +'</div>'
+      +choices
+      +'<div class="slotcard"><div class="cap">Find your holding</div><table class="slottable">'
+      +'<tr><th>You hold</th><th>Your capital</th><th>Profit earned</th><th>Total if you withdraw both</th></tr>'
+      +slotRows+'</table>'
+      +'<div class="slotnote">Your capital and your profit are separate. You may take both, take only the '
+      +'profit and leave your capital working, or leave both in. Tell us which before the payout date.</div>'
+      +'</div>'
+      +'<div class="fig" style="margin-top:30px"><h4>How the profit was divided</h4>'
+      +'<p class="cap2">You provide the capital; we provide the trading work. The ratio was fixed before '
+      +'the cycle opened and applies only to profit actually earned.</p>'
+      +'<div class="ringwrap">'+svgRing(m.invRatio,100-m.invRatio)
+      +'<div class="ringleg"><div><i style="background:'+C.profit+'"></i><span>Slot holders — '+m.invRatio+'%</span></div>'
+      +'<div><i style="background:'+C.cogs+'"></i><span>Trading manager — '+(100-m.invRatio)+'%</span></div></div></div>'
+      +'</div></div></div>';
+
+    /* ---- page 2 ---- */
+    var mcards=m.months.map(function(x,k){
+      var segs=[{label:'Goods sold',value:x.cogs,color:C.cogs},
+        {label:'Ads',value:x.ads,color:C.ads},
+        {label:'Logistics',value:x.logi,color:C.logi},
+        {label:'Bank charges',value:x.bank,color:C.bank},
+        {label:'Miscellaneous',value:x.misc,color:C.misc,dark:true}];
+      if(x.lostValue>0.004) segs.push({label:'Stock lost',value:x.lostValue,color:C.loss});
+      if(x.net>0) segs.push({label:'Profit',value:x.net,color:C.profit,dark:true});
+      var segTotal=segs.reduce(function(s,y){ return s+Math.max(0,y.value); },0);
+      return '<div class="mcard"><div class="mcard-h">'
+        +'<span class="t">Month '+(k+1)+(mLong(k)?' · '+mLong(k):'')+'</span>'
+        +'<span class="p'+(x.net<0?' neg':'')+'">'+V(x.net)+'</span></div><div class="mcard-b">'
+        +'<div class="mgrp"><div class="h">Cash at the start of the month</div>'
+        +'<div class="mline"><span class="k">'+(k===0?'Capital from slots':'Carried over from month '+k)
+        +'</span><span class="v">'+V(x.openTotal)+'</span></div>'
+        +(k>0&&x.openUnits>0?'<div class="mline"><span class="k">Stock carried over</span>'
+          +'<span class="v">'+N(x.openUnits)+' items · '+V(x.openValue)+'</span></div>':'')+'</div>'
+        +'<div class="mgrp"><div class="h">Purchases</div>'
+        +'<div class="mline"><span class="k">Products purchased</span><span class="v">'+N(x.qty)+' items</span></div>'
+        +'<div class="mline"><span class="k">Cost of goods</span><span class="v">'+V(x.goodsCost)+'</span></div>'
+        +'<div class="mline"><span class="k">Delivery in</span><span class="v">'+V(x.purchExp)+'</span></div>'
+        +'<div class="mline sumline"><span class="k">Total cost of purchase</span><span class="v">'+V(x.purchCost)+'</span></div></div>'
+        +'<div class="mgrp"><div class="h">Sales</div>'
+        +'<div class="mline"><span class="k">Products sold</span><span class="v">'+N(x.soldQty)+' items</span></div>'
+        +'<div class="mline sumline"><span class="k">Total revenue</span><span class="v">'+V(x.revenue)+'</span></div></div>'
+        +'<div class="mgrp"><div class="h">Expenses</div>'
+        +'<div class="mline ind"><i style="background:'+C.ads+'"></i><span class="k">Ads</span><span class="v">'+V(x.ads)+'</span></div>'
+        +'<div class="mline ind"><i style="background:'+C.logi+'"></i><span class="k">Logistics</span><span class="v">'+V(x.logi)+'</span></div>'
+        +'<div class="mline ind"><i style="background:'+C.bank+'"></i><span class="k">Bank charges</span><span class="v">'+V(x.bank)+'</span></div>'
+        +'<div class="mline ind"><i style="background:'+C.misc+'"></i><span class="k">Miscellaneous</span><span class="v">'+V(x.misc)+'</span></div>'
+        +'<div class="mline sumline"><span class="k">Total expenses</span><span class="v">'+V(x.sellExp)+'</span></div></div>'
+        +'<div class="mgrp"><div class="h">Where this month\u2019s sales money went</div>'
+        +'<div class="mbar">'+svgStack(segs,segTotal,40)+'</div></div>'
+        +'<div class="mgrp"><div class="h">Net profit for the month</div>'
+        +'<div class="mline"><span class="k">Total revenue</span><span class="v">'+V(x.revenue)+'</span></div>'
+        +'<div class="mline"><span class="k">Less cost of the goods sold</span><span class="v">'+V(-x.cogs)+'</span></div>'
+        +(x.lostValue>0.004?'<div class="mline"><span class="k">Less damaged or returned stock</span>'
+          +'<span class="v">'+V(-x.lostValue)+'</span></div>':'')
+        +'<div class="mline"><span class="k">Less total expenses</span><span class="v">'+V(-x.sellExp)+'</span></div>'
+        +'<div class="mline sumline"><span class="k">Net profit this month</span><span class="v">'+V(x.net)+'</span></div>'
+        +'</div></div>'
+        +'<div class="mcard-f">'
+        +'<div><div class="k">Cash at month end</div><div class="v">'+V(x.cash)+'</div></div>'
+        +'<div><div class="k">Stock still held</div><div class="v">'+N(x.closeUnits)+' items</div></div>'
+        +'<div><div class="k">Net profit this month</div><div class="v '+(x.net<0?'neg':'pos')+'">'+V(x.net)+'</div></div>'
+        +'</div></div>'; }).join('');
+
+    var page2='<div class="page">'
+      +'<div class="rhead" style="padding:22px 24px 20px"><div class="brand">Page two</div>'
+      +'<h3 style="font-size:25px">Month by month</h3>'
+      +'<p class="sub2">'+scaleNote+'</p></div><div class="rule"></div>'
+      +'<div class="rbody">'+mcards
+      +'<div class="mcard"><div class="mcard-h"><span class="t">Three months together</span>'
+      +'<span class="p'+(m.profit<0?' neg':'')+'">'+V(m.profit)+'</span></div><div class="mcard-b">'
+      +'<div class="mline"><span class="k">Products purchased</span><span class="v">'+N(m.unitsBought)+' items</span></div>'
+      +'<div class="mline"><span class="k">Total cost of purchase</span><span class="v">'+V(m.purchTotal)+'</span></div>'
+      +'<div class="mline"><span class="k">Products sold</span><span class="v">'+N(m.unitsSold)+' items</span></div>'
+      +'<div class="mline"><span class="k">Total revenue</span><span class="v">'+V(m.revenue)+'</span></div>'
+      +'<div class="mline ind"><i style="background:'+C.ads+'"></i><span class="k">Ads</span><span class="v">'+V(m.adsTotal)+'</span></div>'
+      +'<div class="mline ind"><i style="background:'+C.logi+'"></i><span class="k">Logistics</span><span class="v">'+V(m.logiTotal)+'</span></div>'
+      +'<div class="mline ind"><i style="background:'+C.bank+'"></i><span class="k">Bank charges</span><span class="v">'+V(m.bankTotal)+'</span></div>'
+      +'<div class="mline ind"><i style="background:'+C.misc+'"></i><span class="k">Miscellaneous</span><span class="v">'+V(m.miscTotal)+'</span></div>'
+      +'<div class="mline sumline"><span class="k">Total expenses</span><span class="v">'+V(m.sellExpTotal)+'</span></div>'
+      +'</div><div class="mcard-b" style="padding-top:0">'
+      +'<div class="mgrp"><div class="h">Net profit for the three months</div>'
+      +'<div class="mline"><span class="k">Total revenue</span><span class="v">'+V(m.revenue)+'</span></div>'
+      +'<div class="mline"><span class="k">Less cost of the goods sold</span><span class="v">'+V(-m.cogsTotal)+'</span></div>'
+      +(m.lostTotal>0.004?'<div class="mline"><span class="k">Less damaged or returned stock</span>'
+        +'<span class="v">'+V(-m.lostTotal)+'</span></div>':'')
+      +'<div class="mline"><span class="k">Less total expenses</span><span class="v">'+V(-m.sellExpTotal)+'</span></div>'
+      +'<div class="mline sumline"><span class="k">Net profit for the cycle</span><span class="v">'+V(m.profit)+'</span></div>'
+      +'</div></div>'
+      +'<div class="mcard-f">'
+      +'<div><div class="k">Cash at close</div><div class="v">'+V(m.endCash)+'</div></div>'
+      +'<div><div class="k">Stock unsold</div><div class="v">'+N(m.endUnits)+' items</div></div>'
+      +'<div><div class="k">Net profit</div><div class="v '+(m.profit<0?'neg':'pos')+'">'+V(m.profit)+'</div></div>'
+      +'</div></div></div></div>';
+
+    /* ---- page 3 ---- */
+    var segs=[{label:'Buying the goods',value:m.cogsTotal,color:C.cogs},
+      {label:'Advertising',value:m.adsTotal,color:C.ads},
+      {label:'Delivery to customers',value:m.logiTotal,color:C.logi},
+      {label:'Bank charges',value:m.bankTotal,color:C.bank},
+      {label:'Other running costs',value:m.miscTotal,color:C.misc,dark:true}];
+    if(m.lostTotal>0.004) segs.push({label:'Damaged or returned stock',value:m.lostTotal,color:C.loss});
+    if(m.profit>0) segs.push({label:'Profit',value:m.profit,color:C.profit,dark:true});
+    var stackTotal=segs.reduce(function(s,x){ return s+Math.max(0,x.value); },0);
+    var legRows=segs.filter(function(s){ return s.value>0.004; }).map(function(s){
+      var p=stackTotal>0?(s.value/stackTotal)*100:0;
+      return '<tr><td class="sw"><i style="background:'+s.color+'"></i></td><td class="nm">'+s.label+'</td>'
+        +'<td class="pv">'+pct1(p)+'</td><td class="am">'+V(s.value)+'</td></tr>'; }).join('')
+      +'<tr class="tot"><td class="sw"></td><td class="nm">Total sales income</td>'
+      +'<td class="pv">100.0%</td><td class="am">'+V(stackTotal)+'</td></tr>';
+
+    var journey='<div class="journey">'
+      +'<div class="jstep"><div class="n">One</div><div class="icon">'+icon('coins')+'</div>'
+      +'<div class="t">Slots pooled</div><div class="v">'+m.slots+' slots<br>'+M(m.slotPrice)+' each</div></div>'
+      +'<div class="jarrow">&#10148;</div>'
+      +'<div class="jstep"><div class="n">Two</div><div class="icon">'+icon('box')+'</div>'
+      +'<div class="t">Stock bought</div><div class="v">'+N(m.unitsBought)+' items'+(product?'<br>'+esc(product):'')+'</div></div>'
+      +'<div class="jarrow">&#10148;</div>'
+      +'<div class="jstep"><div class="n">Three</div><div class="icon">'+icon('cart')+'</div>'
+      +'<div class="t">Sold to customers</div><div class="v">'+N(m.unitsSold)+' items<br>over 3 months</div></div>'
+      +'<div class="jarrow">&#10148;</div>'
+      +'<div class="jstep"><div class="n">Four</div><div class="icon">'+icon('share')+'</div>'
+      +'<div class="t">Profit shared</div><div class="v">'+m.invRatio+' : '+(100-m.invRatio)
+      +'<br>'+M(m.netPerSlot)+' per slot</div></div></div>';
+
+    var lossPara=m.profit>0?'':'<p>This cycle did not produce a profit. Under Mudarabah that outcome falls '
+      +'on the capital, and the trading manager earns nothing at all — no fee, no share, no commission. '
+      +'That is the honest shape of a partnership rather than a loan.</p>';
+    var stillHeld=m.endUnits>0
+      ? '<p class="cap2" style="margin-top:14px">'+N(m.endUnits)+' items were still unsold when the cycle '
+        +'closed. Stock is valued at what it cost, never at what we hope to sell it for, so no profit is '
+        +'counted before a sale actually happens.</p>':'';
+
+    var page3='<div class="page">'
+      +'<div class="rhead" style="padding:22px 24px 20px"><div class="brand">Page three</div>'
+      +'<h3 style="font-size:25px">The cycle in pictures</h3>'
+      +'<p class="sub2">The same numbers, drawn out.</p></div><div class="rule"></div><div class="rbody">'
+      +'<div class="fig"><h4>The journey of a slot</h4>'
+      +'<p class="cap2">Capital pooled once at the start, spent on goods, sold to customers across three '
+      +'months, and the profit divided at the end.</p>'+journey+'</div>'
+      +'<div class="fig"><h4>Every naira of sales income, divided</h4>'
+      +'<p class="cap2">What the money customers paid us was used for. The largest slice is always the '
+      +'goods themselves — that is the nature of trading.</p>'
+      +'<div class="stackwrap">'+svgStack(segs,stackTotal,54)+'</div>'
+      +'<table class="legtable">'+legRows+'</table></div>'
+      +'<div class="fig"><h4>Each month side by side</h4>'
+      +'<p class="cap2">Revenue against everything it cost, and what was left as profit.</p>'
+      +svgGrouped(m.months,[mShort(0),mShort(1),mShort(2)])
+      +'<div class="ringleg" style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px">'
+      +'<div><i style="background:'+C.cogs+'"></i><span>Revenue</span></div>'
+      +'<div><i style="background:'+C.logi+'"></i><span>Total costs</span></div>'
+      +'<div><i style="background:'+C.profit+'"></i><span>Profit</span></div></div></div>'
+      +'<div class="figrow">'
+      +'<div class="fig"><h4>Items sold each month</h4>'
+      +'<p class="cap2">Trading ran across all three months.</p>'
+      +svgBars(m.months.map(function(x){ return x.soldQty; }),[mShort(0),mShort(1),mShort(2)],N)+'</div>'
+      +'<div class="fig"><h4>Bought, sold, left</h4>'
+      +'<p class="cap2">How much of the stock moved.</p>'
+      +svgBars([m.unitsBought,m.unitsSold,m.endUnits],['Bought','Sold','Left'],N)+stillHeld+'</div></div>'
+      +'<div class="plain">'+lossPara
+      +'<p><b>Your capital and your profit are two different things.</b> The capital is the '+M(m.slotPrice)
+      +' you placed in a slot; it is yours whether or not the cycle earns. The profit is your agreed share '
+      +'of what the trade actually made. You can withdraw either, both, or neither.</p>'
+      +'<p><b>Why there is no fixed rate.</b> Your slot does not earn interest. It buys a share of a real '
+      +'trade. When the goods sell well the profit is larger, and when they do not it is smaller — which '
+      +'is exactly why the return above could not have been promised in advance.</p>'
+      +'<p><b>What we count as cost.</b> Delivery paid to bring goods in is treated as part of what the '
+      +'goods cost. Advertising, delivery to customers, bank charges and other running costs are charged '
+      +'against the sales they produced. Nothing counts as profit until an item is sold and paid for.</p>'
+      +'</div>'
+      +'<div class="months3"><div>Month 1 ✓</div><div>Month 2 ✓</div><div>Month 3 ✓</div></div>'
+      +'<div class="seal"><div class="ar">مضاربة</div><div class="en">Cycle<br>settled</div></div></div>'
+      +'<div class="rfoot"><div class="ay">Profit is shared by ratio. Loss is borne by capital.</div>'
+      +'Every slot is equal and earns the same. Your return comes from the ratio agreed at the start, '
+      +'applied to profit the trade actually earned. It is not a fixed or guaranteed rate. '
+      +'Questions on any figure in this report are welcome.</div></div>';
+
+    return '<article class="rep">'+page1+page2+page3+'</article>';
+  }
+
+  /* ==================== csv ==================== */
+  function exportCSV(m){
+    var L=[],q=function(v){ return typeof v==='number'?v.toFixed(2):v; };
+    L.push('CYCLE,'+($('roundName').value||''));
+    L.push('Trades in,'+($('productName').value||''));
+    L.push('Slot value,'+m.slotPrice.toFixed(2));
+    L.push('Slots taken,'+m.slots);
+    L.push('Capital raised,'+m.capital.toFixed(2));
+    L.push('Slots withdrawing capital,'+m.withdraw);
+    L.push('Slots rolling over,'+m.rollover);
+    L.push('');
+    L.push('MONTHLY LEDGER');
+    L.push(['Month','Cash at start','Opening units','Opening stock value','Qty purchased','Cost per unit',
+      'Purchase expenses','Total purchase cost','Cost price per unit','Units sold','Selling price',
+      'Revenue','COGS','Ads','Logistics','Misc','Bank charges','Total expenses','Units left',
+      'Stock value','Units unaccounted','Value unaccounted','Gross profit','Net profit','Cash at end'].join(','));
+    m.months.forEach(function(x){
+      L.push([x.i,x.openTotal,x.openUnits,x.openValue,x.qty,x.unitCost,x.purchExp,x.purchCost,x.unitCP,
+        x.soldQty,x.sellPrice,x.revenue,x.cogs,x.ads,x.logi,x.misc,x.bank,x.sellExp,x.closeUnits,
+        x.closeValue,x.lostUnits,x.lostValue,x.gross,x.net,x.cash].map(q).join(','));
+    });
+    L.push('');
+    L.push('SETTLEMENT');
+    [['Net profit',m.profit],['Slot holders share',m.holderPot],['Mudarib share',m.mudaribPot],
+     ['Gross profit per slot',m.grossPerSlot],['WHT per slot',m.whtPerSlot],
+     ['Net profit per slot',m.netPerSlot],['Return per slot %',m.slotReturn],
+     ['Capital per slot',m.slotPrice],['Capital plus profit per slot',m.payoutPerSlot],
+     ['Capital to return',m.withdraw*m.slotPrice],['Capital rolling over',m.rollover*m.slotPrice],
+     ['Total cash needed at payout',m.cashNeeded],['Cash at close',m.endCash]]
+     .forEach(function(r){ L.push(r[0]+','+r[1].toFixed(2)); });
+    var blob=new Blob([L.join('\n')],{type:'text/csv;charset=utf-8;'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=($('roundName').value||'mudarabah-cycle').replace(/[^\w\-]+/g,'-').toLowerCase()+'.csv';
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },1500);
+  }
+
+  /* ==================== persistence ==================== */
+  var FIELDS=['roundName','productName','startDate','currency','slotPrice','slots','ratio','wht','withdrawSlots','disclose'];
+  function save(){
+    if(!window.storage) return;
+    var snap={months:state.months,fields:{}};
+    FIELDS.forEach(function(f){ snap.fields[f]=$(f).value; });
+    try{ window.storage.set('mudarabah:report3',JSON.stringify(snap)); }catch(e){}
+  }
+  function load(){
+    if(!window.storage) return Promise.resolve();
+    return window.storage.get('mudarabah:report3').then(function(r){
+      if(!r||!r.value) return;
+      var s=JSON.parse(r.value);
+      if(s.months&&s.months.length===3) state.months=s.months;
+      if(s.fields) FIELDS.forEach(function(f){ if(s.fields[f]!==undefined) $(f).value=s.fields[f]; });
+    }).catch(function(){});
+  }
+
+  /* ==================== wiring ==================== */
+  function refresh(){
+    var r=num($('ratio').value);
+    $('barInv').style.flexBasis=r+'%'; $('barMud').style.flexBasis=(100-r)+'%';
+    $('barInv').textContent=r; $('barMud').textContent=100-r;
+    var m=compute();
+    paintMonths(m); paintChart(m); paintSummary(m);
+    $('preview').innerHTML=reportHTML(m);
+    save();
+  }
+
+  FIELDS.forEach(function(f){
+    $(f).addEventListener('input',refresh);
+    $(f).addEventListener('change',refresh);
+  });
+  $('printBtn').addEventListener('click',function(){
+    $('printArea').innerHTML=reportHTML(compute());
+    window.print();
+  });
+  $('csvBtn').addEventListener('click',function(){ exportCSV(compute()); });
+
+  $('startDate').value=new Date().toISOString().slice(0,10);
+  buildMonths();
+
+  Promise.resolve(load()).then(function(){
+    state.months.forEach(function(d,k){
+      F.forEach(function(s){ if(d[s[0]]) $(s[0]+k).value=d[s[0]]; });
+    });
+    refresh();
+  });
+})();
+</script>
+</body>
+</html>
