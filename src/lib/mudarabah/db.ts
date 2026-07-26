@@ -12,39 +12,53 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type MudarabahCycleRow = {
+export type MudarabahLedgerRow = {
   id: string;
-  name: string;
+  cycle_id: string;
   description: string | null;
-  start_date: string;
-  currency: string;
-  slot_price: number;
-  slots: number;
-  ratio: number;
-  wht: number;
-  status: string;
   disclose_mode: string;
+  status: string;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type MudarabahHoldingRow = {
+/** The existing cycle, with the ledger's per-cycle term overrides */
+export type CycleRow = {
   id: string;
-  cycle_id: string;
-  investor_id: string;
-  slots: number;
-  capital_action: string;
-  created_at: string;
-  updated_at: string;
+  series_id: string;
+  cycle_number: number;
+  cycle_label: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  unit_value: number | null;
+  investor_ratio: number | null;
+  wht_rate: number | null;
+  total_slots: number;
+  total_capital: number;
+  total_investors: number;
+  amount_received: number;
+};
+
+export type SeriesRow = {
+  id: string;
+  name: string;
+  price_per_unit: number;
+  mudarabah_investor_ratio: number;
+  default_wht_rate: number;
 };
 
 export type MudarabahSettlementRow = {
   id: string;
   cycle_id: string;
+  ledger_id: string;
   settled_at: string;
   settled_by: string | null;
   engine_version: string;
+  ratio_used: number;
+  unit_value_used: number;
+  wht_rate_used: number;
   computed: unknown;
   is_current: boolean;
   superseded_at: string | null;
@@ -56,13 +70,18 @@ export type MudarabahSettlementRow = {
 export type MudarabahSettlementHolderRow = {
   id: string;
   settlement_id: string;
+  investment_id: string;
   investor_id: string;
-  slots: number;
+  units: number;
   capital: number;
-  profit: number;
+  gross_profit: number;
+  wht: number;
+  net_profit: number;
   capital_action: string;
+  slots_withdrawn: number;
   amount_paid: number;
   amount_paid_note: string | null;
+  payment_request_id: string | null;
 };
 
 export type MudarabahSettlementProductRow = {
@@ -110,8 +129,9 @@ type Table<Row> = {
 export type MudarabahDatabase = {
   public: {
     Tables: {
-      mudarabah_cycles: Table<MudarabahCycleRow>;
-      mudarabah_holdings: Table<MudarabahHoldingRow>;
+      mudarabah_ledgers: Table<MudarabahLedgerRow>;
+      cycles: Table<CycleRow>;
+      series: Table<SeriesRow>;
       mudarabah_settlements: Table<MudarabahSettlementRow>;
       mudarabah_settlement_holders: Table<MudarabahSettlementHolderRow>;
       mudarabah_settlement_products: Table<MudarabahSettlementProductRow>;
@@ -120,22 +140,22 @@ export type MudarabahDatabase = {
     };
     Views: Record<string, never>;
     Functions: {
-      mudarabah_save_cycle: {
-        Args: { p_cycle: unknown };
+      mudarabah_save_ledger: {
+        Args: { p_ledger: unknown };
         Returns: string;
       };
-      mudarabah_get_cycle: {
+      mudarabah_get_ledger: {
         Args: { p_cycle_id: string };
         Returns: unknown;
       };
-      mudarabah_set_holding: {
+      mudarabah_set_cycle_terms: {
         Args: {
           p_cycle_id: string;
-          p_investor_id: string;
-          p_slots: number;
-          p_capital_action: string;
+          p_investor_ratio?: number | null;
+          p_unit_value?: number | null;
+          p_wht_rate?: number | null;
         };
-        Returns: string;
+        Returns: undefined;
       };
       mudarabah_settle_cycle: {
         Args: {

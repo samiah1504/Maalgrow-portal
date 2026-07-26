@@ -36,6 +36,7 @@ import {
   productHasFigures,
   removeProduct,
   toSavePayload,
+  type CycleTerms,
   type Draft,
   type DraftMonth,
   type DraftRow,
@@ -194,25 +195,44 @@ type Settlement = {
 
 export function CycleEditor({
   initialDraft,
+  terms,
+  hasLedger,
   settlement,
   settledProducts,
 }: {
   initialDraft: Draft;
+  terms: CycleTerms;
+  hasLedger: boolean;
   settlement: Settlement;
   settledProducts: SettlementProduct[];
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [ratio, setRatio] = useState(Math.round(terms.ratio * 100));
   const [newProduct, setNewProduct] = useState("");
   const [saving, setSaving] = useState(false);
   const [unsettling, setUnsettling] = useState(false);
   const [reason, setReason] = useState("");
 
   const readOnly = isReadOnly(draft);
-  const symbol = draft.currency || "₦";
+  const symbol = "₦";
+
+  // The ratio slider edits the CYCLE's own override, not the series,
+  // and only while subscriptions are open.
+  const liveTerms: CycleTerms = useMemo(
+    () => ({ ...terms, ratio: ratio / 100 }),
+    [terms, ratio]
+  );
 
   // Everything recalculates as you type — one call, one source of truth
-  const { cycle, notices } = useMemo(() => draftFigures(draft), [draft]);
+  const { cycle, notices } = useMemo(
+    () => draftFigures(draft, liveTerms),
+    [draft, liveTerms]
+  );
+
+  // Trading with money that never arrived is fiction
+  const capitalGap = terms.pooledCapital - terms.amountReceived;
+  const slotsDisagree = Math.abs(terms.totalUnits - terms.cycleTotalSlots) > 0.001;
 
   // A settled cycle shows its FROZEN figures, never a fresh calculation
   const frozen = settlement?.computed ?? null;
@@ -299,13 +319,15 @@ export function CycleEditor({
       const res = await fetch("/api/admin/mudarabah", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cycle: toSavePayload(draft) }),
+        body: JSON.stringify({
+          ledger: toSavePayload(draft, liveTerms),
+          ratio: terms.termsLocked ? undefined : ratio / 100,
+        }),
       });
       const json = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Could not save the cycle");
-      toast.success("Cycle saved");
-      if (!draft.id && json.id) router.replace(`/admin/mudarabah/${json.id}`);
-      else router.refresh();
+      if (!res.ok) throw new Error(json.error ?? "Could not save the ledger");
+      toast.success("Ledger saved");
+      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save the cycle");
     } finally {
@@ -320,7 +342,7 @@ export function CycleEditor({
     }
     setUnsettling(true);
     try {
-      const res = await fetch(`/api/admin/mudarabah/${draft.id}`, {
+      const res = await fetch(`/api/admin/mudarabah/${draft.cycleId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "unsettle", reason: reason.trim() }),
@@ -352,16 +374,20 @@ export function CycleEditor({
       <div className="flex items-center gap-2 text-sm text-muted mb-4">
         <Link href="/admin/mudarabah" className="hover:text-foreground flex items-center gap-1">
           <ArrowLeft className="h-3.5 w-3.5" />
-          Mudarabah Cycles
+          Mudarabah Ledger
         </Link>
         <span>/</span>
-        <span className="text-foreground">{draft.name || "New cycle"}</span>
+        <span className="text-foreground">{terms.cycleLabel}</span>
       </div>
 
       <div className="mud">
         <div className="panel-head">
           <div>
-            <h1>{draft.name || "New Mudarabah cycle"}</h1>
+            <h1>
+              {hasLedger
+                ? `Trading ledger — ${terms.cycleLabel}`
+                : `Start a trading ledger for ${terms.cycleLabel}`}
+            </h1>
             <p className="muted tiny" style={{ marginTop: 4 }}>
               Profit is shared as a ratio of what the trade actually realised. Capital
               and profit are always shown apart.
@@ -399,27 +425,55 @@ export function CycleEditor({
           </div>
         )}
 
-        {/* ── 1. Cycle setup ───────────────────────────────────── */}
+        {/* ── 1. The cycle, read from the existing records ─────── */}
         <section className="panel">
           <div className="panel-head">
-            <h2>Cycle setup</h2>
+            <h2>
+              Series {terms.seriesName} · {terms.cycleLabel}
+            </h2>
             <span className="num muted tiny">
-              Capital raised {naira(cycle.capital, symbol)}
+              {terms.startDate} → {terms.endDate} ·{" "}
+              {terms.cycleStatus.replaceAll("_", " ")}
             </span>
           </div>
 
-          <div className="grid-fields">
-            <div>
-              <label htmlFor="mud-name">Cycle name</label>
-              <input
-                id="mud-name"
-                type="text"
-                value={draft.name}
-                disabled={readOnly}
-                onChange={(e) => set("name", e.target.value)}
-                placeholder="Cycle 2026-Q1"
-              />
-            </div>
+          <p className="muted tiny" style={{ marginBottom: 12 }}>
+            The slot value, the slots taken and the investor list come from this
+            cycle and its investments. They are shown here to confirm the right
+            cycle, and are not edited on this page.
+          </p>
+
+          <div className="summary-grid">
+            <Sum k="Value of one slot" v={naira(terms.unitValue, symbol)} />
+            <Sum k="Slots taken" v={terms.totalUnits.toLocaleString("en-NG")} />
+            <Sum k="Investors" v={String(terms.holders.length)} />
+            <Sum k="Capital pooled" v={naira(terms.pooledCapital, symbol)} />
+          </div>
+
+          {capitalGap !== 0 && (
+            <NoticeLine
+              notice={{
+                level: "warning",
+                scope: "cycle",
+                month: null,
+                productId: null,
+                text: `Slots taken come to ${naira(terms.pooledCapital, symbol)}, but ${naira(terms.amountReceived, symbol)} has been received — a gap of ${naira(Math.abs(capitalGap), symbol)}. Trading with money that never arrived is fiction; check for an unpaid or partly-paid subscription before settling.`,
+              }}
+            />
+          )}
+          {slotsDisagree && (
+            <NoticeLine
+              notice={{
+                level: "warning",
+                scope: "cycle",
+                month: null,
+                productId: null,
+                text: `The cycle record says ${terms.cycleTotalSlots} slots, but the active investments add up to ${terms.totalUnits}. Profit is divided by the investments, not the cycle total.`,
+              }}
+            />
+          )}
+
+          <div className="grid-fields" style={{ marginTop: 16 }}>
             <div>
               <label htmlFor="mud-desc">Description</label>
               <input
@@ -435,68 +489,18 @@ export function CycleEditor({
               </p>
             </div>
             <div>
-              <label htmlFor="mud-start">Start date</label>
-              <input
-                id="mud-start"
-                type="date"
-                value={draft.startDate}
-                disabled={readOnly}
-                onChange={(e) => set("startDate", e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="mud-cur">Currency symbol</label>
-              <input
-                id="mud-cur"
-                type="text"
-                value={draft.currency}
-                disabled={readOnly}
-                onChange={(e) => set("currency", e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="mud-slotprice">Value of one slot</label>
-              <input
-                id="mud-slotprice"
-                type="text"
-                inputMode="decimal"
-                value={draft.slotPrice}
-                disabled={readOnly}
-                onChange={(e) => set("slotPrice", e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="mud-slots">Slots taken</label>
-              <input
-                id="mud-slots"
-                type="text"
-                inputMode="numeric"
-                value={draft.slots}
-                disabled={readOnly}
-                onChange={(e) => set("slots", e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="mud-wht">Withholding tax %</label>
+              <label htmlFor="mud-wht">Withholding tax</label>
               <input
                 id="mud-wht"
                 type="text"
-                inputMode="decimal"
-                value={draft.wht}
-                disabled={readOnly}
-                onChange={(e) => set("wht", e.target.value)}
+                value={percent(terms.whtRate * 100)}
+                disabled
               />
-            </div>
-            <div>
-              <label htmlFor="mud-withdraw">Slots withdrawing capital</label>
-              <input
-                id="mud-withdraw"
-                type="text"
-                inputMode="numeric"
-                value={draft.withdrawSlots}
-                disabled={readOnly}
-                onChange={(e) => set("withdrawSlots", e.target.value)}
-              />
+              <p className="muted tiny" style={{ marginTop: 4 }}>
+                {terms.termsLocked
+                  ? "Fixed — subscriptions have closed."
+                  : "Set on the cycle before subscriptions close."}
+              </p>
             </div>
           </div>
 
@@ -504,32 +508,92 @@ export function CycleEditor({
           <div style={{ marginTop: 20 }}>
             <label htmlFor="mud-ratio">Profit-sharing ratio</label>
             <div className="split-bar">
-              <div className="holders" style={{ width: `${draft.ratio}%` }} />
-              <div className="manager" style={{ width: `${100 - draft.ratio}%` }} />
+              <div className="holders" style={{ width: `${ratio}%` }} />
+              <div className="manager" style={{ width: `${100 - ratio}%` }} />
             </div>
             <div className="split-legend">
               <span>
-                <strong className="num">{draft.ratio}%</strong> slot holders
+                <strong className="num">{ratio}%</strong> slot holders
               </span>
               <span>
-                <strong className="num">{100 - draft.ratio}%</strong> manager
+                <strong className="num">{100 - ratio}%</strong> manager
               </span>
             </div>
             <input
               id="mud-ratio"
               type="range"
-              min={0}
-              max={100}
+              min={1}
+              max={99}
               step={1}
-              value={draft.ratio}
-              disabled={readOnly}
-              onChange={(e) => set("ratio", Number(e.target.value))}
+              value={ratio}
+              disabled={readOnly || terms.termsLocked}
+              onChange={(e) => setRatio(Number(e.target.value))}
               style={{ marginTop: 10 }}
             />
             <p className="muted tiny">
-              A ratio applied to profit the trade actually realised — never a rate on
-              capital. On a loss the manager&apos;s share is nothing at all.
+              {terms.termsLocked
+                ? "Fixed for this cycle. Investors subscribed on the strength of this ratio, so it cannot change now."
+                : "This cycle's own ratio. Changing it here does not touch the series default or any other cycle, and it locks when subscriptions close."}{" "}
+              A ratio applied to profit the trade actually realised — never a rate
+              on capital. On a loss the manager&apos;s share is nothing at all.
             </p>
+          </div>
+        </section>
+
+        {/* ── Membership, straight from the cycle's investments ── */}
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Investors in this cycle</h2>
+            <span className="num muted tiny">
+              {terms.holders.length} investor{terms.holders.length === 1 ? "" : "s"} ·{" "}
+              {terms.totalUnits} slot{terms.totalUnits === 1 ? "" : "s"}
+            </span>
+          </div>
+          <p className="muted tiny" style={{ marginBottom: 10 }}>
+            Read from this cycle&apos;s investments. Reports and emails go to these
+            investors and no one else. Profit is paid to every one of them; only
+            capital depends on their maturity instruction.
+          </p>
+          <div className="scroll-x">
+            <table style={{ minWidth: 560 }}>
+              <thead>
+                <tr>
+                  <th>Investor</th>
+                  <th>Slots</th>
+                  <th>Capital</th>
+                  <th>At maturity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {terms.holders.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="muted tiny">
+                      No active investments in this cycle yet.
+                    </td>
+                  </tr>
+                ) : (
+                  terms.holders.map((h) => (
+                    <tr key={h.investmentId}>
+                      <td>
+                        {h.investorName}
+                        <div className="muted tiny num">{h.investorCode}</div>
+                      </td>
+                      <td className="ro">{h.units}</td>
+                      <td className="ro">
+                        {naira(Math.round(h.units * terms.unitValue), symbol)}
+                      </td>
+                      <td className="ro">
+                        {h.capitalAction === "withdraw"
+                          ? "capital out"
+                          : h.capitalAction === "partial"
+                          ? `${h.slotsWithdrawn} slot${h.slotsWithdrawn === 1 ? "" : "s"} out`
+                          : "capital continues"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 

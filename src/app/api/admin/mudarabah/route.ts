@@ -4,7 +4,7 @@ import { mudarabahDb } from "@/lib/mudarabah/db";
 
 const ADMIN_ROLES = ["super_admin", "administrator"];
 
-// POST /api/admin/mudarabah — create or update a Mudarabah cycle.
+// POST /api/admin/mudarabah — create or update a cycle's trading ledger.
 //
 // Inputs only. Every money value is integer kobo. The database
 // function refuses to write to a settled cycle, so a correction has
@@ -28,27 +28,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { cycle?: Record<string, unknown> };
-    const cycle = body.cycle;
-    if (!cycle || typeof cycle !== "object") {
-      return NextResponse.json({ error: "cycle is required" }, { status: 400 });
+    const body = (await request.json()) as {
+      ledger?: Record<string, unknown>;
+      ratio?: number;
+    };
+    const ledger = body.ledger;
+    if (!ledger || typeof ledger !== "object") {
+      return NextResponse.json({ error: "ledger is required" }, { status: 400 });
     }
-    if (!String(cycle.name ?? "").trim()) {
-      return NextResponse.json({ error: "Give the cycle a name" }, { status: 400 });
-    }
-    if (!String(cycle.startDate ?? "").trim()) {
-      return NextResponse.json({ error: "Give the cycle a start date" }, { status: 400 });
-    }
-    if (!Number(cycle.slotPrice)) {
+    if (!String(ledger.cycleId ?? "").trim()) {
       return NextResponse.json(
-        { error: "A slot has to be worth something" },
+        { error: "A ledger has to belong to an existing cycle" },
         { status: 400 }
       );
     }
 
+    const db = mudarabahDb(supabase);
+
+    // The cycle's own ratio, if it is still editable. The database
+    // refuses once subscriptions have closed.
+    if (typeof body.ratio === "number" && body.ratio > 0 && body.ratio < 1) {
+      const { error: termsError } = await db.rpc("mudarabah_set_cycle_terms", {
+        p_cycle_id: String(ledger.cycleId),
+        p_investor_ratio: body.ratio,
+      });
+      if (termsError) {
+        return NextResponse.json({ error: termsError.message }, { status: 400 });
+      }
+    }
+
     // The session client, so auth.uid() is the person making the change
-    const { data, error } = await mudarabahDb(supabase).rpc("mudarabah_save_cycle", {
-      p_cycle: cycle,
+    const { data, error } = await db.rpc("mudarabah_save_ledger", {
+      p_ledger: ledger,
     });
 
     if (error) {

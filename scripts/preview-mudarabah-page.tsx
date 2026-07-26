@@ -44,6 +44,7 @@ const React = require("react") as typeof import("react");
 const { renderToStaticMarkup } = require("react-dom/server") as typeof import("react-dom/server");
 const { CycleEditor } = require("../src/app/(admin)/admin/mudarabah/[id]/_cycle-editor") as typeof import("../src/app/(admin)/admin/mudarabah/[id]/_cycle-editor");
 const { emptyDraft, addProduct } = require("../src/lib/mudarabah/editor") as typeof import("../src/lib/mudarabah/editor");
+type CycleTerms = import("../src/lib/mudarabah/editor").CycleTerms;
 type Draft = import("../src/lib/mudarabah/editor").Draft;
 type DraftRow = import("../src/lib/mudarabah/editor").DraftRow;
 
@@ -61,19 +62,31 @@ function typeExp(draft: Draft, i: number, e: Partial<Draft["months"][number]>): 
 }
 
 // A real cycle: three products, three months of furniture trading
-let d = emptyDraft();
-d = {
-  ...d,
-  id: "preview",
-  name: "Cycle 2026-Q1",
-  description: "home furniture",
+let d = emptyDraft("preview-cycle");
+d = { ...d, description: "home furniture", status: "active" };
+
+// The terms and membership come from the existing cycle
+const TERMS: CycleTerms = {
+  cycleId: "preview-cycle",
+  seriesName: "A",
+  cycleLabel: "A-901",
+  cycleStatus: "active",
   startDate: "2026-01-01",
-  status: "active",
-  slotPrice: "100000",
-  slots: "20",
-  ratio: 70,
-  wht: "5",
-  withdrawSlots: "8",
+  endDate: "2026-03-31",
+  termsLocked: false,
+  unitValue: 100000 * 100,
+  ratio: 0.7,
+  whtRate: 0.05,
+  totalUnits: 20,
+  cycleTotalSlots: 20,
+  pooledCapital: 2000000 * 100,
+  amountReceived: 2000000 * 100,
+  totalCapital: 2000000 * 100,
+  withdrawSlots: 8,
+  holders: [
+    { investmentId: "i1", investorId: "v1", investorName: "Aisha Bello", investorCode: "MG0001", units: 12.5, capitalAction: "withdraw", slotsWithdrawn: 12.5 },
+    { investmentId: "i2", investorId: "v2", investorName: "Yusuf Ibrahim", investorCode: "MG0002", units: 7.5, capitalAction: "rollover", slotsWithdrawn: 0 },
+  ],
 };
 d = addProduct(d, "3-seater sofa");
 d = addProduct(d, "Dining table");
@@ -99,6 +112,8 @@ d = typeExp(d, 2, { ads: "50000", logistics: "20000", misc: "12000", bankCharges
 const body = renderToStaticMarkup(
   React.createElement(CycleEditor, {
     initialDraft: d,
+    terms: TERMS,
+    hasLedger: true,
     settlement: null,
     settledProducts: [],
   })

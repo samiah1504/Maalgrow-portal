@@ -29,6 +29,7 @@ import {
   productHasFigures,
   removeProduct,
   toSavePayload,
+  type CycleTerms,
   type Draft,
   type DraftRow,
 } from "../src/lib/mudarabah/editor";
@@ -41,6 +42,31 @@ function check(name: string, ok: boolean, detail?: unknown) {
     failures++;
     console.error("FAIL:", name, detail ?? "");
   }
+}
+
+/* ── The cycle's terms, as they arrive from the existing records ── */
+
+function terms(over: Partial<CycleTerms> = {}): CycleTerms {
+  return {
+    cycleId: "cycle-1",
+    seriesName: "A",
+    cycleLabel: "A-901",
+    cycleStatus: "active",
+    startDate: "2026-01-01",
+    endDate: "2026-03-31",
+    termsLocked: false,
+    unitValue: 100_000 * 100,
+    ratio: 0.7,
+    whtRate: 0.05,
+    totalUnits: 20,
+    cycleTotalSlots: 20,
+    pooledCapital: 2_000_000 * 100,
+    amountReceived: 2_000_000 * 100,
+    totalCapital: 2_000_000 * 100,
+    withdrawSlots: 8,
+    holders: [],
+    ...over,
+  };
 }
 
 /* ── Helpers to "type into" the page ─────────────────────────────── */
@@ -108,8 +134,8 @@ const REF_MONTHS: RefMonth[] = [
 const REF_FIELDS = { slotPrice: 100_000, slots: 20, ratio: 70, wht: 5, withdrawSlots: 8 };
 
 // Type it in exactly as the admin would — naira strings, not kobo
-let typed = emptyDraft();
-typed = { ...typed, name: "Reference cycle", slotPrice: "100000", slots: "20", ratio: 70, wht: "5", withdrawSlots: "8" };
+let typed = emptyDraft("cycle-1");
+const REF_TERMS = terms();
 typed = addProduct(typed, "3-seater sofa");
 const productId = typed.products[0].id;
 REF_MONTHS.forEach((m, i) => {
@@ -128,7 +154,7 @@ REF_MONTHS.forEach((m, i) => {
   });
 });
 
-const { cycle: pageCycle } = draftFigures(typed);
+const { cycle: pageCycle } = draftFigures(typed, REF_TERMS);
 const refCycle = referenceCompute(REF_FIELDS, REF_MONTHS);
 
 // Money on the page is kobo; the reference works in naira
@@ -165,13 +191,13 @@ check(
 );
 check(
   "an empty field is not the same as a zero — a blank cycle computes cleanly",
-  draftFigures(emptyDraft()).cycle.profit === 0
+  draftFigures(emptyDraft("cycle-1"), REF_TERMS).cycle.profit === 0
 );
 
 /* ── 2. Multi-product through the page's own state ───────────────── */
 
-let multi = emptyDraft();
-multi = { ...multi, slotPrice: "100000", slots: "10", ratio: 70, wht: "5" };
+let multi = emptyDraft("cycle-1");
+const MULTI_TERMS = terms({ totalUnits: 10, withdrawSlots: 0 });
 multi = addProduct(multi, "3-seater sofa");
 multi = addProduct(multi, "Side table");
 const sofa = multi.products[0].id;
@@ -182,7 +208,7 @@ multi = typeRow(multi, 0, table, { unitCost: "2000", qty: "100", soldQty: "20", 
 multi = typeRow(multi, 1, table, { soldQty: "30", sellPrice: "3100" });
 multi = typeRow(multi, 2, table, { soldQty: "25", sellPrice: "3200" });
 
-const multiFigures = draftFigures(multi);
+const multiFigures = draftFigures(multi, MULTI_TERMS);
 const tableM3 = multiFigures.cycle.months[2].rows.find((r) => r.productId === table)!;
 const sofaM3 = multiFigures.cycle.months[2].rows.find((r) => r.productId === sofa)!;
 
@@ -204,7 +230,7 @@ const bed = untouched.products[2].id;
 untouched = typeRow(untouched, 0, bed, {
   unitCost: "21000", qty: "25", soldQty: "0", sellPrice: "0",
 });
-const untouchedFigures = draftFigures(untouched);
+const untouchedFigures = draftFigures(untouched, MULTI_TERMS);
 const bedM1 = untouchedFigures.cycle.months[0].rows.find((r) => r.productId === bed)!;
 const bedM3 = untouchedFigures.cycle.months[2].rows.find((r) => r.productId === bed)!;
 check(
@@ -235,7 +261,7 @@ check(
 /* ── 3. Validation ───────────────────────────────────────────────── */
 
 // Quiet when everything is in order
-const clean = draftFigures(typed);
+const clean = draftFigures(typed, REF_TERMS);
 check(
   "no errors on a cycle that is in order",
   !clean.notices.some((n) => n.level === "error"),
@@ -243,7 +269,7 @@ check(
 );
 
 // Sold more than were available
-const oversold = draftFigures(typeRow(multi, 0, sofa, { soldQty: "99" }));
+const oversold = draftFigures(typeRow(multi, 0, sofa, { soldQty: "99" }), MULTI_TERMS);
 const oversoldNotice = noticesForRow(oversold.notices, 1, sofa)[0];
 check(
   "selling more than were available is an error that names the product",
@@ -252,7 +278,7 @@ check(
 );
 
 // Units left below the expectation — a warning, with the loss valued
-const short = draftFigures(typeRow(multi, 0, table, { stockLeft: "75" }));
+const short = draftFigures(typeRow(multi, 0, table, { stockLeft: "75" }), MULTI_TERMS);
 const shortNotice = noticesForRow(short.notices, 1, table)[0];
 check(
   "counting fewer units than expected warns, values the loss, and says why it happens",
@@ -264,7 +290,7 @@ check(
 );
 
 // Units left above the expectation — an error
-const above = draftFigures(typeRow(multi, 0, table, { stockLeft: "500" }));
+const above = draftFigures(typeRow(multi, 0, table, { stockLeft: "500" }), MULTI_TERMS);
 const aboveNotice = noticesForRow(above.notices, 1, table)[0];
 check(
   "counting more units than existed is an error",
@@ -273,12 +299,12 @@ check(
 );
 
 // Cash going negative in a month
-let broke = emptyDraft();
-broke = { ...broke, slotPrice: "1000", slots: "1", ratio: 70 };
+let broke = emptyDraft("cycle-1");
+const BROKE_TERMS = terms({ unitValue: 1000 * 100, totalUnits: 1, withdrawSlots: 0 });
 broke = addProduct(broke, "Wardrobe");
 const wardrobe = broke.products[0].id;
 broke = typeRow(broke, 0, wardrobe, { unitCost: "50000", qty: "10", soldQty: "0", sellPrice: "0" });
-const brokeFigures = draftFigures(broke);
+const brokeFigures = draftFigures(broke, BROKE_TERMS);
 const monthNotice = noticesForMonth(brokeFigures.notices, 1)[0];
 check(
   "a month that ends with negative cash is an error that says where to record the money",
@@ -287,12 +313,12 @@ check(
 );
 
 // Payout shortfall at cycle level
-let tight = emptyDraft();
-tight = { ...tight, slotPrice: "100000", slots: "10", ratio: 70, wht: "0", withdrawSlots: "10" };
+let tight = emptyDraft("cycle-1");
+const TIGHT_TERMS = terms({ totalUnits: 10, withdrawSlots: 10, whtRate: 0 });
 tight = addProduct(tight, "Wardrobe");
 const w2 = tight.products[0].id;
 tight = typeRow(tight, 0, w2, { unitCost: "10000", qty: "90", soldQty: "10", sellPrice: "12000" });
-const tightNotice = cycleNotices(draftFigures(tight).notices)[0];
+const tightNotice = cycleNotices(draftFigures(tight, TIGHT_TERMS).notices)[0];
 check(
   "a payout the cash cannot cover warns, and says what to do about it",
   tightNotice?.level === "warning" &&
@@ -310,7 +336,7 @@ check(
 
 /* ── 4. A settled cycle is read-only ─────────────────────────────── */
 
-const settledDraft: Draft = { ...typed, id: "cycle-1", status: "settled" };
+const settledDraft: Draft = { ...typed, status: "settled" };
 check("a settled cycle is read-only", isReadOnly(settledDraft) === true);
 check("a draft cycle is editable", isReadOnly({ status: "draft" }) === false);
 check("an active cycle is editable", isReadOnly({ status: "active" }) === false);
@@ -324,7 +350,7 @@ check("summaries round to whole naira", naira(800_050) === "₦8,001");
 
 /* ── The save payload carries inputs only ────────────────────────── */
 
-const payload = toSavePayload(typed) as Record<string, unknown>;
+const payload = toSavePayload(typed, REF_TERMS) as Record<string, unknown>;
 const payloadText = JSON.stringify(payload);
 check(
   "the saved payload holds inputs only — no profit, no ROI, no cost price",
@@ -332,10 +358,14 @@ check(
 );
 check(
   "the saved payload carries money as integer kobo",
-  payload.slotPrice === 10_000_000 &&
-    Number.isInteger(
-      (payload.months as { rows: { unitCost: number }[] }[])[0].rows[0].unitCost
-    )
+  Number.isInteger(
+    (payload.months as { rows: { unitCost: number }[] }[])[0].rows[0].unitCost
+  )
+);
+check(
+  "the saved payload holds no slot value, slots or ratio — those live on the cycle",
+  !("slotPrice" in payload) && !("slots" in payload) && !("ratio" in payload) &&
+    payload.cycleId === "cycle-1"
 );
 
 console.log(`\nWorst drift from the reference file: ${worst} kobo`);

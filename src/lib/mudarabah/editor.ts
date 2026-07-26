@@ -48,23 +48,62 @@ export type DraftMonth = {
 
 export type DraftProduct = { id: string; name: string };
 
+/**
+ * What the admin types. The slot value, the number of slots, the
+ * ratio, the withholding rate, the dates and the investor list are NOT
+ * here — they live on the existing cycle, series and investments, and
+ * arrive as CycleTerms.
+ */
 export type Draft = {
-  id: string | null;
-  name: string;
+  cycleId: string;
   description: string;
-  startDate: string;
-  currency: string;
   status: "draft" | "active" | "settled";
   discloseMode: "full" | "perSlot";
-  /** Value of one slot, as typed in naira */
-  slotPrice: string;
-  slots: string;
-  /** Slot holders' share of profit, 0–100 */
-  ratio: number;
-  wht: string;
-  withdrawSlots: string;
   products: DraftProduct[];
   months: [DraftMonth, DraftMonth, DraftMonth];
+};
+
+/** One member of the cycle, read from investments — never typed here */
+export type CycleHolder = {
+  investmentId: string;
+  investorId: string;
+  investorName: string;
+  investorCode: string;
+  units: number;
+  capitalAction: "withdraw" | "rollover" | "partial";
+  slotsWithdrawn: number;
+};
+
+/**
+ * Everything the ledger reads from the EXISTING records. Read-only on
+ * this page except the ratio and withholding rate, and those only
+ * while subscriptions are still open.
+ */
+export type CycleTerms = {
+  cycleId: string;
+  seriesName: string;
+  cycleLabel: string;
+  cycleStatus: string;
+  startDate: string;
+  endDate: string;
+  termsLocked: boolean;
+  /** Kobo */
+  unitValue: number;
+  /** Slot holders' share, 0–1 as stored on the cycle or series */
+  ratio: number;
+  /** 0–1 */
+  whtRate: number;
+  /** Sum of units over active investments — may be fractional */
+  totalUnits: number;
+  /** cycles.total_slots, kept separately so a mismatch is visible */
+  cycleTotalSlots: number;
+  /** Kobo: units × unit value, the capital actually pooled */
+  pooledCapital: number;
+  /** Kobo */
+  amountReceived: number;
+  totalCapital: number;
+  withdrawSlots: number;
+  holders: CycleHolder[];
 };
 
 export function emptyRow(productId: string): DraftRow {
@@ -75,20 +114,12 @@ export function emptyMonth(): DraftMonth {
   return { rows: {}, ads: "", logistics: "", misc: "", bankCharges: "" };
 }
 
-export function emptyDraft(): Draft {
+export function emptyDraft(cycleId: string): Draft {
   return {
-    id: null,
-    name: "",
+    cycleId,
     description: "",
-    startDate: new Date().toISOString().slice(0, 10),
-    currency: "₦",
     status: "draft",
     discloseMode: "perSlot",
-    slotPrice: "100000",
-    slots: "20",
-    ratio: 70,
-    wht: "0",
-    withdrawSlots: "0",
     products: [],
     months: [emptyMonth(), emptyMonth(), emptyMonth()],
   };
@@ -97,7 +128,7 @@ export function emptyDraft(): Draft {
 const kobo = (s: string): number => parseNairaToKobo(s) ?? 0;
 const count = (s: string): number => parseCount(s) ?? 0;
 
-export function toCycleInput(draft: Draft): CycleInput {
+export function toCycleInput(draft: Draft, terms: CycleTerms): CycleInput {
   const months = draft.months.map((m): MonthInput => ({
     rows: draft.products.map((p): MonthRowInput => {
       const r = m.rows[p.id] ?? emptyRow(p.id);
@@ -119,32 +150,26 @@ export function toCycleInput(draft: Draft): CycleInput {
   })) as [MonthInput, MonthInput, MonthInput];
 
   return {
-    name: draft.name,
-    startDate: draft.startDate,
-    currency: draft.currency,
-    slotPrice: kobo(draft.slotPrice),
-    slots: count(draft.slots),
-    ratio: draft.ratio,
-    wht: parseFloat(draft.wht || "0") || 0,
-    withdrawSlots: count(draft.withdrawSlots),
+    name: terms.cycleLabel,
+    startDate: terms.startDate,
+    currency: "₦",
+    // From the existing cycle and series, never typed on this page
+    slotPrice: terms.unitValue,
+    slots: terms.totalUnits,
+    ratio: terms.ratio * 100,
+    wht: terms.whtRate * 100,
+    withdrawSlots: terms.withdrawSlots,
     products: draft.products.map((p) => ({ id: p.id, name: p.name })),
     months,
   };
 }
 
 /** The payload the save endpoint takes — inputs only, money in kobo */
-export function toSavePayload(draft: Draft): Record<string, unknown> {
-  const input = toCycleInput(draft);
+export function toSavePayload(draft: Draft, terms: CycleTerms): Record<string, unknown> {
+  const input = toCycleInput(draft, terms);
   return {
-    id: draft.id,
-    name: draft.name,
+    cycleId: draft.cycleId,
     description: draft.description,
-    startDate: draft.startDate,
-    currency: draft.currency,
-    slotPrice: input.slotPrice,
-    slots: input.slots,
-    ratio: input.ratio,
-    wht: input.wht,
     status: draft.status,
     discloseMode: draft.discloseMode,
     products: input.products,
@@ -165,19 +190,28 @@ export function toSavePayload(draft: Draft): Record<string, unknown> {
   };
 }
 
-/** A saved cycle (the shape mudarabah_get_cycle returns) into a draft */
-export function fromSavedCycle(saved: {
-  id: string;
-  name: string;
-  description: string | null;
+/** The shape mudarabah_get_ledger returns */
+export type LedgerPayload = {
+  cycleId: string;
+  hasLedger: boolean;
+  seriesName: string;
+  cycleLabel: string;
+  cycleStatus: string;
   startDate: string;
-  currency: string;
-  slotPrice: number;
-  slots: number;
+  endDate: string;
+  termsLocked: boolean;
+  unitValue: number;
   ratio: number;
-  wht: number;
-  status: string;
+  whtRate: number;
+  totalUnits: number;
+  cycleTotalSlots: number;
+  pooledCapital: number;
+  amountReceived: number;
+  totalCapital: number;
+  withdrawSlots: number;
+  description: string | null;
   discloseMode: string;
+  status: string;
   products: { id: string; name: string }[];
   months: {
     ads: number;
@@ -193,22 +227,71 @@ export function fromSavedCycle(saved: {
       stockLeft: number;
     }[];
   }[];
-}, withdrawSlots = 0): Draft {
+  holders: {
+    investmentId: string;
+    investorId: string;
+    investorName: string;
+    investorCode: string;
+    units: number;
+    capitalAction: string;
+    slotsWithdrawn: number;
+  }[];
+};
+
+/** Naira from the portal's own columns into the ledger's kobo */
+const toKobo = (naira: number) => Math.round(Number(naira ?? 0) * 100);
+
+export function termsFromLedger(p: LedgerPayload): CycleTerms {
+  return {
+    cycleId: p.cycleId,
+    seriesName: p.seriesName,
+    cycleLabel: p.cycleLabel,
+    cycleStatus: p.cycleStatus,
+    startDate: p.startDate,
+    endDate: p.endDate,
+    termsLocked: p.termsLocked,
+    unitValue: toKobo(p.unitValue),
+    ratio: Number(p.ratio ?? 0),
+    whtRate: Number(p.whtRate ?? 0),
+    totalUnits: Number(p.totalUnits ?? 0),
+    cycleTotalSlots: Number(p.cycleTotalSlots ?? 0),
+    pooledCapital: toKobo(p.pooledCapital),
+    amountReceived: toKobo(p.amountReceived),
+    totalCapital: toKobo(p.totalCapital),
+    withdrawSlots: Number(p.withdrawSlots ?? 0),
+    holders: (p.holders ?? []).map((h) => ({
+      investmentId: h.investmentId,
+      investorId: h.investorId,
+      investorName: h.investorName,
+      investorCode: h.investorCode,
+      units: Number(h.units),
+      capitalAction:
+        h.capitalAction === "withdraw"
+          ? "withdraw"
+          : h.capitalAction === "partial"
+          ? "partial"
+          : "rollover",
+      slotsWithdrawn: Number(h.slotsWithdrawn ?? 0),
+    })),
+  };
+}
+
+export function draftFromLedger(p: LedgerPayload): Draft {
   const asNaira = (k: number) => (k === 0 ? "" : String(k / 100));
   const asCount = (n: number) => (n === 0 ? "" : String(n));
 
   const months = [0, 1, 2].map((i): DraftMonth => {
-    const m = saved.months[i];
+    const m = p.months?.[i];
     if (!m) return emptyMonth();
     const rows: Record<string, DraftRow> = {};
-    for (const r of m.rows) {
+    for (const r of m.rows ?? []) {
       rows[r.productId] = {
         productId: r.productId,
         qty: asCount(r.qty),
         unitCost: asNaira(r.unitCost),
         soldQty: asCount(r.soldQty),
         sellPrice: asNaira(r.sellPrice),
-        // Stored either way; shown as typed so history cannot shift
+        // Stored either way, so history cannot shift under a later change
         stockLeft: String(r.stockLeft),
       };
     }
@@ -222,21 +305,13 @@ export function fromSavedCycle(saved: {
   }) as [DraftMonth, DraftMonth, DraftMonth];
 
   return {
-    id: saved.id,
-    name: saved.name,
-    description: saved.description ?? "",
-    startDate: saved.startDate,
-    currency: saved.currency === "NGN" ? "₦" : saved.currency,
-    status: (["draft", "active", "settled"].includes(saved.status)
-      ? saved.status
+    cycleId: p.cycleId,
+    description: p.description ?? "",
+    status: (["draft", "active", "settled"].includes(p.status)
+      ? p.status
       : "draft") as Draft["status"],
-    discloseMode: saved.discloseMode === "full" ? "full" : "perSlot",
-    slotPrice: String(saved.slotPrice / 100),
-    slots: String(saved.slots),
-    ratio: Number(saved.ratio),
-    wht: String(saved.wht),
-    withdrawSlots: String(withdrawSlots),
-    products: saved.products.map((p) => ({ id: p.id, name: p.name })),
+    discloseMode: p.discloseMode === "full" ? "full" : "perSlot",
+    products: (p.products ?? []).map((x) => ({ id: x.id, name: x.name })),
     months,
   };
 }
@@ -258,7 +333,11 @@ export type Notice = {
  * purpose — someone reading a warning should know what to do next, not
  * think they mistyped.
  */
-export function noticesFor(input: CycleInput, cycle: CycleResult): Notice[] {
+export function noticesFor(
+  input: CycleInput,
+  cycle: CycleResult,
+  terms?: CycleTerms
+): Notice[] {
   const out: Notice[] = [];
   const symbol = input.currency || "₦";
   const issues: CycleIssue[] = validateCycle(input, cycle);
@@ -403,12 +482,11 @@ export function addProduct(draft: Draft, name: string): Draft {
 }
 
 /** Live figures for the page. One call, one source of truth. */
-export function draftFigures(draft: Draft): {
-  input: CycleInput;
-  cycle: CycleResult;
-  notices: Notice[];
-} {
-  const input = toCycleInput(draft);
+export function draftFigures(
+  draft: Draft,
+  terms: CycleTerms
+): { input: CycleInput; cycle: CycleResult; notices: Notice[] } {
+  const input = toCycleInput(draft, terms);
   const cycle = compute(input);
-  return { input, cycle, notices: noticesFor(input, cycle) };
+  return { input, cycle, notices: noticesFor(input, cycle, terms) };
 }

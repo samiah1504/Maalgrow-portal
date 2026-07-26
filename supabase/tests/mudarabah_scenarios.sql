@@ -407,4 +407,72 @@ BEGIN
   RAISE NOTICE 'PASS S7: only administrators set terms; per-product data stays admin-only';
 END $$;
 
+-- ------------------------------------------------------------
+-- Scenario 8: withholding tax credit notes
+-- ------------------------------------------------------------
+DO $$
+DECLARE
+  v_settle UUID; v_n INTEGER; v_again INTEGER;
+  v_ref TEXT; v_ref2 TEXT; v_amount BIGINT; v_amount2 BIGINT;
+  v_total BIGINT; v_declared BIGINT;
+BEGIN
+  SET LOCAL test.uid = 'a0000000-0000-0000-0000-0000000000f1';
+
+  SELECT id INTO v_settle FROM mudarabah_settlements
+  WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1'
+  ORDER BY settled_at DESC LIMIT 1;
+
+  v_n := mudarabah_issue_credit_notes(v_settle);
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: expected a note for each taxed holder, got %', v_n;
+  END IF;
+
+  SELECT reference, wht_amount INTO v_ref, v_amount
+  FROM wht_credit_notes
+  WHERE investor_id = '20000000-0000-0000-0000-0000000000f1';
+
+  -- Issuing again must not create a second note or change anything
+  v_again := mudarabah_issue_credit_notes(v_settle);
+  IF v_again <> 0 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: reissuing created % new notes', v_again;
+  END IF;
+
+  -- Recording the remittance is a REISSUE: same reference, same figures
+  PERFORM mudarabah_record_remittance(
+    (SELECT id FROM wht_credit_notes WHERE investor_id = '20000000-0000-0000-0000-0000000000f1'),
+    'FIRS/2026/00123');
+
+  SELECT reference, wht_amount INTO v_ref2, v_amount2
+  FROM wht_credit_notes
+  WHERE investor_id = '20000000-0000-0000-0000-0000000000f1';
+
+  IF v_ref2 <> v_ref OR v_amount2 <> v_amount THEN
+    RAISE EXCEPTION 'TEST FAIL S8: a reissued note changed — ref % vs %, amount % vs %',
+      v_ref2, v_ref, v_amount2, v_amount;
+  END IF;
+  IF (SELECT reissue_count FROM wht_credit_notes
+      WHERE investor_id = '20000000-0000-0000-0000-0000000000f1') <> 1 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: the reissue was not recorded as one';
+  END IF;
+
+  -- The notes add up to what was declared
+  SELECT COALESCE(SUM(wht_amount), 0) INTO v_total FROM wht_credit_notes
+  WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1';
+  SELECT ROUND(total_wht * 100) INTO v_declared FROM cycle_profit_declarations
+  WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1';
+  IF v_total <> v_declared THEN
+    RAISE EXCEPTION 'TEST FAIL S8: notes total % kobo, declaration says %', v_total, v_declared;
+  END IF;
+
+  -- An investor with no tax identification number still gets a note
+  IF EXISTS (SELECT 1 FROM wht_credit_notes WHERE investor_tin IS NOT NULL) THEN
+    RAISE EXCEPTION 'TEST FAIL S8: expected these test investors to have no TIN recorded';
+  END IF;
+  IF (SELECT COUNT(*) FROM wht_credit_notes WHERE investor_name IS NOT NULL) <> 2 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: a note without a TIN did not render its investor';
+  END IF;
+
+  RAISE NOTICE 'PASS S8: credit notes issue once, reissue unchanged, and reconcile with the declaration';
+END $$;
+
 ROLLBACK;

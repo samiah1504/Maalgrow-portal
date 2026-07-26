@@ -9,9 +9,13 @@ const ADMIN_ROLES = ["super_admin", "administrator"];
 //   action: "unsettle"     — reopen a settled cycle. A reason is
 //                            required; the earlier snapshot is kept and
 //                            the action is logged with who and when.
-//   action: "set_holding"  — record how many slots an investor holds
-//                            and whether their capital is withdrawing
-//                            or rolling over.
+//   action: "set_terms"    — the cycle's own profit-sharing ratio and
+//                            withholding rate. Refused once
+//                            subscriptions have closed.
+//
+// Membership is NOT set here: how many slots an investor holds lives
+// on their investment, and what happens to their capital lives on
+// their maturity instruction.
 //
 // Settling itself is not here: it needs the figures from the shared
 // engine, and belongs with the settlement flow in a later step.
@@ -41,9 +45,8 @@ export async function PATCH(
     const body = (await request.json()) as {
       action?: string;
       reason?: string;
-      investorId?: string;
-      slots?: number;
-      capitalAction?: string;
+      investorRatio?: number;
+      whtRate?: number;
     };
 
     if (body.action === "unsettle") {
@@ -64,23 +67,11 @@ export async function PATCH(
       return NextResponse.json({ ok: true });
     }
 
-    if (body.action === "set_holding") {
-      const slots = Number(body.slots);
-      if (!body.investorId) {
-        return NextResponse.json({ error: "investorId is required" }, { status: 400 });
-      }
-      if (!Number.isInteger(slots) || slots < 1) {
-        return NextResponse.json(
-          { error: "Slots must be a whole number, at least 1" },
-          { status: 400 }
-        );
-      }
-      const capitalAction = body.capitalAction === "withdraw" ? "withdraw" : "rollover";
-      const { error } = await mudarabahDb(supabase).rpc("mudarabah_set_holding", {
+    if (body.action === "set_terms") {
+      const { error } = await mudarabahDb(supabase).rpc("mudarabah_set_cycle_terms", {
         p_cycle_id: id,
-        p_investor_id: body.investorId,
-        p_slots: slots,
-        p_capital_action: capitalAction,
+        p_investor_ratio: body.investorRatio ?? null,
+        p_wht_rate: body.whtRate ?? null,
       });
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
@@ -89,7 +80,7 @@ export async function PATCH(
     }
 
     return NextResponse.json(
-      { error: "action must be unsettle or set_holding" },
+      { error: "action must be unsettle or set_terms" },
       { status: 400 }
     );
   } catch (err) {

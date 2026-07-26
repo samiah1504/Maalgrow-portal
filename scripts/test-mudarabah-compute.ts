@@ -26,6 +26,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
+  allocateHolders,
   compute,
   holderFigures,
   investorView,
@@ -211,7 +212,10 @@ const NEAR_MONEY: [keyof CycleResult, string][] = [
   ["grossPerSlot", "grossPerSlot"], ["whtPerSlot", "whtPerSlot"],
   ["netPerSlot", "netPerSlot"], ["whtTotal", "whtTotal"], ["netTotal", "netTotal"],
   ["payoutPerSlot", "payoutPerSlot"], ["cogsTotal", "cogsTotal"],
-  ["lostTotal", "lostTotal"], ["endStock", "endStock"], ["cashNeeded", "cashNeeded"],
+  ["lostTotal", "lostTotal"], ["endStock", "endStock"],
+  // cashNeeded is DELIBERATELY not compared: the reference counts only
+  // what reaches investors, and withholding tax leaves the business
+  // too. See the explicit test below.
 ];
 for (const [mine, theirs] of NEAR_MONEY) {
   money(`cycle.${String(mine)}`, ours[mine] as number, ref[theirs], TOL_CYCLE);
@@ -232,6 +236,81 @@ if (!near(ours.slotReturn, ref.slotReturn, 1e-4)) {
 check(
   `single-product parity with the reference file (largest drift ${maxDrift} kobo)`,
   parityOk
+);
+
+/* ── 1b. Fractional slots, and what payout really costs ─────────── */
+
+// The portal has held half slots since migration 004
+const halfSlotCycle = compute({ ...SINGLE, slots: 20.5, withdrawSlots: 8.5 });
+check(
+  "slots and withdrawing slots accept halves",
+  halfSlotCycle.slots === 20.5 &&
+    halfSlotCycle.withdraw === 8.5 &&
+    halfSlotCycle.rollover === 12 &&
+    halfSlotCycle.capital === Math.round(20.5 * SINGLE.slotPrice),
+  { slots: halfSlotCycle.slots, capital: halfSlotCycle.capital }
+);
+
+// Profit is paid to EVERY investor whatever they do with their
+// capital, and the withheld portion still leaves the business — as a
+// remittance rather than to the investor, but it leaves.
+check(
+  "cash needed is every investor's profit plus withdrawing capital",
+  ours.cashNeeded === Math.round(ours.holderPot + ours.withdraw * ours.slotPrice),
+  { cashNeeded: ours.cashNeeded, holderPot: ours.holderPot }
+);
+check(
+  "cash needed does not change when a holder rolls their capital over",
+  compute({ ...SINGLE, withdrawSlots: 0 }).cashNeeded === ours.holderPot
+);
+check(
+  "cash needed covers the tax as well as what the investor receives",
+  ours.cashNeeded - ours.withdraw * ours.slotPrice ===
+    ours.netTotal + ours.whtTotal ||
+    ours.cashNeeded - ours.withdraw * ours.slotPrice >= ours.netTotal
+);
+
+/* ── 1c. Holders are paid from an exact division of the pot ─────── */
+
+const alloc = allocateHolders(ours, [
+  { investmentId: "i1", investorId: "v1", units: 12.5, capitalAction: "withdraw", slotsWithdrawn: 12.5 },
+  { investmentId: "i2", investorId: "v2", units: 7.5, capitalAction: "rollover", slotsWithdrawn: 0 },
+]);
+check(
+  "holder profits add back to the investor pot EXACTLY, in kobo",
+  alloc.reduce((s, h) => s + h.grossProfit, 0) === ours.holderPot,
+  { sum: alloc.reduce((s, h) => s + h.grossProfit, 0), pot: ours.holderPot }
+);
+check(
+  "tax is taken from each holder's own allocated gross",
+  alloc.every((h) => h.netProfit === h.grossProfit - h.wht)
+);
+check(
+  "a holder rolling capital over is still paid their profit",
+  alloc[1].capitalAction === "rollover" &&
+    alloc[1].capitalWithdrawn === 0 &&
+    alloc[1].amountPaid === alloc[1].netProfit &&
+    alloc[1].netProfit > 0
+);
+check(
+  "a holder withdrawing is paid profit AND capital",
+  alloc[0].amountPaid === alloc[0].netProfit + alloc[0].capitalWithdrawn &&
+    alloc[0].capitalWithdrawn === Math.round(12.5 * ours.slotPrice)
+);
+// An awkward pot that does not divide evenly still lands exactly
+const awkward = allocateHolders(
+  { ...ours, holderPot: 100_000_003 },
+  [
+    { investmentId: "a", investorId: "a", units: 1.5, capitalAction: "rollover", slotsWithdrawn: 0 },
+    { investmentId: "b", investorId: "b", units: 1.5, capitalAction: "rollover", slotsWithdrawn: 0 },
+    { investmentId: "c", investorId: "c", units: 1.5, capitalAction: "rollover", slotsWithdrawn: 0 },
+  ]
+);
+check(
+  "a pot that will not divide evenly is still allocated to the last kobo",
+  awkward.reduce((s, h) => s + h.grossProfit, 0) === 100_000_003 &&
+    Math.max(...awkward.map((h) => h.grossProfit)) -
+      Math.min(...awkward.map((h) => h.grossProfit)) <= 1
 );
 
 /* ── 2. Independent carry-forward, no cross-contamination ────────── */

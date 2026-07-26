@@ -338,11 +338,13 @@ function mergeRows(rows: MonthRowInput[]): Map<string, MonthRowInput> {
 
 export function compute(input: CycleInput): CycleResult {
   const slotPrice = int(input.slotPrice);
-  const slots = Math.max(0, int(input.slots));
-  const capital = slotPrice * slots;
+  // Slots are NOT whole numbers. The portal has held half slots since
+  // migration 004 and investments.units is NUMERIC(12,2).
+  const slots = Math.max(0, num(input.slots));
+  const capital = Math.round(slotPrice * slots);
   const invRatio = num(input.ratio) / 100;
   const whtRate = num(input.wht) / 100;
-  const withdraw = Math.min(slots, Math.max(0, int(input.withdrawSlots)));
+  const withdraw = Math.min(slots, Math.max(0, num(input.withdrawSlots)));
 
   const products = resolveProducts(input);
   // Each product carries its own stock and its own cost price forward
@@ -506,6 +508,9 @@ export function compute(input: CycleInput): CycleResult {
   // The two pots are split so they add back to the profit exactly.
   const holderPot = isLoss ? profit : Math.round(profit * invRatio);
   const mudaribPot = isLoss ? 0 : profit - holderPot;
+  // Per-slot figures are a RATE shown to investors, rounded for
+  // display. Individual holders are paid from allocateHolders(),
+  // which divides the pot exactly — never slots × a rounded rate.
   const grossPerSlot = slots > 0 ? Math.round(holderPot / slots) : 0;
   const whtPerSlot = grossPerSlot > 0 ? Math.round(grossPerSlot * whtRate) : 0;
   const netPerSlot = grossPerSlot - whtPerSlot;
@@ -545,7 +550,12 @@ export function compute(input: CycleInput): CycleResult {
     endCash: last.cash,
     endStock: last.stockValue,
     endUnits: last.unitsLeft,
-    cashNeeded: netPerSlot * slots + withdraw * slotPrice,
+    // Every investor is paid their profit, whatever they do with
+    // their capital, so the whole investor pot leaves the business —
+    // the withheld portion as a remittance rather than to the
+    // investor, but it leaves all the same. Capital leaves only for
+    // the slots being withdrawn.
+    cashNeeded: Math.round(holderPot + withdraw * slotPrice),
     invRatio: num(input.ratio),
   };
 }
@@ -727,12 +737,114 @@ export function investorView(cycle: CycleResult): InvestorCycleView {
   };
 }
 
+/* ── Per-holder allocation ───────────────────────────────────────── */
+
+export type HolderInput = {
+  investmentId: string;
+  investorId: string;
+  /** May be a half slot — investments.units is NUMERIC(12,2) */
+  units: number;
+  /** Capital only: profit is ALWAYS paid out */
+  capitalAction: "withdraw" | "rollover" | "partial";
+  slotsWithdrawn: number;
+};
+
+export type HolderAllocation = {
+  investmentId: string;
+  investorId: string;
+  units: number;
+  capital: number;
+  grossProfit: number;
+  wht: number;
+  netProfit: number;
+  capitalAction: "withdraw" | "rollover" | "partial";
+  slotsWithdrawn: number;
+  capitalWithdrawn: number;
+  /** What actually moves: profit always, plus withdrawn capital */
+  amountPaid: number;
+};
+
+/**
+ * Divide the investor pot across holders EXACTLY.
+ *
+ * With fractional units and integer kobo, `round(perSlot × units)` per
+ * holder does not add back to the pot. The residual is a few kobo, and
+ * it has to go somewhere deliberate rather than falling out of a
+ * floating-point comparison. Largest remainder: each holder takes the
+ * floor of their exact share, then the leftover kobo go one at a time
+ * to the largest fractional remainders. Nobody is systematically
+ * shortchanged and the total is exact.
+ *
+ * This mirrors declare_cycle_profit in migration 018 — the same method
+ * on both sides, so the report and the portal cannot disagree.
+ *
+ * Tax is computed on each holder's ALLOCATED gross, not on the pot
+ * before allocation, so the amount remitted for an investor matches
+ * the amount on their statement.
+ */
+export function allocateHolders(
+  cycle: CycleResult,
+  holders: HolderInput[],
+  whtRate = cycle.slots > 0 && cycle.grossPerSlot > 0
+    ? cycle.whtPerSlot / cycle.grossPerSlot
+    : 0
+): HolderAllocation[] {
+  const totalUnits = holders.reduce((s, h) => s + num(h.units), 0);
+  const pot = cycle.holderPot;
+
+  if (holders.length === 0) return [];
+
+  const exact = holders.map((h) =>
+    totalUnits > 0 ? (pot * num(h.units)) / totalUnits : 0
+  );
+  const gross = exact.map(Math.floor);
+  let leftover = pot - gross.reduce((s, g) => s + g, 0);
+  const byRemainder = exact
+    .map((e, i) => ({ i, r: e - Math.floor(e) }))
+    .sort((a, b) => b.r - a.r);
+  for (let k = 0; k < byRemainder.length && leftover > 0; k++) {
+    gross[byRemainder[k].i] += 1;
+    leftover -= 1;
+  }
+
+  const out = holders.map((h, i) => {
+    const g = gross[i];
+    const wht = g > 0 ? Math.round(g * whtRate) : 0;
+    const net = g - wht;
+    const capital = Math.round(num(h.units) * cycle.slotPrice);
+    const capitalWithdrawn = Math.round(num(h.slotsWithdrawn) * cycle.slotPrice);
+    return {
+      investmentId: h.investmentId,
+      investorId: h.investorId,
+      units: num(h.units),
+      capital,
+      grossProfit: g,
+      wht,
+      netProfit: net,
+      capitalAction: h.capitalAction,
+      slotsWithdrawn: num(h.slotsWithdrawn),
+      capitalWithdrawn,
+      // Profit is paid whatever they decide about capital
+      amountPaid: net + capitalWithdrawn,
+    };
+  });
+
+  // Fail loudly rather than silently absorbing a difference
+  const sum = out.reduce((s, h) => s + h.grossProfit, 0);
+  if (sum !== pot) {
+    throw new Error(
+      `Holder allocation does not add up: holders total ${sum} kobo, investor pot is ${pot} kobo`
+    );
+  }
+  return out;
+}
+
 /** Per-holder figures — derived, never stored */
 export function holderFigures(
   cycle: CycleResult,
   holding: { slots: number }
 ): { theirCapital: number; theirProfit: number; theirTotal: number } {
-  const theirCapital = holding.slots * cycle.slotPrice;
-  const theirProfit = holding.slots * cycle.netPerSlot;
+  const theirCapital = Math.round(holding.slots * cycle.slotPrice);
+  const theirProfit = Math.round(holding.slots * cycle.netPerSlot);
   return { theirCapital, theirProfit, theirTotal: theirCapital + theirProfit };
 }

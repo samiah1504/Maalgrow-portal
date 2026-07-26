@@ -1,19 +1,23 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { CycleEditor } from "./_cycle-editor";
-import { emptyDraft, fromSavedCycle, type Draft } from "@/lib/mudarabah/editor";
+import {
+  draftFromLedger,
+  termsFromLedger,
+  type LedgerPayload,
+} from "@/lib/mudarabah/editor";
 import type { SettlementComputed, SettlementProduct } from "@/lib/mudarabah/figures";
 import { mudarabahDb } from "@/lib/mudarabah/db";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Mudarabah Cycle | Admin" };
+export const metadata: Metadata = { title: "Mudarabah Ledger | Admin" };
 export const revalidate = 0;
 
 const ADMIN_ROLES = ["super_admin", "administrator"];
 
-type SavedCycle = Parameters<typeof fromSavedCycle>[0];
-
-export default async function MudarabahCyclePage({
+// The route id is the EXISTING cycle's id. There is no separate
+// Mudarabah cycle to address.
+export default async function MudarabahLedgerPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -32,26 +36,13 @@ export default async function MudarabahCyclePage({
     .single();
   if (!profile || !ADMIN_ROLES.includes(profile.role ?? "")) redirect("/admin");
 
-  // A brand new cycle: nothing to load
-  if (id === "new") {
-    return <CycleEditor initialDraft={emptyDraft()} settlement={null} settledProducts={[]} />;
-  }
-
   const db = mudarabahDb(await createAdminClient());
-  const { data: saved } = await db.rpc("mudarabah_get_cycle", { p_cycle_id: id });
-  if (!saved) notFound();
+  const { data: raw } = await db.rpc("mudarabah_get_ledger", { p_cycle_id: id });
+  if (!raw) notFound();
 
-  // How many slots are withdrawing capital at maturity
-  const { data: holdings } = await db
-    .from("mudarabah_holdings")
-    .select("slots, capital_action")
-    .eq("cycle_id", id);
-
-  const withdrawSlots = (holdings ?? [])
-    .filter((h) => h.capital_action === "withdraw")
-    .reduce((s, h) => s + Number(h.slots), 0);
-
-  const draft: Draft = fromSavedCycle(saved as unknown as SavedCycle, withdrawSlots);
+  const payload = raw as unknown as LedgerPayload;
+  const draft = draftFromLedger(payload);
+  const terms = termsFromLedger(payload);
 
   // A settled cycle shows its FROZEN figures, never a fresh calculation
   let settlement: {
@@ -70,23 +61,16 @@ export default async function MudarabahCyclePage({
       .maybeSingle();
 
     if (row) {
-      const r = row as unknown as {
-        id: string;
-        settled_at: string;
-        engine_version: string;
-        computed: SettlementComputed;
-      };
-
       settlement = {
-        settledAt: r.settled_at,
-        engineVersion: r.engine_version,
-        computed: r.computed,
+        settledAt: row.settled_at,
+        engineVersion: row.engine_version,
+        computed: row.computed as SettlementComputed,
       };
 
       const { data: prods } = await db
         .from("mudarabah_settlement_products")
         .select("product_key, product_name, units_bought, units_sold, units_left, revenue, cogs, gross, gross_margin")
-        .eq("settlement_id", r.id);
+        .eq("settlement_id", row.id);
 
       settledProducts = (prods ?? []).map((p) => ({
         productId: p.product_key,
@@ -105,6 +89,8 @@ export default async function MudarabahCyclePage({
   return (
     <CycleEditor
       initialDraft={draft}
+      terms={terms}
+      hasLedger={payload.hasLedger}
       settlement={settlement}
       settledProducts={settledProducts}
     />
