@@ -30,6 +30,7 @@ import {
   renderReportDocument,
   type CreditNoteData,
 } from "../src/lib/mudarabah/report-html";
+import { inlineReportFonts } from "../src/lib/mudarabah/report-assets";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -166,6 +167,70 @@ check("no unit cost appears", !leakedCost, leakedCost);
 check(
   "the only product wording is the cycle's category",
   html.includes("home furniture")
+);
+
+/* ── 1b. The page adds up ────────────────────────────────────────── */
+
+/**
+ * An investor WILL do the subtraction. Every figure printed on page 2
+ * has to reconcile against the figures printed beside it — not merely
+ * be correct in kobo underneath. Parse the naira back out of the
+ * rendered document and check the arithmetic as a reader would.
+ */
+function nairaAfter(doc: string, label: string): number | null {
+  // …<div class="k">LABEL</div><div class="v">−₦1,234</div>…
+  const re = new RegExp(
+    `<div class="k">${label}</div><div class="v">(−?)₦([\\d,]+)</div>`
+  );
+  const m = re.exec(doc);
+  if (!m) return null;
+  return (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, ""));
+}
+
+const sales = nairaAfter(html, "Total sales");
+const cogs = nairaAfter(html, "Cost of the goods sold");
+const running = nairaAfter(html, "Running costs");
+const unaccounted = nairaAfter(html, "Stock unaccounted for") ?? 0;
+const netShown = nairaAfter(html, "Net profit");
+
+check(
+  "the cycle summary states sales, its costs and the profit",
+  sales !== null && cogs !== null && running !== null && netShown !== null,
+  { sales, cogs, running, unaccounted, netShown }
+);
+check(
+  "and those figures subtract to exactly the profit printed beside them",
+  sales! + cogs! + running! + unaccounted === netShown!,
+  { sales, cogs, running, unaccounted, netShown, sum: sales! + cogs! + running! + unaccounted }
+);
+
+// Each month card must reconcile the same way, and the months must add
+// up to the cycle total — no figure on the page is orphaned.
+const cards = html.split('<div class="mcard">').slice(1);
+const cardSums = cards.map((c) => {
+  const money = [...c.matchAll(/<span class="val">(−?)₦([\d,]+)<\/span>/g)].map(
+    (m) => (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, ""))
+  );
+  // last is the month's net; the ones before it are its parts
+  const net = money[money.length - 1];
+  const parts = money.slice(0, -1).reduce((t, v) => t + v, 0);
+  return { net, parts };
+});
+check("there are three month cards", cardSums.length === 3, cardSums.length);
+check(
+  "each month card adds up on its own",
+  cardSums.every((c) => c.parts === c.net),
+  cardSums
+);
+check(
+  "the months add up to the cycle total",
+  cardSums.reduce((t, c) => t + c.net, 0) === netShown,
+  { months: cardSums.map((c) => c.net), cycle: netShown }
+);
+
+check(
+  "month headings avoid Marcellus numerals, which are ambiguous",
+  html.includes("Month one") && html.includes("Month three") && !html.includes("Month 1")
 );
 
 /* ── 2. Wrong cycle ──────────────────────────────────────────────── */
@@ -425,6 +490,21 @@ check(
    "ibm-plex-mono-latin-ext-600"].every((f) => html.includes(f))
 );
 check("money is written in naira", html.includes("₦"));
+
+// A document saved to disk, mailed, or handed to a headless browser as
+// a file:// URL cannot resolve /fonts/… — it falls back silently and
+// the file misrepresents what was checked.
+const inlined = inlineReportFonts(html);
+check(
+  "every face can be embedded, so a saved document is self-contained",
+  inlined.missing.length === 0 && inlined.inlined.length === 13,
+  { inlined: inlined.inlined.length, missing: inlined.missing }
+);
+check(
+  "and the embedded document keeps no path-relative font reference",
+  !inlined.html.includes("url('/fonts/") &&
+    inlined.html.includes("data:font/woff2;base64,")
+);
 
 console.log(`\n${failures === 0 ? "All report tests passed." : `${failures} failed.`}`);
 process.exit(failures === 0 ? 0 : 1);

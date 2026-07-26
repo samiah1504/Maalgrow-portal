@@ -46,6 +46,21 @@ function longDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
+/**
+ * "Month one", not "Month 1".
+ *
+ * Month headings are set in Marcellus, whose figures are its only set —
+ * `lining-nums` changes nothing because there is nothing to change to.
+ * Its 1 is a bare vertical stroke that reads as a capital I at 11pt, and
+ * its 3 has a flat top. Spelling the ordinal removes the ambiguity
+ * without moving the heading to another typeface. Numerals anywhere else
+ * in this document are set in the mono face, which is unambiguous.
+ */
+function monthWord(i: number): string {
+  const words = ["one", "two", "three", "four", "five", "six"];
+  return words[i - 1] ? `Month ${words[i - 1]}` : `Month ${i}`;
+}
+
 /** Every value that reaches the document goes through this */
 function esc(s: unknown): string {
   return String(s ?? "")
@@ -210,6 +225,28 @@ export const REPORT_CSS = `
 }
 .mgr .tot .k { font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
 .mgr .tot .v { font-family: var(--font-mono); font-size: 12pt; margin-top: 1mm; color: var(--plum-800); }
+
+/* The reconciliation: the deductions sit in one row and the result
+   spans the width beneath them, so the subtraction reads as a
+   subtraction rather than as six unrelated boxes. */
+.mgr .recon.c4 { grid-template-columns: repeat(4, 1fr); }
+.mgr .tot.neg .v { color: #9B2C2C; }
+.mgr .tot.result {
+  grid-column: 1 / -1;
+  display: flex; align-items: baseline; justify-content: space-between;
+  background: var(--plum); border-color: var(--plum);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .tot.result .k { color: rgba(255,255,255,.75); }
+.mgr .tot.result .v { color: #fff; margin-top: 0; font-size: 14pt; }
+.mgr .qty {
+  font-size: 9pt; color: var(--ink-soft); margin-bottom: 3mm;
+}
+.mgr .qty b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+.mgr .rounding {
+  font-size: 8.5pt; line-height: 1.6; color: var(--ink-soft);
+  margin: 3mm 0 0;
+}
 
 /*
  * Page 2 carries three month cards and a six-figure summary, and it
@@ -446,35 +483,62 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
   const du = (v: number) =>
     perSlot && f.totalUnits > 0 ? Math.round((v / f.totalUnits) * 10) / 10 : v;
 
-  const months = f.months
+  // Every figure on this page is the figure the reader SEES, added up.
+  // Rounding each month to the naira and then printing an unrounded
+  // total would leave a statement whose own columns disagree by a naira
+  // — which reads as an error even when the kobo underneath are exact.
+  const shown = f.months.map((m) => ({
+    i: m.i,
+    unitsBought: du(m.unitsBought),
+    unitsSold: du(m.unitsSold),
+    revenue: d(m.revenue),
+    cogs: d(m.revenue - m.net - m.expenses - m.lostValue),
+    expenses: d(m.expenses),
+    lost: d(m.lostValue),
+  }));
+  const sum = (pick: (s: (typeof shown)[number]) => number) =>
+    shown.reduce((t, s) => t + pick(s), 0);
+
+  const total = {
+    unitsBought: Math.round(sum((s) => s.unitsBought) * 10) / 10,
+    unitsSold: Math.round(sum((s) => s.unitsSold) * 10) / 10,
+    unitsLeft: du(f.unitsLeft),
+    revenue: sum((s) => s.revenue),
+    cogs: sum((s) => s.cogs),
+    expenses: sum((s) => s.expenses),
+    lost: sum((s) => s.lost),
+  };
+  const totalNet = total.revenue - total.cogs - total.expenses - total.lost;
+
+  const months = shown
     .map(
       (m) => `<div class="mcard">
-    <div class="h">Month ${m.i}</div>
+    <div class="h">${monthWord(m.i)}</div>
     <div class="b">
       <div class="mline"><span>Products purchased</span><span class="val">${units(
-        du(m.unitsBought)
+        m.unitsBought
       )}</span></div>
       <div class="mline"><span>Products sold</span><span class="val">${units(
-        du(m.unitsSold)
+        m.unitsSold
       )}</span></div>
       <div class="mline"><span>Sales</span><span class="val">${naira(
-        d(m.revenue)
+        m.revenue
       )}</span></div>
       <div class="mline minus"><span>Cost of the goods sold</span><span class="val">−${naira(
-        d(m.revenue - m.net - m.expenses - m.lostValue)
+        m.cogs
       )}</span></div>
       <div class="mline minus"><span>Running costs — advertising, delivery, bank charges and other</span><span class="val">−${naira(
-        d(m.expenses)
+        m.expenses
       )}</span></div>
       ${
-        m.lostValue !== 0
+        m.lost !== 0
           ? `<div class="mline minus"><span>Stock unaccounted for</span><span class="val">−${naira(
-              d(m.lostValue)
+              m.lost
             )}</span></div>`
           : ""
       }
       <div class="mline net"><span>Net profit for the month</span><span class="val">${naira(
-        d(m.net)
+        m.revenue - m.cogs - m.expenses - m.lost
       )}</span></div>
     </div>
   </div>`
@@ -488,24 +552,38 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
     }</span>
   </h2>
 
-  <div class="totals">
-    <div class="tot"><div class="k">Products purchased</div><div class="v">${units(
-      du(f.unitsBought)
-    )}</div></div>
-    <div class="tot"><div class="k">Products sold</div><div class="v">${units(
-      du(f.unitsSold)
-    )}</div></div>
-    <div class="tot"><div class="k">Still in stock</div><div class="v">${units(
-      du(f.unitsLeft)
-    )}</div></div>
-    <div class="tot"><div class="k">Total cost of purchase</div><div class="v">${naira(
-      d(f.purchaseCost)
-    )}</div></div>
+  <div class="qty">Products purchased <b>${units(
+    total.unitsBought
+  )}</b> · sold <b>${units(total.unitsSold)}</b> · still in stock <b>${units(
+    total.unitsLeft
+  )}</b></div>
+
+  <!--
+    These four cells SUBTRACT to the fifth. The earlier version put
+    total sales beside the total cost of PURCHASE, which are not the two
+    figures profit is the difference of — stock is bought before it is
+    sold — so anyone who did the subtraction got a number that was not
+    the profit printed next to it, and concluded we could not add up.
+  -->
+  <div class="totals recon ${total.lost !== 0 ? "c4" : ""}">
     <div class="tot"><div class="k">Total sales</div><div class="v">${naira(
-      d(f.revenue)
+      total.revenue
     )}</div></div>
-    <div class="tot"><div class="k">Net profit</div><div class="v">${naira(
-      d(f.profit)
+    <div class="tot neg"><div class="k">Cost of the goods sold</div><div class="v">−${naira(
+      total.cogs
+    )}</div></div>
+    <div class="tot neg"><div class="k">Running costs</div><div class="v">−${naira(
+      total.expenses
+    )}</div></div>
+    ${
+      total.lost !== 0
+        ? `<div class="tot neg"><div class="k">Stock unaccounted for</div><div class="v">−${naira(
+            total.lost
+          )}</div></div>`
+        : ""
+    }
+    <div class="tot result"><div class="k">Net profit</div><div class="v">${naira(
+      totalNet
     )}</div></div>
   </div>
 
@@ -535,10 +613,23 @@ function page3(f: ReportFigures, cycle: ReportCycle): string {
     <div class="tot"><div class="k">Slots in the cycle</div><div class="v">${units(
       f.totalUnits
     )}</div></div>
-    <div class="tot"><div class="k">Net profit</div><div class="v">${naira(
+    <div class="tot"><div class="k">Net profit for the whole cycle</div><div class="v">${naira(
       f.profit
     )}</div></div>
   </div>
+  ${
+    // These are WHOLE-CYCLE figures; the previous page is per slot and
+    // rounded to the naira. Multiply one by the slot count and you land
+    // a few naira from the other — say so, rather than let a reader
+    // find the gap and wonder which figure to trust.
+    cycle.discloseMode === "perSlot" && f.totalUnits > 0
+      ? `<p class="rounding">The month-by-month figures on the previous page are shown
+      per slot and rounded to the nearest naira, so multiplying them by the
+      ${units(f.totalUnits)} slots in the cycle lands within a few naira of the totals
+      above rather than exactly on them. Nothing is lost in the rounding: every payment
+      is worked out from the exact figures, to the kobo.</p>`
+      : ""
+  }
 
   <div class="panel">
     <h3>Your capital and your profit are two different things</h3>
