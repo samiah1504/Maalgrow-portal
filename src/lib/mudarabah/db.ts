@@ -153,6 +153,8 @@ export type WhtCreditNoteRow = {
   id: string;
   reference: string;
   cycle_id: string;
+  settlement_id: string;
+  remittance_id: string | null;
   investment_id: string;
   investor_id: string;
   investor_name: string;
@@ -170,6 +172,18 @@ export type WhtCreditNoteRow = {
   filed_on: string | null;
   issued_at: string;
   reissue_count: number;
+};
+
+/** A filing with the tax authority. One filing may cover several cycles. */
+export type WhtRemittanceRow = {
+  id: string;
+  reference: string;
+  remitted_on: string;
+  amount: number;
+  authority: string | null;
+  notes: string | null;
+  recorded_by: string | null;
+  recorded_at: string;
 };
 
 /** Read-only: the few investor columns a statement needs to be addressed. */
@@ -216,6 +230,8 @@ export type MudarabahDatabase = {
       wht_credit_notes: Table<WhtCreditNoteRow>;
       mudarabah_statements: Table<MudarabahStatementRow>;
       investors: Table<InvestorRow>;
+      wht_remittances: Table<WhtRemittanceRow>;
+      wht_remittance_cycles: Table<{ remittance_id: string; cycle_id: string }>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -263,10 +279,33 @@ export type MudarabahDatabase = {
       };
       mudarabah_issue_credit_notes: {
         Args: {
-          p_settlement_id: string;
-          p_remittance_reference: string;
-          p_filed_on?: string;
+          p_remittance_id: string;
+          p_cycle_id?: string | null;
+          p_investment_id?: string | null;
         };
+        Returns: unknown;
+      };
+      mudarabah_create_remittance: {
+        Args: {
+          p_reference: string;
+          p_remitted_on: string;
+          p_amount: number;
+          p_cycle_ids: string[];
+          p_authority?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      mudarabah_issuance_preview: {
+        Args: { p_remittance_id: string };
+        Returns: unknown;
+      };
+      mudarabah_wht_overview: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
+      mudarabah_my_credit_note: {
+        Args: { p_cycle_id: string };
         Returns: unknown;
       };
       mudarabah_queue_statements: {

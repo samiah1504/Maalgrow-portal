@@ -389,7 +389,7 @@ END $$;
 -- T10: a cycle with credit notes issued cannot be reopened
 -- ------------------------------------------------------------
 DO $$
-DECLARE v_settlement UUID; v_ok BOOLEAN := FALSE; v_result JSONB;
+DECLARE v_settlement UUID; v_ok BOOLEAN := FALSE; v_result JSONB; v_rem UUID;
 BEGIN
   SET LOCAL test.uid = 'a0000000-0000-0000-0000-0000000000e1';
 
@@ -398,7 +398,12 @@ BEGIN
   SELECT id INTO v_settlement FROM mudarabah_settlements
   WHERE cycle_id = '40000000-0000-0000-0000-0000000000e1' AND is_current;
 
-  v_result := mudarabah_issue_credit_notes(v_settlement, 'FIRS/2026/0001', '2026-05-14');
+  -- Since 023 a note is issued against a recorded filing, never a
+  -- reference typed into a box.
+  v_rem := mudarabah_create_remittance(
+    'FIRS/2026/0001', '2026-05-14', 1776112,
+    ARRAY['40000000-0000-0000-0000-0000000000e1']::UUID[]);
+  v_result := mudarabah_issue_credit_notes(v_rem);
 
   IF (v_result->>'issued')::INT <> 2 THEN
     RAISE EXCEPTION 'TEST FAIL T10: expected 2 notes (the third has no tax number), got %',

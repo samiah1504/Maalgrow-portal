@@ -28,7 +28,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const cycleId = new URL(request.url).searchParams.get("cycleId");
+    const url = new URL(request.url);
+    const cycleId = url.searchParams.get("cycleId");
+    // "note" serves the withholding tax credit note. Same route, same
+    // check, same storage — a second route would be a second place for
+    // the authorisation to be got wrong.
+    const kind = url.searchParams.get("doc") === "note" ? "credit_note" : "statement";
     if (!cycleId) {
       return NextResponse.json({ error: "cycleId is required" }, { status: 400 });
     }
@@ -36,16 +41,43 @@ export async function GET(request: Request) {
     // The SESSION-scoped client. Using the admin client here would
     // bypass every policy and make the id in the query authoritative.
     const db = mudarabahDb(supabase);
-    const { data, error } = await db.rpc("mudarabah_my_statement", {
-      p_cycle_id: cycleId,
-    });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
 
-    const row = (Array.isArray(data) ? data[0] : data) as
-      | { state: string; storage_path: string | null }
-      | undefined;
+    let row: { state: string; storage_path: string | null } | undefined;
+
+    if (kind === "credit_note") {
+      // The note has to exist before its document can. Scoped by
+      // get_my_investor_id(), like everything else they read.
+      const { data: note, error: noteErr } = await db.rpc("mudarabah_my_credit_note", {
+        p_cycle_id: cycleId,
+      });
+      if (noteErr) {
+        return NextResponse.json({ error: noteErr.message }, { status: 400 });
+      }
+      const n = (Array.isArray(note) ? note[0] : note) as
+        | { investment_id: string }
+        | undefined;
+      if (!n) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const { data: doc } = await db
+        .from("mudarabah_statements")
+        .select("state, storage_path")
+        .eq("cycle_id", cycleId)
+        .eq("investment_id", n.investment_id)
+        .eq("kind", "credit_note")
+        .maybeSingle();
+      row = doc ?? { state: "pending", storage_path: null };
+    } else {
+      const { data, error } = await db.rpc("mudarabah_my_statement", {
+        p_cycle_id: cycleId,
+      });
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      row = (Array.isArray(data) ? data[0] : data) as
+        | { state: string; storage_path: string | null }
+        | undefined;
+    }
 
     // Not theirs, or no such cycle. The same answer either way: an
     // investor must not be able to learn that a cycle exists by the
@@ -59,7 +91,9 @@ export async function GET(request: Request) {
         {
           state: row.state,
           message:
-            "Your statement is being prepared. It will be available here shortly.",
+            kind === "credit_note"
+              ? "Your credit note is being prepared. It will be available here shortly."
+              : "Your statement is being prepared. It will be available here shortly.",
         },
         { status: 202 }
       );
@@ -79,22 +113,23 @@ export async function GET(request: Request) {
 
     const filename = statementFilename(
       String(seriesRow?.name ?? ""),
-      cycleRow?.cycle_label ?? "Cycle"
+      cycleRow?.cycle_label ?? "Cycle",
+      kind === "credit_note" ? "Credit-Note" : "Statement"
     );
 
-    const url = await signedStatementUrl(
+    const signed = await signedStatementUrl(
       await createAdminClient(),
       row.storage_path,
       filename
     );
-    if (!url) {
+    if (!signed) {
       return NextResponse.json(
         { error: "Could not prepare the download. Please try again." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ url, filename });
+    return NextResponse.json({ url: signed, filename });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Could not fetch the statement" },

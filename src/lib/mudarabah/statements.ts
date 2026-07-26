@@ -17,7 +17,7 @@
 
 import { mudarabahDb } from "./db";
 import { figuresFromSettlement, type ReportCycle, type ReportHolding } from "./report-figures";
-import { renderReportDocument } from "./report-html";
+import { renderCreditNoteDocument, renderReportDocument, type CreditNoteData } from "./report-html";
 import { htmlToPdf, statementStoragePath } from "./pdf";
 import type { SettlementComputed } from "./figures";
 
@@ -189,6 +189,125 @@ export async function generateStatements(
       });
       result.failed++;
       result.errors.push({ investorName: name, message });
+    }
+  }
+
+  return result;
+}
+
+/* ── Credit notes ────────────────────────────────────────────────── */
+
+/**
+ * Build the PDF for every credit note in a cycle that does not have
+ * one yet.
+ *
+ * Same rule as the statement: generated once at issuance, stored, and
+ * the same file downloaded and emailed thereafter. The document is
+ * rendered from the FROZEN NOTE — every figure on it was fixed when
+ * the note was issued, and nothing here recomputes any of them.
+ */
+export async function generateCreditNotes(
+  adminClient: unknown,
+  cycleId: string
+): Promise<GenerationResult> {
+  const db = mudarabahDb(adminClient);
+  const storage = (adminClient as {
+    storage: {
+      from: (b: string) => {
+        upload: (
+          p: string,
+          body: Buffer,
+          o: { contentType: string; upsert: boolean }
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  }).storage;
+
+  const { data: notes } = await db
+    .from("wht_credit_notes")
+    .select(
+      "id, reference, cycle_id, settlement_id, investment_id, investor_id, investor_name, investor_address, investor_tin, period_start, period_end, gross_profit, wht_rate, wht_amount, net_paid, deducted_on, remittance_reference, filed_on"
+    )
+    .eq("cycle_id", cycleId);
+
+  const rows = notes ?? [];
+  const result: GenerationResult = { total: rows.length, generated: 0, failed: 0, errors: [] };
+  if (rows.length === 0) return result;
+
+  const { data: issuer } = await db
+    .from("wht_issuer_settings")
+    .select("company_name, company_address, company_tin, signatory_name, signatory_title")
+    .eq("id", 1)
+    .maybeSingle();
+
+  const { data: cycleRow } = await db
+    .from("cycles")
+    .select("cycle_label, series_id")
+    .eq("id", cycleId)
+    .maybeSingle();
+  const { data: seriesRow } = await db
+    .from("series")
+    .select("name")
+    .eq("id", cycleRow?.series_id ?? "")
+    .maybeSingle();
+
+  for (const n of rows) {
+    try {
+      const note: CreditNoteData = {
+        reference: n.reference,
+        issuer: {
+          companyName: issuer?.company_name ?? "MaalGrow",
+          companyAddress: issuer?.company_address ?? null,
+          companyTin: issuer?.company_tin ?? null,
+          signatoryName: issuer?.signatory_name ?? null,
+          signatoryTitle: issuer?.signatory_title ?? null,
+        },
+        investorName: n.investor_name,
+        investorAddress: n.investor_address,
+        investorTin: n.investor_tin,
+        seriesName: String(seriesRow?.name ?? ""),
+        cycleLabel: cycleRow?.cycle_label ?? "",
+        periodStart: n.period_start,
+        periodEnd: n.period_end,
+        grossProfit: Number(n.gross_profit),
+        // 0–1 in the column and in CreditNoteData alike
+        whtRate: Number(n.wht_rate),
+        whtAmount: Number(n.wht_amount),
+        netPaid: Number(n.net_paid),
+        deductedOn: n.deducted_on,
+        remittanceReference: n.remittance_reference,
+        filedOn: n.filed_on,
+      };
+
+      const pdf = await htmlToPdf(renderCreditNoteDocument(note));
+      const path = statementStoragePath(cycleId, n.investment_id, "credit_note");
+      const { error: upErr } = await storage.from(STATEMENT_BUCKET).upload(path, pdf, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+      if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
+
+      // The row is created here rather than queued at settlement:
+      // a note only exists once it has been issued.
+      await db.from("mudarabah_statements").upsert(
+        {
+          cycle_id: cycleId,
+          settlement_id: n.settlement_id,
+          investment_id: n.investment_id,
+          investor_id: n.investor_id,
+          kind: "credit_note",
+          storage_path: path,
+          state: "ready",
+          bytes: pdf.length,
+          generated_at: new Date().toISOString(),
+        },
+        { onConflict: "settlement_id,investment_id,kind" }
+      );
+      result.generated++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      result.failed++;
+      result.errors.push({ investorName: n.investor_name, message });
     }
   }
 

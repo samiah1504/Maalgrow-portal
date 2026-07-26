@@ -55,11 +55,12 @@ export function CycleStatements({ statements }: { statements: CycleStatement[] }
 function StatementCard({ statement: s }: { statement: CycleStatement }) {
   const [loading, setLoading] = useState(false);
 
-  const download = async () => {
+  const download = async (doc?: "note") => {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/investor/statement?cycleId=${encodeURIComponent(s.cycleId)}`
+        `/api/investor/statement?cycleId=${encodeURIComponent(s.cycleId)}` +
+          (doc ? `&doc=${doc}` : "")
       );
       const json = await res.json();
 
@@ -129,11 +130,18 @@ function StatementCard({ statement: s }: { statement: CycleStatement }) {
           {s.capitalAction === "partial" && ` (${s.slotsWithdrawn} slots)`}.
         </p>
 
-        {s.wht > 0 && <TaxState state={s.whtState} amount={s.wht} />}
+        {s.wht > 0 && (
+          <TaxState
+            state={s.whtState}
+            amount={s.wht}
+            onDownload={() => download("note")}
+            busy={loading}
+          />
+        )}
 
         <button
           type="button"
-          onClick={download}
+          onClick={() => download()}
           disabled={loading || !ready}
           className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary-700 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
         >
@@ -154,13 +162,34 @@ function StatementCard({ statement: s }: { statement: CycleStatement }) {
  * as money that vanished; each state says plainly what has happened
  * and what happens next.
  */
-function TaxState({ state, amount }: { state: string; amount: number }) {
+function TaxState({
+  state,
+  amount,
+  onDownload,
+  busy,
+}: {
+  state: string;
+  amount: number;
+  onDownload: () => void;
+  busy: boolean;
+}) {
   if (state === "certified") {
     return (
-      <p className="flex items-start gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
-        <ShieldCheck className="h-3.5 w-3.5 mt-px shrink-0" />
-        Your withholding tax credit note is ready.
-      </p>
+      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2 space-y-1.5">
+        <p className="flex items-start gap-1.5 text-[11px] text-emerald-700">
+          <ShieldCheck className="h-3.5 w-3.5 mt-px shrink-0" />
+          Your withholding tax credit note is ready.
+        </p>
+        <button
+          type="button"
+          onClick={onDownload}
+          disabled={busy}
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-emerald-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-emerald-800 disabled:opacity-50"
+        >
+          <Download className="h-3 w-3" />
+          Download credit note
+        </button>
+      </div>
     );
   }
   if (state === "remitted") {
