@@ -130,6 +130,42 @@ export type MudarabahCycleEventRow = {
   created_at: string;
 };
 
+/** A frozen credit note. The document renders this and computes nothing. */
+export type WhtCreditNoteRow = {
+  id: string;
+  reference: string;
+  cycle_id: string;
+  investment_id: string;
+  investor_id: string;
+  investor_name: string;
+  investor_address: string | null;
+  investor_tin: string | null;
+  period_start: string;
+  period_end: string;
+  gross_profit: number;
+  wht_rate: number;
+  wht_amount: number;
+  net_paid: number;
+  deducted_on: string;
+  remittance_reference: string | null;
+  remitted_at: string | null;
+  filed_on: string | null;
+  issued_at: string;
+  reissue_count: number;
+};
+
+/**
+ * Read-only, and only the columns the report needs. The maturity
+ * instruction is what decides whether an investor's capital continues
+ * — the ledger never records it, it only reads it.
+ */
+export type RolloverDecisionRow = {
+  investment_id: string;
+  source_cycle_id: string;
+  decision: string;
+  slots_to_withdraw: number | null;
+};
+
 type Table<Row> = {
   Row: Row;
   Insert: Partial<Row>;
@@ -149,6 +185,8 @@ export type MudarabahDatabase = {
       mudarabah_balance_entries: Table<MudarabahBalanceEntryRow>;
       mudarabah_cycle_events: Table<MudarabahCycleEventRow>;
       wht_issuer_settings: Table<WhtIssuerSettingsRow>;
+      rollover_decisions: Table<RolloverDecisionRow>;
+      wht_credit_notes: Table<WhtCreditNoteRow>;
     };
     Views: Record<string, never>;
     Functions: {
