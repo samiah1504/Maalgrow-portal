@@ -79,6 +79,7 @@ export async function PATCH(
         account_number,
         bvn,
         nin,
+        tin,
         kyc_status,
         kyc_notes,
         preferred_channel,
@@ -93,6 +94,8 @@ export async function PATCH(
       if (account_number !== undefined) investorUpdate.account_number = account_number?.trim() || null;
       if (bvn !== undefined) investorUpdate.bvn = bvn?.trim() || null;
       if (nin !== undefined) investorUpdate.nin = nin?.trim() || null;
+      // The tax number an administrator may fill in on an investor's behalf
+      if (tin !== undefined) investorUpdate.tin = tin?.trim() || null;
       if (kyc_status !== undefined) investorUpdate.kyc_status = kyc_status as InvestorUpdate["kyc_status"];
       if (kyc_notes !== undefined) investorUpdate.kyc_notes = kyc_notes?.trim() || null;
       if (preferred_channel !== undefined && ["sms", "whatsapp", "both"].includes(preferred_channel)) {

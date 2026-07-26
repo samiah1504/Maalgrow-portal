@@ -55,6 +55,8 @@ export type Database = {
           address: string | null;
           bvn: string | null;
           nin: string | null;
+          /** Tax identification number. Optional; used only for withholding tax credit notes. */
+          tin: string | null;
           bank_name: string | null;
           account_name: string | null;
           account_number: string | null;
@@ -86,6 +88,7 @@ export type Database = {
           address?: string | null;
           bvn?: string | null;
           nin?: string | null;
+          tin?: string | null;
           bank_name?: string | null;
           account_name?: string | null;
           account_number?: string | null;
@@ -107,6 +110,7 @@ export type Database = {
           address?: string | null;
           bvn?: string | null;
           nin?: string | null;
+          tin?: string | null;
           bank_name?: string | null;
           account_name?: string | null;
           account_number?: string | null;

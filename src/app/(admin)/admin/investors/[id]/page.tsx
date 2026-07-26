@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { CycleHistory } from "./_cycle-history";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -539,6 +540,9 @@ export default async function AdminInvestorDetailPage({
               );
             })
           )}
+
+          {/* Every settled cycle, read from the frozen snapshot */}
+          <CycleHistory investorId={investor.id} />
 
           {/* Outgoing payment requests (Profit/Capital returns) */}
           {investor.payment_requests.length > 0 && (

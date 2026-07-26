@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { mudarabahDb } from "@/lib/mudarabah/db";
 
 const ADMIN_ROLES = ["super_admin", "administrator", "finance"];
 
@@ -54,6 +55,26 @@ export async function POST(
       return NextResponse.json(
         { error: "total_expenses must be a non-negative number" },
         { status: 400 }
+      );
+    }
+
+    // A cycle with a trading ledger declares its profit by settling the
+    // ledger, which calls declare_cycle_profit itself with figures the
+    // engine produced. Accepting a hand-entered declaration as well
+    // would let whichever ran last silently overwrite the other.
+    const { data: ledger } = await mudarabahDb(supabase)
+      .from("mudarabah_ledgers")
+      .select("cycle_id")
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+
+    if (ledger) {
+      return NextResponse.json(
+        {
+          error:
+            "This cycle has a Mudarabah trading ledger. Declare its profit by settling the ledger, not by entering figures here.",
+        },
+        { status: 409 }
       );
     }
 

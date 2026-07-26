@@ -22,6 +22,7 @@ import {
   Lock,
   Plus,
   Save,
+  ShieldCheck,
   Trash2,
   Unlock,
 } from "lucide-react";
@@ -425,6 +426,17 @@ export function CycleEditor({
           </div>
         )}
 
+        {/* Settling is a page of its own: it previews every figure
+            that would be written before writing any of them. */}
+        {draft.status !== "settled" && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <Link href={`/admin/mudarabah/${draft.cycleId}/settle`} className="btn btn-primary">
+              <ShieldCheck className="h-4 w-4" />
+              Settle this cycle
+            </Link>
+          </div>
+        )}
+
         {/* ── 1. The cycle, read from the existing records ─────── */}
         <section className="panel">
           <div className="panel-head">
@@ -587,7 +599,11 @@ export function CycleEditor({
                           ? "capital out"
                           : h.capitalAction === "partial"
                           ? `${h.slotsWithdrawn} slot${h.slotsWithdrawn === 1 ? "" : "s"} out`
-                          : "capital continues"}
+                          : h.capitalAction === "rollover"
+                          ? "capital continues"
+                          : // Nobody has answered. Saying "capital continues"
+                            // here would read as a decision they never made.
+                            <span className="muted">no instruction yet</span>}
                       </td>
                     </tr>
                   ))
