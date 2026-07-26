@@ -408,13 +408,14 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------
--- Scenario 8: withholding tax credit notes
+-- Scenario 8: credit notes — only after the tax is filed, and
+-- only for investors who have a tax identification number
 -- ------------------------------------------------------------
 DO $$
 DECLARE
-  v_settle UUID; v_n INTEGER; v_again INTEGER;
-  v_ref TEXT; v_ref2 TEXT; v_amount BIGINT; v_amount2 BIGINT;
-  v_total BIGINT; v_declared BIGINT;
+  v_settle UUID; v_res JSONB; v_again JSONB;
+  v_ref TEXT; v_amount BIGINT; v_ref2 TEXT; v_amount2 BIGINT;
+  v_total BIGINT; v_declared BIGINT; v_ok BOOLEAN := FALSE;
 BEGIN
   SET LOCAL test.uid = 'a0000000-0000-0000-0000-0000000000f1';
 
@@ -422,40 +423,75 @@ BEGIN
   WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1'
   ORDER BY settled_at DESC LIMIT 1;
 
-  v_n := mudarabah_issue_credit_notes(v_settle);
-  IF v_n <> 2 THEN
-    RAISE EXCEPTION 'TEST FAIL S8: expected a note for each taxed holder, got %', v_n;
+  -- Issuing without a remittance reference is refused: a note must
+  -- never claim a filing that has not happened
+  BEGIN
+    PERFORM mudarabah_issue_credit_notes(v_settle, '');
+  EXCEPTION WHEN OTHERS THEN v_ok := TRUE;
+  END;
+  IF NOT v_ok THEN
+    RAISE EXCEPTION 'TEST FAIL S8: a credit note was issued before the tax was filed';
+  END IF;
+
+  -- Neither investor has a tax number yet, so nobody gets a note
+  v_res := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  IF (v_res->>'issued')::INT <> 0 OR (v_res->>'skipped_no_tin')::INT <> 2 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: expected nobody issued and 2 skipped, got %', v_res;
+  END IF;
+  IF EXISTS (SELECT 1 FROM wht_credit_notes) THEN
+    RAISE EXCEPTION 'TEST FAIL S8: a note was issued for an investor with no tax number';
+  END IF;
+
+  -- One investor fills in their tax number
+  UPDATE investors SET tin = '12345678-0001'
+  WHERE id = '20000000-0000-0000-0000-0000000000f1';
+
+  v_res := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  IF (v_res->>'issued')::INT <> 1 OR (v_res->>'skipped_no_tin')::INT <> 1 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: expected 1 issued and 1 still waiting, got %', v_res;
   END IF;
 
   SELECT reference, wht_amount INTO v_ref, v_amount
-  FROM wht_credit_notes
-  WHERE investor_id = '20000000-0000-0000-0000-0000000000f1';
+  FROM wht_credit_notes WHERE investor_id = '20000000-0000-0000-0000-0000000000f1';
 
-  -- Issuing again must not create a second note or change anything
-  v_again := mudarabah_issue_credit_notes(v_settle);
-  IF v_again <> 0 THEN
-    RAISE EXCEPTION 'TEST FAIL S8: reissuing created % new notes', v_again;
+  -- The filing details are on the note
+  IF NOT EXISTS (
+    SELECT 1 FROM wht_credit_notes
+    WHERE investor_id = '20000000-0000-0000-0000-0000000000f1'
+      AND remittance_reference = 'FIRS/2026/00123'
+      AND filed_on = '2026-04-30'
+      AND investor_tin = '12345678-0001'
+  ) THEN
+    RAISE EXCEPTION 'TEST FAIL S8: the filing details were not recorded on the note';
   END IF;
 
-  -- Recording the remittance is a REISSUE: same reference, same figures
-  PERFORM mudarabah_record_remittance(
-    (SELECT id FROM wht_credit_notes WHERE investor_id = '20000000-0000-0000-0000-0000000000f1'),
-    'FIRS/2026/00123');
+  -- Running it again issues nothing new and changes nothing
+  v_again := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  IF (v_again->>'issued')::INT <> 0 OR (v_again->>'already_issued')::INT <> 1 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: reissuing created a duplicate, got %', v_again;
+  END IF;
 
   SELECT reference, wht_amount INTO v_ref2, v_amount2
-  FROM wht_credit_notes
-  WHERE investor_id = '20000000-0000-0000-0000-0000000000f1';
-
+  FROM wht_credit_notes WHERE investor_id = '20000000-0000-0000-0000-0000000000f1';
   IF v_ref2 <> v_ref OR v_amount2 <> v_amount THEN
-    RAISE EXCEPTION 'TEST FAIL S8: a reissued note changed — ref % vs %, amount % vs %',
-      v_ref2, v_ref, v_amount2, v_amount;
-  END IF;
-  IF (SELECT reissue_count FROM wht_credit_notes
-      WHERE investor_id = '20000000-0000-0000-0000-0000000000f1') <> 1 THEN
-    RAISE EXCEPTION 'TEST FAIL S8: the reissue was not recorded as one';
+    RAISE EXCEPTION 'TEST FAIL S8: a reissued note changed';
   END IF;
 
-  -- The notes add up to what was declared
+  -- The readiness screen shows who is still waiting
+  IF (SELECT COUNT(*) FROM mudarabah_credit_note_readiness('40000000-0000-0000-0000-0000000000f1')
+      WHERE NOT has_tin) <> 1 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: readiness does not show who is missing a tax number';
+  END IF;
+
+  -- Once the second investor fills theirs in, they are caught up
+  UPDATE investors SET tin = '12345678-0002'
+  WHERE id = '20000000-0000-0000-0000-0000000000f2';
+  v_res := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  IF (v_res->>'issued')::INT <> 1 THEN
+    RAISE EXCEPTION 'TEST FAIL S8: the investor who caught up was not issued a note';
+  END IF;
+
+  -- And the notes now reconcile with the declaration exactly
   SELECT COALESCE(SUM(wht_amount), 0) INTO v_total FROM wht_credit_notes
   WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1';
   SELECT ROUND(total_wht * 100) INTO v_declared FROM cycle_profit_declarations
@@ -464,15 +500,49 @@ BEGIN
     RAISE EXCEPTION 'TEST FAIL S8: notes total % kobo, declaration says %', v_total, v_declared;
   END IF;
 
-  -- An investor with no tax identification number still gets a note
-  IF EXISTS (SELECT 1 FROM wht_credit_notes WHERE investor_tin IS NOT NULL) THEN
-    RAISE EXCEPTION 'TEST FAIL S8: expected these test investors to have no TIN recorded';
-  END IF;
-  IF (SELECT COUNT(*) FROM wht_credit_notes WHERE investor_name IS NOT NULL) <> 2 THEN
-    RAISE EXCEPTION 'TEST FAIL S8: a note without a TIN did not render its investor';
+  RAISE NOTICE 'PASS S8: notes issue only after filing, only with a tax number, and reconcile exactly';
+END $$;
+
+-- ------------------------------------------------------------
+-- Scenario 9: issuer details are editable from the app
+-- ------------------------------------------------------------
+DO $$
+DECLARE v_ok BOOLEAN := FALSE;
+BEGIN
+  SET LOCAL test.uid = 'a0000000-0000-0000-0000-0000000000f1';
+  PERFORM mudarabah_update_issuer_settings(
+    'MaalVest Limited', '12 Marina, Lagos', 'TIN-99887766',
+    'Samiah Yusuf', 'Managing Director', NULL);
+
+  IF NOT EXISTS (
+    SELECT 1 FROM wht_issuer_settings
+    WHERE id = 1 AND company_name = 'MaalVest Limited'
+      AND company_tin = 'TIN-99887766' AND signatory_title = 'Managing Director'
+  ) THEN
+    RAISE EXCEPTION 'TEST FAIL S9: issuer settings were not saved';
   END IF;
 
-  RAISE NOTICE 'PASS S8: credit notes issue once, reissue unchanged, and reconcile with the declaration';
+  -- A blank company name is refused: it appears on every note
+  BEGIN
+    PERFORM mudarabah_update_issuer_settings('   ');
+  EXCEPTION WHEN OTHERS THEN v_ok := TRUE;
+  END;
+  IF NOT v_ok THEN
+    RAISE EXCEPTION 'TEST FAIL S9: a blank company name was accepted';
+  END IF;
+
+  -- Only an administrator may change them
+  v_ok := FALSE;
+  SET LOCAL test.uid = 'a0000000-0000-0000-0000-0000000000f2';
+  BEGIN
+    PERFORM mudarabah_update_issuer_settings('Someone Else Ltd');
+  EXCEPTION WHEN OTHERS THEN v_ok := TRUE;
+  END;
+  IF NOT v_ok THEN
+    RAISE EXCEPTION 'TEST FAIL S9: a non-administrator changed the issuer details';
+  END IF;
+
+  RAISE NOTICE 'PASS S9: issuer details are editable by an administrator only';
 END $$;
 
 ROLLBACK;

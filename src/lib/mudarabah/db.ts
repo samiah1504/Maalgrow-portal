@@ -109,6 +109,17 @@ export type MudarabahBalanceEntryRow = {
   created_at: string;
 };
 
+export type WhtIssuerSettingsRow = {
+  id: number;
+  company_name: string;
+  company_address: string | null;
+  company_tin: string | null;
+  signatory_name: string | null;
+  signatory_title: string | null;
+  seal_url: string | null;
+  updated_at: string;
+};
+
 export type MudarabahCycleEventRow = {
   id: string;
   cycle_id: string;
@@ -137,6 +148,7 @@ export type MudarabahDatabase = {
       mudarabah_settlement_products: Table<MudarabahSettlementProductRow>;
       mudarabah_balance_entries: Table<MudarabahBalanceEntryRow>;
       mudarabah_cycle_events: Table<MudarabahCycleEventRow>;
+      wht_issuer_settings: Table<WhtIssuerSettingsRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -170,6 +182,25 @@ export type MudarabahDatabase = {
       mudarabah_unsettle_cycle: {
         Args: { p_cycle_id: string; p_reason: string };
         Returns: string;
+      };
+      mudarabah_update_issuer_settings: {
+        Args: {
+          p_company_name: string;
+          p_company_address?: string | null;
+          p_company_tin?: string | null;
+          p_signatory_name?: string | null;
+          p_signatory_title?: string | null;
+          p_seal_url?: string | null;
+        };
+        Returns: undefined;
+      };
+      mudarabah_issue_credit_notes: {
+        Args: {
+          p_settlement_id: string;
+          p_remittance_reference: string;
+          p_filed_on?: string;
+        };
+        Returns: unknown;
       };
       mudarabah_record_payment: {
         Args: {
