@@ -233,6 +233,101 @@ check(
   html.includes("Month one") && html.includes("Month three") && !html.includes("Month 1")
 );
 
+/* ── 1c. The pictures page ───────────────────────────────────────── */
+
+check("the report is four pages", (html.match(/<section class="page">/g) ?? []).length === 4);
+check(
+  "and each page says which of the four it is",
+  ["Page 1 of 4", "Page 2 of 4", "Page 3 of 4", "Page 4 of 4"].every((s) =>
+    html.includes(s)
+  )
+);
+check(
+  "the pictures page is there, drawn from the same figures",
+  html.includes("The cycle in pictures") &&
+    html.includes("The journey of a slot") &&
+    html.includes("Every naira of sales income, divided") &&
+    html.includes("Each month side by side")
+);
+
+// The journey names the CATEGORY. Naming the product would hand every
+// investor the trade's buying list.
+check(
+  "the journey names the category, never a product",
+  html.includes("Stock bought") && html.includes("home furniture")
+);
+
+// Parse the divided-income table back out and check it as a reader would
+const divideRows = [
+  ...html.matchAll(
+    /<td><span class="dot [a-e]"><\/span>([^<]+)<\/td>\s*<td class="p">([\d.]+)%<\/td><td class="m">(−?)₦([\d,]+)<\/td>/g
+  ),
+].map((m) => ({
+  label: m[1],
+  share: Number(m[2]),
+  value: (m[3] ? -1 : 1) * Number(m[4].replace(/,/g, "")),
+}));
+const totalRow =
+  /<tr class="sum"><td>Total sales income<\/td><td class="p">100\.0%<\/td>\s*<td class="m">₦([\d,]+)<\/td>/.exec(
+    html
+  );
+
+check("the divided-income table has rows", divideRows.length >= 3, divideRows.length);
+check(
+  "its shares add to exactly 100.0 per cent",
+  Math.abs(divideRows.reduce((t, r) => t + r.share, 0) - 100) < 1e-9,
+  divideRows.map((r) => r.share)
+);
+check(
+  "its money column adds to the total sales income printed beneath it",
+  totalRow !== null &&
+    divideRows.reduce((t, r) => t + r.value, 0) ===
+      Number(totalRow[1].replace(/,/g, "")),
+  {
+    parts: divideRows.reduce((t, r) => t + r.value, 0),
+    total: totalRow && Number(totalRow[1].replace(/,/g, "")),
+  }
+);
+check(
+  "and that total is the very figure page 2 calls total sales",
+  totalRow !== null && Number(totalRow[1].replace(/,/g, "")) === sales,
+  { pictures: totalRow && totalRow[1], pageTwo: sales }
+);
+check(
+  "running costs are itemised when the figures allow it",
+  divideRows.some((r) => r.label === "Advertising") &&
+    divideRows.some((r) => r.label === "Delivery to customers") &&
+    divideRows.some((r) => r.label === "Bank charges")
+);
+check(
+  "and the profit row equals the profit page 2 prints",
+  divideRows.find((r) => r.label === "Profit")?.value === netShown,
+  { pictures: divideRows.find((r) => r.label === "Profit")?.value, pageTwo: netShown }
+);
+
+// A cycle settled before the itemisation was recorded must still render
+const noSplit = figuresFromLive(cycle);
+noSplit.months = noSplit.months.map((m) => ({
+  ...m,
+  ads: undefined,
+  logistics: undefined,
+  misc: undefined,
+  bankCharges: undefined,
+}));
+noSplit.expenseSplit = null;
+const noSplitHtml = renderReportDocument(noSplit, CYCLE, HOLDING);
+check(
+  "an older snapshot with no itemisation falls back to one running-costs row",
+  noSplitHtml.includes(">Running costs</td>") &&
+    !noSplitHtml.includes(">Advertising</td>")
+);
+check(
+  "and that fallback still adds to 100.0 per cent",
+  /<tr class="sum"><td>Total sales income<\/td><td class="p">100\.0%<\/td>/.test(
+    noSplitHtml
+  )
+);
+
 /* ── 2. Wrong cycle ──────────────────────────────────────────────── */
 
 const OTHER_HOLDING: ReportHolding = {

@@ -57,6 +57,31 @@ export type ReportMonth = {
   unitsBought: number;
   unitsSold: number;
   unitsLeft: number;
+  /**
+   * The month's running costs, itemised. Pages 2 and 3 both round at
+   * this level and add upwards, so their totals agree exactly rather
+   * than to within a naira.
+   */
+  ads?: number;
+  logistics?: number;
+  misc?: number;
+  bankCharges?: number;
+};
+
+/**
+ * Running costs, split the way they were entered. Month-level, never
+ * per product — advertising is bought for the cycle, not for a chair.
+ *
+ * NULL for a cycle settled before this was recorded. The snapshot is
+ * frozen and is not going to grow the fields retrospectively, so the
+ * renderer falls back to a single "running costs" figure rather than
+ * inventing a split.
+ */
+export type ExpenseSplit = {
+  ads: number;
+  logistics: number;
+  misc: number;
+  bankCharges: number;
 };
 
 /**
@@ -96,6 +121,8 @@ export type ReportFigures = {
   purchaseCost: number;
   cogsTotal: number;
   expensesTotal: number;
+  /** How expensesTotal was made up, when that is known */
+  expenseSplit: ExpenseSplit | null;
   lostTotal: number;
   unitsBought: number;
   unitsSold: number;
@@ -108,6 +135,33 @@ export type ReportFigures = {
 
 function pct(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;
+}
+
+/**
+ * Add up a split only when every month carries one. A partial answer
+ * here would be a table of running costs that does not add up to the
+ * running costs, which is worse than not offering the breakdown.
+ */
+function splitOf(
+  months: readonly Partial<ExpenseSplit>[]
+): ExpenseSplit | null {
+  const complete = months.every(
+    (m) =>
+      typeof m.ads === "number" &&
+      typeof m.logistics === "number" &&
+      typeof m.misc === "number" &&
+      typeof m.bankCharges === "number"
+  );
+  if (!complete || months.length === 0) return null;
+  return months.reduce<ExpenseSplit>(
+    (t, m) => ({
+      ads: t.ads + (m.ads ?? 0),
+      logistics: t.logistics + (m.logistics ?? 0),
+      misc: t.misc + (m.misc ?? 0),
+      bankCharges: t.bankCharges + (m.bankCharges ?? 0),
+    }),
+    { ads: 0, logistics: 0, misc: 0, bankCharges: 0 }
+  );
 }
 
 /** A settled cycle: read the frozen record, never the engine */
@@ -141,6 +195,8 @@ export function figuresFromSettlement(
     purchaseCost: computed.purchTotal,
     cogsTotal: computed.cogsTotal,
     expensesTotal: computed.sellExpTotal,
+    // Snapshots taken before the split was recorded simply have none
+    expenseSplit: splitOf(computed.months),
     lostTotal: computed.lostTotal,
     unitsBought: computed.unitsBought,
     unitsSold: computed.unitsSold,
@@ -157,6 +213,10 @@ export function figuresFromSettlement(
       unitsBought: m.unitsBought,
       unitsSold: m.unitsSold,
       unitsLeft: m.unitsLeft,
+      ads: m.ads,
+      logistics: m.logistics,
+      misc: m.misc,
+      bankCharges: m.bankCharges,
     })),
   };
 }
@@ -186,6 +246,7 @@ export function figuresFromLive(cycle: CycleResult): ReportFigures {
     purchaseCost: cycle.purchTotal,
     cogsTotal: cycle.cogsTotal,
     expensesTotal: cycle.sellExpTotal,
+    expenseSplit: splitOf(cycle.months),
     lostTotal: cycle.lostTotal,
     unitsBought: cycle.unitsBought,
     unitsSold: cycle.unitsSold,
@@ -202,6 +263,10 @@ export function figuresFromLive(cycle: CycleResult): ReportFigures {
       unitsBought: m.unitsBought,
       unitsSold: m.unitsSold,
       unitsLeft: m.unitsLeft,
+      ads: m.ads,
+      logistics: m.logistics,
+      misc: m.misc,
+      bankCharges: m.bankCharges,
     })),
   };
 }

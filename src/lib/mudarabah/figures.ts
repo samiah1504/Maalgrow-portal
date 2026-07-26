@@ -52,6 +52,15 @@ export type SettlementMonth = {
   /** What was paid for goods that month */
   spend: number;
   sellExp: number;
+  /**
+   * How sellExp was made up. OPTIONAL because cycles settled before
+   * this was recorded have a snapshot without it, and a frozen
+   * snapshot is never rewritten.
+   */
+  ads?: number;
+  logistics?: number;
+  misc?: number;
+  bankCharges?: number;
   lostValue: number;
   net: number;
   cash: number;
@@ -174,6 +183,13 @@ export function buildSettlement(
         cogs: m.cogs,
         spend: m.spend,
         sellExp: m.sellExp,
+        // The split as well as the total: the report shows how the
+        // running costs were made up, and a snapshot that kept only the
+        // total could never answer that afterwards.
+        ads: m.ads,
+        logistics: m.logistics,
+        misc: m.misc,
+        bankCharges: m.bankCharges,
         lostValue: m.lostValue,
         net: m.net,
         cash: m.cash,

@@ -24,6 +24,7 @@ import type {
   ReportCycle,
   ReportFigures,
   ReportHolding,
+  ReportMonth,
 } from "./report-figures";
 import { holderReportFigures, slotWord } from "./report-figures";
 
@@ -292,6 +293,101 @@ export const REPORT_CSS = `
   font-size: 7.5pt; color: var(--ink-soft); display: flex; justify-content: space-between;
 }
 
+/* ── Page 3: the same figures, drawn ─────────────────────────────── */
+.mgr .band {
+  background: linear-gradient(100deg, var(--plum-900), var(--plum) 60%, #52248F);
+  color: #fff; border-radius: 8px; padding: 6mm 8mm; margin-bottom: 6mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .band .eyebrow {
+  font-size: 7.5pt; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--gold-300);
+}
+.mgr .band .ttl { font-family: var(--font-head); font-size: 17pt; margin-top: 1.5mm; }
+.mgr .band .sub { font-size: 9pt; opacity: .8; margin-top: 1mm; }
+
+.mgr .pic-h {
+  font-family: var(--font-head); font-size: 12.5pt; color: var(--plum);
+  margin: 5mm 0 1mm; overflow: hidden;
+}
+.mgr .pic-h .mode {
+  float: right; font-family: var(--font-body); font-size: 7.5pt;
+  color: var(--ink-soft); padding-top: 2mm;
+}
+.mgr .pic-p { font-size: 9pt; line-height: 1.55; color: var(--ink-soft); margin: 0 0 3mm; }
+
+.mgr .journey { display: flex; align-items: stretch; gap: 1.5mm; }
+.mgr .step {
+  flex: 1; text-align: center; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--parchment); padding: 3mm 2mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .step .n {
+  font-size: 6.5pt; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.mgr .step .ic { color: var(--plum); margin: 1.5mm 0; }
+.mgr .step .t { font-size: 9pt; font-weight: 700; color: var(--plum); margin-bottom: 1.5mm; }
+.mgr .step .l { font-family: var(--font-mono); font-size: 8pt; line-height: 1.45; }
+.mgr .arrow { align-self: center; color: var(--gold); font-size: 10pt; }
+
+.mgr .stack {
+  display: flex; height: 9mm; border-radius: 5px; overflow: hidden; margin-bottom: 2mm;
+}
+.mgr .seg {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 8.5pt; color: #fff; font-weight: 500;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .seg.a, .mgr .dot.a { background: var(--plum-900); }
+.mgr .seg.b, .mgr .dot.b { background: var(--plum); }
+.mgr .seg.c, .mgr .dot.c { background: #8B6BB8; }
+.mgr .seg.d, .mgr .dot.d { background: var(--plum-200); }
+.mgr .seg.e, .mgr .dot.e { background: var(--gold); }
+
+.mgr .divide { width: 100%; border-collapse: collapse; }
+.mgr .divide td {
+  padding: 1.4mm 0; font-size: 9pt; border-bottom: 1px solid var(--line);
+}
+.mgr .divide td.p, .mgr .divide td.m {
+  font-family: var(--font-mono); text-align: right; white-space: nowrap;
+}
+.mgr .divide td.p { width: 18mm; font-weight: 500; }
+.mgr .divide td.m { width: 34mm; }
+.mgr .divide tr.sum td {
+  border-top: 1.5px solid var(--plum); border-bottom: none;
+  font-weight: 700; color: var(--plum); padding-top: 2mm;
+}
+.mgr .dot {
+  display: inline-block; width: 2.4mm; height: 2.4mm; border-radius: 1px;
+  margin-right: 2.2mm; vertical-align: middle;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
+.mgr .chart { display: flex; align-items: flex-end; gap: 6mm; padding: 0 2mm; }
+.mgr .mb { flex: 1; text-align: center; }
+.mgr .mb .cols {
+  display: flex; align-items: flex-end; justify-content: center; gap: 2mm;
+  height: 34mm; margin-bottom: 1.5mm;
+}
+.mgr .col {
+  width: 9mm; border-radius: 2px 2px 0 0; min-height: .5mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .col.rev, .mgr .sw.rev { background: var(--plum); }
+.mgr .col.cst, .mgr .sw.cst { background: var(--plum-200); }
+.mgr .mb .lbl { font-size: 8.5pt; color: var(--ink); }
+.mgr .mb .sub { font-family: var(--font-mono); font-size: 8pt; color: var(--ink-soft); }
+.mgr .key {
+  display: flex; gap: 6mm; justify-content: center; margin-top: 2.5mm;
+  font-size: 8pt; color: var(--ink-soft);
+}
+.mgr .sw {
+  display: inline-block; width: 2.6mm; height: 2.6mm; border-radius: 1px;
+  margin-right: 1.6mm; vertical-align: middle;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
 /* ── Credit note: a tax document, plainer and more formal ───────── */
 .mgr .cn-head {
   border-bottom: 2px solid var(--plum); padding-bottom: 5mm; margin-bottom: 6mm;
@@ -469,12 +565,36 @@ function page1(
 
   <div class="foot">
     <span>MaalGrow · Series ${esc(cycle.seriesName)} · ${esc(cycle.cycleLabel)}</span>
-    <span>Page 1 of 3</span>
+    <span>Page 1 of 4</span>
   </div>
 </section>`;
 }
 
 /* ── Pages 2 and 3 — identical for every investor ────────────────── */
+
+/**
+ * A month's running costs, itemised and already rounded for display.
+ * Null when the snapshot predates the itemisation being recorded.
+ */
+function monthSplit(
+  m: ReportMonth,
+  d: (v: number) => number
+): { ads: number; logistics: number; misc: number; bankCharges: number } | null {
+  if (
+    typeof m.ads !== "number" ||
+    typeof m.logistics !== "number" ||
+    typeof m.misc !== "number" ||
+    typeof m.bankCharges !== "number"
+  ) {
+    return null;
+  }
+  return {
+    ads: d(m.ads),
+    logistics: d(m.logistics),
+    misc: d(m.misc),
+    bankCharges: d(m.bankCharges),
+  };
+}
 
 function page2(f: ReportFigures, cycle: ReportCycle): string {
   const perSlot = cycle.discloseMode === "perSlot";
@@ -487,15 +607,24 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
   // Rounding each month to the naira and then printing an unrounded
   // total would leave a statement whose own columns disagree by a naira
   // — which reads as an error even when the kobo underneath are exact.
-  const shown = f.months.map((m) => ({
-    i: m.i,
-    unitsBought: du(m.unitsBought),
-    unitsSold: du(m.unitsSold),
-    revenue: d(m.revenue),
-    cogs: d(m.revenue - m.net - m.expenses - m.lostValue),
-    expenses: d(m.expenses),
-    lost: d(m.lostValue),
-  }));
+  const shown = f.months.map((m) => {
+    const split = monthSplit(m, d);
+    return {
+      i: m.i,
+      unitsBought: du(m.unitsBought),
+      unitsSold: du(m.unitsSold),
+      revenue: d(m.revenue),
+      cogs: d(m.revenue - m.net - m.expenses - m.lostValue),
+      // When the itemisation is known, the month's running costs are
+      // the sum of the printed items — so page 3, which lists them,
+      // reaches the identical total rather than one a naira away.
+      expenses: split
+        ? split.ads + split.logistics + split.misc + split.bankCharges
+        : d(m.expenses),
+      split,
+      lost: d(m.lostValue),
+    };
+  });
   const sum = (pick: (s: (typeof shown)[number]) => number) =>
     shown.reduce((t, s) => t + pick(s), 0);
 
@@ -591,12 +720,12 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
 
   <div class="foot">
     <span>MaalGrow · ${esc(cycle.description ?? "Trading cycle")}</span>
-    <span>Page 2 of 3</span>
+    <span>Page 2 of 4</span>
   </div>
 </section>`;
 }
 
-function page3(f: ReportFigures, cycle: ReportCycle): string {
+function page4(f: ReportFigures, cycle: ReportCycle): string {
   return `<section class="page">
   <h2 class="sect">What this cycle traded in</h2>
   <p style="font-size:10pt;line-height:1.7;margin:0 0 5mm">
@@ -665,7 +794,208 @@ function page3(f: ReportFigures, cycle: ReportCycle): string {
     <span>MaalGrow · Series ${esc(cycle.seriesName)} · ${esc(cycle.cycleLabel)}${
     f.settledAt ? ` · settled ${longDate(f.settledAt.slice(0, 10))}` : ""
   }</span>
-    <span>Page 3 of 3</span>
+    <span>Page 4 of 4</span>
+  </div>
+</section>`;
+}
+
+/* ── Page 3 — the same figures, drawn ────────────────────────────── */
+
+/**
+ * Percentages that add to exactly 100.0.
+ *
+ * Rounding each share on its own gives a column reading 99.9 or 100.1
+ * beside a row labelled "Total 100.0%". Largest remainder on tenths of
+ * a percent, the same method the engine uses for money.
+ */
+function sharesOf(parts: number[], whole: number): number[] {
+  if (whole <= 0) return parts.map(() => 0);
+  const exact = parts.map((p) => (p / whole) * 1000);
+  const floors = exact.map(Math.floor);
+  let left = 1000 - floors.reduce((t, v) => t + v, 0);
+  const order = exact
+    .map((v, i) => ({ i, rem: v - Math.floor(v) }))
+    .sort((a, b) => b.rem - a.rem);
+  const out = [...floors];
+  for (let k = 0; left > 0 && k < order.length; k++, left--) out[order[k].i]++;
+  return out.map((v) => v / 10);
+}
+
+/** Small stroke icons. Inline, because nothing may be fetched. */
+const ICONS: Record<string, string> = {
+  pooled: `<ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V6"/><path d="M4.5 12v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-6"/>`,
+  stock: `<path d="M12 2.5 21 7v10l-9 4.5L3 17V7z"/><path d="M3 7l9 4.5L21 7"/><path d="M12 11.5V21"/>`,
+  sold: `<circle cx="9.5" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2.5 3h3l2.4 12.2a1.6 1.6 0 0 0 1.6 1.3h8.1a1.6 1.6 0 0 0 1.6-1.3L21.5 7H6"/>`,
+  shared: `<circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 12h9"/>`,
+};
+
+function icon(name: keyof typeof ICONS): string {
+  return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
+function page3(f: ReportFigures, cycle: ReportCycle): string {
+  const perSlot = cycle.discloseMode === "perSlot";
+  const d = (v: number) =>
+    perSlot && f.totalUnits > 0 ? Math.round(v / f.totalUnits) : v;
+
+  /* The journey — four steps, whole cycle, said so plainly */
+  const goods = cycle.description ?? "goods bought to sell";
+  const steps = [
+    {
+      n: "One", k: "pooled" as const, t: "Slots pooled",
+      lines: [`${units(f.totalUnits)} slot${f.totalUnits === 1 ? "" : "s"}`,
+              `${naira(f.slotPrice)} each`],
+    },
+    {
+      n: "Two", k: "stock" as const, t: "Stock bought",
+      // The CATEGORY, never a product. Naming what was bought would put
+      // the trade's buying list in the hands of every investor.
+      lines: [`${units(f.unitsBought)} items`, esc(goods)],
+    },
+    {
+      n: "Three", k: "sold" as const, t: "Sold to customers",
+      lines: [`${units(f.unitsSold)} items`, "over three months"],
+    },
+    {
+      n: "Four", k: "shared" as const, t: "Profit shared",
+      lines: [`${Math.round(f.ratio)} : ${100 - Math.round(f.ratio)}`,
+              `${naira(f.netPerSlot)} per slot`],
+    },
+  ]
+    .map(
+      (s, i) => `${i > 0 ? `<div class="arrow" aria-hidden="true">&#10148;</div>` : ""}
+    <div class="step">
+      <div class="n">${s.n}</div>
+      <div class="ic">${icon(s.k)}</div>
+      <div class="t">${s.t}</div>
+      ${s.lines.map((l) => `<div class="l">${l}</div>`).join("")}
+    </div>`
+    )
+    .join("");
+
+  /* Every naira of sales income — the page 2 identity, as proportions.
+     Built from the SAME month-level values page 2 prints, added the
+     same way, so the two pages cannot land a naira apart. */
+  const per = f.months.map((m) => ({
+    revenue: d(m.revenue),
+    cogs: d(m.revenue - m.net - m.expenses - m.lostValue),
+    lost: d(m.lostValue),
+    expenses: d(m.expenses),
+    split: monthSplit(m, d),
+  }));
+  const add = (pick: (p: (typeof per)[number]) => number) =>
+    per.reduce((t, p) => t + pick(p), 0);
+  const itemised = per.every((p) => p.split !== null);
+
+  const rows: { label: string; value: number; tone: string }[] = [
+    { label: "Buying the goods", value: add((p) => p.cogs), tone: "a" },
+  ];
+  if (itemised) {
+    const misc = add((p) => p.split!.misc);
+    rows.push({ label: "Advertising", value: add((p) => p.split!.ads), tone: "b" });
+    rows.push({
+      label: "Delivery to customers",
+      value: add((p) => p.split!.logistics),
+      tone: "c",
+    });
+    if (misc > 0) rows.push({ label: "Other running costs", value: misc, tone: "c" });
+    rows.push({
+      label: "Bank charges",
+      value: add((p) => p.split!.bankCharges),
+      tone: "d",
+    });
+  } else {
+    rows.push({ label: "Running costs", value: add((p) => p.expenses), tone: "b" });
+  }
+  const lost = add((p) => p.lost);
+  if (lost > 0) rows.push({ label: "Stock unaccounted for", value: lost, tone: "d" });
+
+  // Sales income is what the parts add to — the same figure page 2
+  // prints as total sales, reached the same way.
+  const income = add((p) => p.revenue);
+  const profit = income - rows.reduce((t, r) => t + r.value, 0);
+  rows.push({ label: "Profit", value: profit, tone: "e" });
+
+  const shares = sharesOf(rows.map((r) => r.value), income);
+  const bar = rows
+    .map((r, i) =>
+      shares[i] > 0
+        ? `<div class="seg ${r.tone}" style="width:${shares[i]}%">${
+            shares[i] >= 12 ? `${shares[i].toFixed(1)}%` : ""
+          }</div>`
+        : ""
+    )
+    .join("");
+  const table = rows
+    .map(
+      (r, i) => `<tr><td><span class="dot ${r.tone}"></span>${r.label}</td>
+      <td class="p">${shares[i].toFixed(1)}%</td><td class="m">${naira(r.value)}</td></tr>`
+    )
+    .join("");
+
+  /* Each month side by side */
+  const bars = per.map((p, i) => {
+    const cost =
+      p.cogs +
+      (p.split
+        ? p.split.ads + p.split.logistics + p.split.misc + p.split.bankCharges
+        : p.expenses) +
+      p.lost;
+    return { i: f.months[i].i, revenue: p.revenue, cost, net: p.revenue - cost };
+  });
+  const peak = Math.max(1, ...bars.map((b) => Math.max(b.revenue, b.cost)));
+  const H = 34; // mm of drawing height
+  const chart = bars
+    .map(
+      (b) => `<div class="mb">
+      <div class="cols">
+        <div class="col rev" style="height:${(b.revenue / peak) * H}mm"></div>
+        <div class="col cst" style="height:${(Math.max(0, b.cost) / peak) * H}mm"></div>
+      </div>
+      <div class="lbl">${monthWord(b.i)}</div>
+      <div class="sub">${naira(b.net)} left</div>
+    </div>`
+    )
+    .join("");
+
+  return `<section class="page">
+  <div class="band">
+    <div class="eyebrow">Page three</div>
+    <div class="ttl">The cycle in pictures</div>
+    <div class="sub">The same numbers, drawn out.</div>
+  </div>
+
+  <h3 class="pic-h">The journey of a slot
+    <span class="mode">Across the whole cycle</span>
+  </h3>
+  <p class="pic-p">Capital pooled once at the start, spent on goods, sold to customers
+    across three months, and the profit divided at the end.</p>
+  <div class="journey">${steps}</div>
+
+  <h3 class="pic-h">Every naira of sales income, divided
+    <span class="mode">${perSlot ? "Figures per slot" : "Whole cycle"}</span>
+  </h3>
+  <p class="pic-p">What customers paid us, and what it went on. The largest slice is
+    always the goods themselves — that is the nature of trading.</p>
+  <div class="stack">${bar}</div>
+  <table class="divide">
+    ${table}
+    <tr class="sum"><td>Total sales income</td><td class="p">100.0%</td>
+      <td class="m">${naira(income)}</td></tr>
+  </table>
+
+  <h3 class="pic-h">Each month side by side</h3>
+  <p class="pic-p">Sales against everything the month cost, and what was left as profit.</p>
+  <div class="chart">${chart}</div>
+  <div class="key">
+    <span><i class="sw rev"></i>Sales</span>
+    <span><i class="sw cst"></i>What it cost</span>
+  </div>
+
+  <div class="foot">
+    <span>MaalGrow · ${esc(cycle.description ?? "Trading cycle")}</span>
+    <span>Page 3 of 4</span>
   </div>
 </section>`;
 }
@@ -681,7 +1011,7 @@ export function renderReportBody(
   return `<div class="mgr">${page1(f, cycle, holding, h)}${page2(f, cycle)}${page3(
     f,
     cycle
-  )}</div>`;
+  )}${page4(f, cycle)}</div>`;
 }
 
 /** A standalone document — what the browser prints and step 7 renders */
