@@ -2,50 +2,85 @@
  * Mudarabah cycle engine — THE single source of truth for every
  * calculation in the Mudarabah cycle feature.
  *
- * This module is a faithful port of the compute() engine in
- * reference/mudarabah-report-v4.html (the working, tested reference
- * implementation). Every rule below is a correctness requirement:
+ * A cycle trades several products at once. Products are declared once
+ * per cycle and keep a stable identity across all three months, because
+ * a product bought in month 1 may still be selling in month 3.
  *
- *  • Purchase logistics are CAPITALISED into the cost of goods and
- *    spread across units. Selling-side logistics is an expense.
- *  • WEIGHTED AVERAGE cost: stock carried in blends with new stock
- *    into one cost price. No batch tracking.
- *  • Closing stock is valued at COST, never at expected selling
- *    price (valuing at selling price books profit before the sale).
+ * Every rule below is a correctness requirement:
+ *
+ *  • WEIGHTED AVERAGE cost, PER PRODUCT. Stock carried in blends with
+ *    newly bought stock into one cost price for that product. Never one
+ *    shared average across different products — that would value
+ *    leftover sofas at the blended cost of sofas and side tables.
+ *  • Closing stock is valued at COST, never at expected selling price
+ *    (valuing at selling price books profit before the sale).
+ *  • Delivery is already included in what we pay per product, so there
+ *    is no separate freight cost to capitalise or allocate.
+ *  • Selling expenses (ads, logistics, misc, bank charges) are
+ *    MONTH-LEVEL and are never allocated to products. So gross profit
+ *    is reported per product, but net profit only per month and per
+ *    cycle. Splitting shared ad spend across products needs an
+ *    arbitrary rule, and an arbitrary rule produces per-product "net
+ *    profit" that looks authoritative while being invented.
  *  • On a loss the manager's share is ZERO — not reduced, zero.
- *    Capital providers bear the financial loss; the manager's loss
- *    is unpaid effort.
- *  • Gross profit excludes selling expenses. Only net profit is
- *    ever shown to investors.
+ *    Capital providers bear the financial loss; the manager's loss is
+ *    unpaid effort.
+ *  • Gross profit excludes selling expenses. Only net profit is ever
+ *    shown to investors.
+ *
+ * Units left is DERIVED (openUnits + bought - sold) and only overridden
+ * when the real count differs — damage, a bad return, shrinkage. Any
+ * gap is charged as a loss at that product's own cost price.
  *
  * Invariant (holds by construction; tested on random inputs):
- *   endCash + endStockValue === totalCapital + totalProfit
+ *   endCash + sum of every product's final closing value
+ *     === totalCapital + totalProfit
  *
  * Import this module from EVERY path that needs cycle figures —
  * browser, server renderer, email job, balance updater. Store only
  * inputs; derive on read. Never persist profit, ROI or unit cost.
+ *
+ * Investor-facing code must consume investorView() and nothing else:
+ * the investor report must never break figures down by product.
  */
 
-export type MonthInput = {
-  /** Quantity purchased */
+export type ProductRef = {
+  id: string;
+  name: string;
+};
+
+/** One product's activity within one month. Four numbers are typed. */
+export type MonthRowInput = {
+  productId: string;
+  /** How many we got */
   qty: number;
-  /** Cost of each product */
+  /** Cost of each (delivery already included) */
   unitCost: number;
-  /** Purchase expenses (delivery in) — capitalised */
-  purchExp: number;
-  /** Number of products sold */
+  /** How many sold */
   soldQty: number;
   /** Selling price per product */
   sellPrice: number;
+  /**
+   * Units left at month end. DERIVED — leave undefined and the engine
+   * fills in openUnits + qty - soldQty. Only set it when the real count
+   * differs from the expected one.
+   */
+  stockLeft?: number | null;
+};
+
+export type MonthInput = {
+  rows: MonthRowInput[];
+  /** Month-level selling expenses — never split per product */
   ads: number;
-  logi: number;
+  logistics: number;
   misc: number;
-  bank: number;
-  /** Units left unsold at month end (entered, not derived) */
-  stockLeft: number;
+  bankCharges: number;
 };
 
 export type CycleInput = {
+  name?: string;
+  startDate?: string;
+  currency?: string;
   slotPrice: number;
   slots: number;
   /** Investor share of profit, 0–100 */
@@ -54,47 +89,88 @@ export type CycleInput = {
   wht: number;
   /** Slots withdrawing capital at maturity */
   withdrawSlots: number;
+  products: ProductRef[];
   months: [MonthInput, MonthInput, MonthInput];
 };
 
-export type MonthResult = {
-  i: number;
-  fundsIn: number;
-  openCash: number;
-  openTotal: number;
+export type RowResult = {
+  productId: string;
+  productName: string;
   openUnits: number;
   openValue: number;
   qty: number;
   unitCost: number;
-  purchExp: number;
-  goodsCost: number;
-  purchCost: number;
+  spend: number;
   availUnits: number;
   availValue: number;
+  /** Weighted average cost price for THIS product */
   unitCP: number;
   soldQty: number;
   sellPrice: number;
   revenue: number;
   cogs: number;
-  ads: number;
-  logi: number;
-  misc: number;
-  bank: number;
-  sellExp: number;
-  expectClose: number;
+  expectedLeft: number;
   closeUnits: number;
   closeValue: number;
   lostUnits: number;
   lostValue: number;
+  /** Per product — real and reportable, unlike a per-product net */
+  gross: number;
+  oversold: boolean;
+  /** Units left was typed over the derived figure */
+  adjusted: boolean;
+  /** No row was entered — stock carries forward untouched */
+  implicit: boolean;
+};
+
+export type MonthResult = {
+  i: number;
+  rows: RowResult[];
+  fundsIn: number;
+  openCash: number;
+  openTotal: number;
+  openUnits: number;
+  openValue: number;
+  revenue: number;
+  cogs: number;
+  /** Total paid for goods this month */
+  spend: number;
+  lostValue: number;
+  lostUnits: number;
+  ads: number;
+  logistics: number;
+  misc: number;
+  bankCharges: number;
+  sellExp: number;
   gross: number;
   net: number;
   cash: number;
+  unitsBought: number;
+  unitsSold: number;
+  unitsLeft: number;
+  stockValue: number;
   working: number;
-  oversold: boolean;
+};
+
+export type ProductSummary = {
+  productId: string;
+  productName: string;
+  unitsBought: number;
+  unitsSold: number;
+  unitsLeft: number;
+  revenue: number;
+  cogs: number;
+  gross: number;
+  /** Gross margin on revenue, percent */
+  grossMargin: number;
+  lostUnits: number;
+  lostValue: number;
+  stockValue: number;
 };
 
 export type CycleResult = {
   months: MonthResult[];
+  products: ProductSummary[];
   slotPrice: number;
   slots: number;
   capital: number;
@@ -115,13 +191,15 @@ export type CycleResult = {
   cogsTotal: number;
   sellExpTotal: number;
   adsTotal: number;
-  logiTotal: number;
+  logisticsTotal: number;
   miscTotal: number;
   bankTotal: number;
+  /** Total cost of purchase, every product added together */
   purchTotal: number;
   lostTotal: number;
   unitsSold: number;
   unitsBought: number;
+  unitsLeft: number;
   endCash: number;
   endStock: number;
   endUnits: number;
@@ -138,6 +216,71 @@ const int = (v: unknown): number => {
   return Number.isFinite(n) ? Math.round(n) : 0;
 };
 
+/**
+ * Declared products, plus any product a month row references but the
+ * cycle never declared. Including the stragglers keeps their value
+ * inside the books — silently dropping a row would break the invariant.
+ * validateCycle() flags them.
+ */
+function resolveProducts(input: CycleInput): ProductRef[] {
+  const out: ProductRef[] = [];
+  const seen = new Set<string>();
+  for (const p of input.products ?? []) {
+    if (p && !seen.has(p.id)) {
+      seen.add(p.id);
+      out.push({ id: p.id, name: p.name });
+    }
+  }
+  for (const m of input.months ?? []) {
+    for (const r of m?.rows ?? []) {
+      if (r && !seen.has(r.productId)) {
+        seen.add(r.productId);
+        out.push({ id: r.productId, name: r.productId });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * One row per product per month. Two rows for the same product in the
+ * same month are merged (cost and selling price weighted by quantity)
+ * rather than dropped, so no value escapes the books.
+ */
+function mergeRows(rows: MonthRowInput[]): Map<string, MonthRowInput> {
+  const byId = new Map<string, MonthRowInput>();
+  for (const r of rows ?? []) {
+    if (!r) continue;
+    const prev = byId.get(r.productId);
+    if (!prev) {
+      byId.set(r.productId, { ...r });
+      continue;
+    }
+    const qtyA = int(prev.qty);
+    const qtyB = int(r.qty);
+    const soldA = int(prev.soldQty);
+    const soldB = int(r.soldQty);
+    const qty = qtyA + qtyB;
+    const soldQty = soldA + soldB;
+    const entered = r.stockLeft ?? prev.stockLeft;
+    byId.set(r.productId, {
+      productId: r.productId,
+      qty,
+      unitCost:
+        qty > 0
+          ? (qtyA * num(prev.unitCost) + qtyB * num(r.unitCost)) / qty
+          : num(r.unitCost),
+      soldQty,
+      sellPrice:
+        soldQty > 0
+          ? (soldA * num(prev.sellPrice) + soldB * num(r.sellPrice)) / soldQty
+          : num(r.sellPrice),
+      stockLeft: entered ?? null,
+    });
+  }
+  return byId;
+}
+
 export function compute(input: CycleInput): CycleResult {
   const slotPrice = num(input.slotPrice);
   const slots = Math.max(0, int(input.slots));
@@ -146,95 +289,155 @@ export function compute(input: CycleInput): CycleResult {
   const whtRate = num(input.wht) / 100;
   const withdraw = Math.min(slots, Math.max(0, int(input.withdrawSlots)));
 
+  const products = resolveProducts(input);
+  // Each product carries its own stock and its own cost price forward
+  const carry = new Map<string, { units: number; value: number }>();
+  products.forEach((p) => carry.set(p.id, { units: 0, value: 0 }));
+
   let cash = 0;
-  let openUnits = 0;
-  let openValue = 0;
   const months: MonthResult[] = [];
 
   for (let k = 0; k < 3; k++) {
-    const d = input.months[k];
+    const m = input.months[k];
+    const entered = mergeRows(m?.rows ?? []);
     const oCash = cash;
-    const oUnits = openUnits;
-    const oValue = openValue;
     const fundsIn = k === 0 ? capital : 0;
     const openTotal = oCash + fundsIn;
 
-    const qty = int(d.qty);
-    const unitCost = num(d.unitCost);
-    const purchExp = num(d.purchExp);
-    // Purchase logistics CAPITALISED into the cost of the goods
-    const goodsCost = qty * unitCost;
-    const purchCost = goodsCost + purchExp;
-    const availUnits = oUnits + qty;
-    const availValue = oValue + purchCost;
-    // WEIGHTED AVERAGE cost across carried-in and new stock
-    const unitCP = availUnits > 0 ? availValue / availUnits : 0;
+    const rows: RowResult[] = products.map((p) => {
+      const state = carry.get(p.id)!;
+      const raw = entered.get(p.id);
+      const openUnits = state.units;
+      const openValue = state.value;
 
-    const soldQty = int(d.soldQty);
-    const sellPrice = num(d.sellPrice);
-    const revenue = soldQty * sellPrice;
-    const cogs = soldQty * unitCP;
+      const qty = int(raw?.qty ?? 0);
+      const unitCost = num(raw?.unitCost ?? 0);
+      const spend = qty * unitCost;
+      const availUnits = openUnits + qty;
+      const availValue = openValue + spend;
+      // WEIGHTED AVERAGE cost for THIS product only
+      const unitCP = availUnits > 0 ? availValue / availUnits : 0;
 
-    const ads = num(d.ads);
-    const logi = num(d.logi);
-    const misc = num(d.misc);
-    const bank = num(d.bank);
-    const sellExp = ads + logi + misc + bank;
+      const soldQty = int(raw?.soldQty ?? 0);
+      const sellPrice = num(raw?.sellPrice ?? 0);
+      const revenue = soldQty * sellPrice;
+      const cogs = soldQty * unitCP;
 
-    const expectClose = availUnits - soldQty;
-    const closeUnits = int(d.stockLeft); // entered by admin
-    const lostUnits = expectClose - closeUnits;
-    // Unaccounted units are charged as a loss AT COST
-    const lostValue = lostUnits * unitCP;
-    // Closing stock valued at COST, never at selling price
-    const closeValue = closeUnits * unitCP;
+      const expectedLeft = availUnits - soldQty;
+      const typed = raw?.stockLeft;
+      const hasTyped = typed !== undefined && typed !== null;
+      const closeUnits = hasTyped ? int(typed) : expectedLeft;
+      const lostUnits = expectedLeft - closeUnits;
+      // Unaccounted units charged as a loss AT THAT PRODUCT'S COST
+      const lostValue = lostUnits * unitCP;
+      // Closing stock valued at COST, never at selling price
+      const closeValue = closeUnits * unitCP;
+
+      state.units = closeUnits;
+      state.value = closeValue;
+
+      return {
+        productId: p.id,
+        productName: p.name,
+        openUnits,
+        openValue,
+        qty,
+        unitCost,
+        spend,
+        availUnits,
+        availValue,
+        unitCP,
+        soldQty,
+        sellPrice,
+        revenue,
+        cogs,
+        expectedLeft,
+        closeUnits,
+        closeValue,
+        lostUnits,
+        lostValue,
+        gross: revenue - cogs,
+        oversold: soldQty > availUnits,
+        adjusted: hasTyped && closeUnits !== expectedLeft,
+        implicit: raw === undefined,
+      };
+    });
+
+    const rowSum = (f: keyof RowResult): number =>
+      rows.reduce((s, r) => s + (r[f] as number), 0);
+
+    const revenue = rowSum("revenue");
+    const cogs = rowSum("cogs");
+    const lostValue = rowSum("lostValue");
+    const spend = rowSum("spend");
+    const stockValue = rowSum("closeValue");
+
+    const ads = num(m?.ads);
+    const logistics = num(m?.logistics);
+    const misc = num(m?.misc);
+    const bankCharges = num(m?.bankCharges);
+    const sellExp = ads + logistics + misc + bankCharges;
 
     // Gross excludes selling expenses; net is what holders share
     const gross = revenue - cogs;
     const net = gross - sellExp - lostValue;
-    cash = openTotal + revenue - (goodsCost + purchExp + sellExp);
-    openUnits = closeUnits;
-    openValue = closeValue;
+    cash = openTotal + revenue - spend - sellExp;
 
     months.push({
       i: k + 1,
+      rows,
       fundsIn,
       openCash: oCash,
       openTotal,
-      openUnits: oUnits,
-      openValue: oValue,
-      qty,
-      unitCost,
-      purchExp,
-      goodsCost,
-      purchCost,
-      availUnits,
-      availValue,
-      unitCP,
-      soldQty,
-      sellPrice,
+      openUnits: rowSum("openUnits"),
+      openValue: rowSum("openValue"),
       revenue,
       cogs,
-      ads,
-      logi,
-      misc,
-      bank,
-      sellExp,
-      expectClose,
-      closeUnits,
-      closeValue,
-      lostUnits,
+      spend,
       lostValue,
+      lostUnits: rowSum("lostUnits"),
+      ads,
+      logistics,
+      misc,
+      bankCharges,
+      sellExp,
       gross,
       net,
       cash,
-      working: cash + closeValue,
-      oversold: soldQty > availUnits,
+      unitsBought: rowSum("qty"),
+      unitsSold: rowSum("soldQty"),
+      unitsLeft: rowSum("closeUnits"),
+      stockValue,
+      working: cash + stockValue,
     });
   }
 
   const sum = (f: keyof MonthResult): number =>
     months.reduce((s, m) => s + (m[f] as number), 0);
+
+  // Per-product cycle summary — ADMIN ONLY. Never reaches an investor.
+  const summary: ProductSummary[] = products.map((p, idx) => {
+    const mine = months.map((m) => m.rows[idx]);
+    const s = (f: keyof RowResult): number =>
+      mine.reduce((t, r) => t + (r[f] as number), 0);
+    const revenue = s("revenue");
+    const gross = s("gross");
+    const last = mine[mine.length - 1];
+    return {
+      productId: p.id,
+      productName: p.name,
+      unitsBought: s("qty"),
+      unitsSold: s("soldQty"),
+      unitsLeft: last.closeUnits,
+      revenue,
+      cogs: s("cogs"),
+      gross,
+      grossMargin: revenue !== 0 ? (gross / revenue) * 100 : 0,
+      lostUnits: s("lostUnits"),
+      lostValue: s("lostValue"),
+      stockValue: last.closeValue,
+    };
+  });
 
   const profit = sum("net");
   const isLoss = profit < 0;
@@ -245,9 +448,11 @@ export function compute(input: CycleInput): CycleResult {
   const grossPerSlot = slots > 0 ? holderPot / slots : 0;
   const whtPerSlot = grossPerSlot > 0 ? grossPerSlot * whtRate : 0;
   const netPerSlot = grossPerSlot - whtPerSlot;
+  const last = months[2];
 
   return {
     months,
+    products: summary,
     slotPrice,
     slots,
     capital,
@@ -268,18 +473,196 @@ export function compute(input: CycleInput): CycleResult {
     cogsTotal: sum("cogs"),
     sellExpTotal: sum("sellExp"),
     adsTotal: sum("ads"),
-    logiTotal: sum("logi"),
+    logisticsTotal: sum("logistics"),
     miscTotal: sum("misc"),
-    bankTotal: sum("bank"),
-    purchTotal: sum("purchCost"),
+    bankTotal: sum("bankCharges"),
+    purchTotal: sum("spend"),
     lostTotal: sum("lostValue"),
-    unitsSold: sum("soldQty"),
-    unitsBought: sum("qty"),
-    endCash: months[2].cash,
-    endStock: months[2].closeValue,
-    endUnits: months[2].closeUnits,
+    unitsSold: sum("unitsSold"),
+    unitsBought: sum("unitsBought"),
+    unitsLeft: last.unitsLeft,
+    endCash: last.cash,
+    endStock: last.stockValue,
+    endUnits: last.unitsLeft,
     cashNeeded: netPerSlot * slots + withdraw * slotPrice,
     invRatio: num(input.ratio),
+  };
+}
+
+/* ── Validation ──────────────────────────────────────────────────── */
+
+export type CycleIssue = {
+  level: "error" | "warning";
+  code:
+    | "oversold"
+    | "stock_above_expected"
+    | "stock_below_expected"
+    | "undeclared_product"
+    | "negative_cash"
+    | "cash_shortfall";
+  month: number | null;
+  productId: string | null;
+  productName: string | null;
+  message: string;
+};
+
+export function validateCycle(
+  input: CycleInput,
+  cycle: CycleResult = compute(input)
+): CycleIssue[] {
+  const issues: CycleIssue[] = [];
+  const declared = new Set((input.products ?? []).map((p) => p.id));
+
+  for (const m of cycle.months) {
+    for (const r of m.rows) {
+      if (r.oversold) {
+        issues.push({
+          level: "error",
+          code: "oversold",
+          month: m.i,
+          productId: r.productId,
+          productName: r.productName,
+          message: `Month ${m.i}: ${r.soldQty} ${r.productName} sold, but only ${r.availUnits} were available.`,
+        });
+      }
+      if (r.lostUnits < 0) {
+        issues.push({
+          level: "error",
+          code: "stock_above_expected",
+          month: m.i,
+          productId: r.productId,
+          productName: r.productName,
+          message: `Month ${m.i}: ${r.closeUnits} ${r.productName} left, but only ${r.expectedLeft} existed. That is more stock than there was.`,
+        });
+      } else if (r.lostUnits > 0) {
+        issues.push({
+          level: "warning",
+          code: "stock_below_expected",
+          month: m.i,
+          productId: r.productId,
+          productName: r.productName,
+          message: `Month ${m.i}: ${r.lostUnits} ${r.productName} unaccounted for — charged as a loss at cost.`,
+        });
+      }
+      if (!declared.has(r.productId)) {
+        issues.push({
+          level: "error",
+          code: "undeclared_product",
+          month: m.i,
+          productId: r.productId,
+          productName: r.productName,
+          message: `Month ${m.i} refers to a product that is not on the cycle's product list.`,
+        });
+      }
+    }
+    if (m.cash < 0) {
+      issues.push({
+        level: "error",
+        code: "negative_cash",
+        month: m.i,
+        productId: null,
+        productName: null,
+        message: `Month ${m.i} ends with negative cash — more was spent than was available.`,
+      });
+    }
+  }
+
+  if (cycle.cashNeeded > cycle.endCash) {
+    issues.push({
+      level: "error",
+      code: "cash_shortfall",
+      month: null,
+      productId: null,
+      productName: null,
+      message:
+        "Cash needed at payout is more than the cash in hand — stock would have to be sold to settle.",
+    });
+  }
+
+  return issues;
+}
+
+/* ── Investor-facing view ────────────────────────────────────────── */
+
+/**
+ * The ONLY shape investor-facing renderers may consume.
+ *
+ * Business confidentiality: the investor report must never break
+ * figures down by product. No product names, no per-product
+ * quantities, no per-product revenue, and no unit cost anywhere.
+ * Totals only. Never divide cost of purchase by quantity — in any
+ * label, caption or tooltip.
+ *
+ * This type carries no product-shaped field, so a per-product figure
+ * cannot reach the investor template by accident.
+ */
+export type InvestorMonthView = {
+  i: number;
+  revenue: number;
+  purchaseCost: number;
+  expenses: number;
+  gross: number;
+  net: number;
+  unitsBought: number;
+  unitsSold: number;
+  unitsLeft: number;
+};
+
+export type InvestorCycleView = {
+  months: InvestorMonthView[];
+  slotPrice: number;
+  slots: number;
+  capital: number;
+  profit: number;
+  isLoss: boolean;
+  holderPot: number;
+  mudaribPot: number;
+  grossPerSlot: number;
+  whtPerSlot: number;
+  netPerSlot: number;
+  slotReturn: number;
+  payoutPerSlot: number;
+  revenue: number;
+  purchaseCost: number;
+  expensesTotal: number;
+  unitsBought: number;
+  unitsSold: number;
+  unitsLeft: number;
+  invRatio: number;
+};
+
+export function investorView(cycle: CycleResult): InvestorCycleView {
+  return {
+    months: cycle.months.map((m) => ({
+      i: m.i,
+      revenue: m.revenue,
+      purchaseCost: m.spend,
+      expenses: m.sellExp,
+      gross: m.gross,
+      net: m.net,
+      unitsBought: m.unitsBought,
+      unitsSold: m.unitsSold,
+      unitsLeft: m.unitsLeft,
+    })),
+    slotPrice: cycle.slotPrice,
+    slots: cycle.slots,
+    capital: cycle.capital,
+    profit: cycle.profit,
+    isLoss: cycle.isLoss,
+    holderPot: cycle.holderPot,
+    mudaribPot: cycle.mudaribPot,
+    grossPerSlot: cycle.grossPerSlot,
+    whtPerSlot: cycle.whtPerSlot,
+    netPerSlot: cycle.netPerSlot,
+    slotReturn: cycle.slotReturn,
+    payoutPerSlot: cycle.payoutPerSlot,
+    revenue: cycle.revenue,
+    purchaseCost: cycle.purchTotal,
+    expensesTotal: cycle.sellExpTotal,
+    unitsBought: cycle.unitsBought,
+    unitsSold: cycle.unitsSold,
+    unitsLeft: cycle.unitsLeft,
+    invRatio: cycle.invRatio,
   };
 }
 
