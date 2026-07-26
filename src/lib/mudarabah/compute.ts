@@ -2,6 +2,18 @@
  * Mudarabah cycle engine — THE single source of truth for every
  * calculation in the Mudarabah cycle feature.
  *
+ * ── MONEY IS INTEGER KOBO ──────────────────────────────────────────
+ * Every money value in and out of this module is a whole number of
+ * kobo. Never naira, never a float. ₦8,000 is 800_000. Formatting to
+ * naira happens at the edge, in the UI, and nowhere else.
+ *
+ * Value is split between sold / lost / left units by largest
+ * remainder, so the three parts add back to the stock's value exactly.
+ * That keeps the books whole to the kobo instead of drifting a
+ * fraction at a time, which is why the invariant below is an exact
+ * integer equality rather than an approximate one.
+ * ───────────────────────────────────────────────────────────────────
+ *
  * A cycle trades several products at once. Products are declared once
  * per cycle and keep a stable identity across all three months, because
  * a product bought in month 1 may still be selling in month 3.
@@ -34,15 +46,26 @@
  *
  * Invariant (holds by construction; tested on random inputs):
  *   endCash + sum of every product's final closing value
- *     === totalCapital + totalProfit
+ *     === totalCapital + totalProfit          (exact, to the kobo)
  *
  * Import this module from EVERY path that needs cycle figures —
  * browser, server renderer, email job, balance updater. Store only
  * inputs; derive on read. Never persist profit, ROI or unit cost.
  *
+ * The ONE exception is the settlement snapshot: once a cycle is
+ * settled its figures are frozen and read back from that record, never
+ * recomputed. See figures.ts.
+ *
  * Investor-facing code must consume investorView() and nothing else:
  * the investor report must never break figures down by product.
  */
+
+/**
+ * Bumped BY HAND whenever a formula changes. Every settlement is
+ * stamped with it, so "which rules was this cycle settled under?"
+ * always has an answer.
+ */
+export const ENGINE_VERSION = "1.0.0";
 
 export type ProductRef = {
   id: string;
@@ -54,11 +77,11 @@ export type MonthRowInput = {
   productId: string;
   /** How many we got */
   qty: number;
-  /** Cost of each (delivery already included) */
+  /** Cost of each, in KOBO (delivery already included) */
   unitCost: number;
   /** How many sold */
   soldQty: number;
-  /** Selling price per product */
+  /** Selling price per product, in KOBO */
   sellPrice: number;
   /**
    * Units left at month end. DERIVED — leave undefined and the engine
@@ -70,7 +93,7 @@ export type MonthRowInput = {
 
 export type MonthInput = {
   rows: MonthRowInput[];
-  /** Month-level selling expenses — never split per product */
+  /** Month-level selling expenses in KOBO — never split per product */
   ads: number;
   logistics: number;
   misc: number;
@@ -81,6 +104,7 @@ export type CycleInput = {
   name?: string;
   startDate?: string;
   currency?: string;
+  /** In KOBO */
   slotPrice: number;
   slots: number;
   /** Investor share of profit, 0–100 */
@@ -103,7 +127,10 @@ export type RowResult = {
   spend: number;
   availUnits: number;
   availValue: number;
-  /** Weighted average cost price for THIS product */
+  /**
+   * Weighted average cost price for THIS product, in kobo. A rate, not
+   * a money amount — kept exact and never rounded or stored.
+   */
   unitCP: number;
   soldQty: number;
   sellPrice: number;
@@ -217,6 +244,30 @@ const int = (v: unknown): number => {
 };
 
 /**
+ * Split a whole-kobo amount across weights so the parts add back to
+ * the total EXACTLY. Each part takes the floor of its exact share and
+ * the leftover kobo go to the largest remainders.
+ *
+ * A weight of zero always receives zero — a bucket holding no units
+ * never picks up a phantom kobo of stock.
+ */
+function allocate(total: number, weights: number[]): number[] {
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  if (totalWeight === 0) return weights.map(() => 0);
+  const exact = weights.map((w) => (total * w) / totalWeight);
+  const parts = exact.map(Math.floor);
+  let leftover = total - parts.reduce((s, p) => s + p, 0);
+  const byRemainder = exact
+    .map((e, i) => ({ i, r: e - Math.floor(e) }))
+    .sort((a, b) => b.r - a.r);
+  for (let k = 0; k < byRemainder.length && leftover > 0; k++) {
+    parts[byRemainder[k].i] += 1;
+    leftover -= 1;
+  }
+  return parts;
+}
+
+/**
  * Declared products, plus any product a month row references but the
  * cycle never declared. Including the stragglers keeps their value
  * inside the books — silently dropping a row would break the invariant.
@@ -268,13 +319,17 @@ function mergeRows(rows: MonthRowInput[]): Map<string, MonthRowInput> {
       qty,
       unitCost:
         qty > 0
-          ? (qtyA * num(prev.unitCost) + qtyB * num(r.unitCost)) / qty
-          : num(r.unitCost),
+          ? Math.round(
+              (qtyA * num(prev.unitCost) + qtyB * num(r.unitCost)) / qty
+            )
+          : int(r.unitCost),
       soldQty,
       sellPrice:
         soldQty > 0
-          ? (soldA * num(prev.sellPrice) + soldB * num(r.sellPrice)) / soldQty
-          : num(r.sellPrice),
+          ? Math.round(
+              (soldA * num(prev.sellPrice) + soldB * num(r.sellPrice)) / soldQty
+            )
+          : int(r.sellPrice),
       stockLeft: entered ?? null,
     });
   }
@@ -282,7 +337,7 @@ function mergeRows(rows: MonthRowInput[]): Map<string, MonthRowInput> {
 }
 
 export function compute(input: CycleInput): CycleResult {
-  const slotPrice = num(input.slotPrice);
+  const slotPrice = int(input.slotPrice);
   const slots = Math.max(0, int(input.slots));
   const capital = slotPrice * slots;
   const invRatio = num(input.ratio) / 100;
@@ -311,27 +366,32 @@ export function compute(input: CycleInput): CycleResult {
       const openValue = state.value;
 
       const qty = int(raw?.qty ?? 0);
-      const unitCost = num(raw?.unitCost ?? 0);
+      const unitCost = int(raw?.unitCost ?? 0);
       const spend = qty * unitCost;
       const availUnits = openUnits + qty;
       const availValue = openValue + spend;
-      // WEIGHTED AVERAGE cost for THIS product only
+      // WEIGHTED AVERAGE cost for THIS product only — exact, unrounded
       const unitCP = availUnits > 0 ? availValue / availUnits : 0;
 
       const soldQty = int(raw?.soldQty ?? 0);
-      const sellPrice = num(raw?.sellPrice ?? 0);
+      const sellPrice = int(raw?.sellPrice ?? 0);
       const revenue = soldQty * sellPrice;
-      const cogs = soldQty * unitCP;
 
       const expectedLeft = availUnits - soldQty;
       const typed = raw?.stockLeft;
       const hasTyped = typed !== undefined && typed !== null;
       const closeUnits = hasTyped ? int(typed) : expectedLeft;
       const lostUnits = expectedLeft - closeUnits;
-      // Unaccounted units charged as a loss AT THAT PRODUCT'S COST
-      const lostValue = lostUnits * unitCP;
-      // Closing stock valued at COST, never at selling price
-      const closeValue = closeUnits * unitCP;
+
+      // The stock's value splits three ways and must add back exactly:
+      // what was sold, what went missing, what is still on the shelf.
+      // Unaccounted units are charged AT THAT PRODUCT'S COST; closing
+      // stock is valued at COST, never at selling price.
+      const [cogs, lostValue, closeValue] = allocate(availValue, [
+        soldQty,
+        lostUnits,
+        closeUnits,
+      ]);
 
       state.units = closeUnits;
       state.value = closeValue;
@@ -372,10 +432,10 @@ export function compute(input: CycleInput): CycleResult {
     const spend = rowSum("spend");
     const stockValue = rowSum("closeValue");
 
-    const ads = num(m?.ads);
-    const logistics = num(m?.logistics);
-    const misc = num(m?.misc);
-    const bankCharges = num(m?.bankCharges);
+    const ads = int(m?.ads);
+    const logistics = int(m?.logistics);
+    const misc = int(m?.misc);
+    const bankCharges = int(m?.bankCharges);
     const sellExp = ads + logistics + misc + bankCharges;
 
     // Gross excludes selling expenses; net is what holders share
@@ -443,10 +503,11 @@ export function compute(input: CycleInput): CycleResult {
   const isLoss = profit < 0;
   // On a loss the manager's share is ZERO — capital providers bear
   // the financial loss; the manager's loss is unpaid effort.
-  const holderPot = isLoss ? profit : profit * invRatio;
-  const mudaribPot = isLoss ? 0 : profit * (1 - invRatio);
-  const grossPerSlot = slots > 0 ? holderPot / slots : 0;
-  const whtPerSlot = grossPerSlot > 0 ? grossPerSlot * whtRate : 0;
+  // The two pots are split so they add back to the profit exactly.
+  const holderPot = isLoss ? profit : Math.round(profit * invRatio);
+  const mudaribPot = isLoss ? 0 : profit - holderPot;
+  const grossPerSlot = slots > 0 ? Math.round(holderPot / slots) : 0;
+  const whtPerSlot = grossPerSlot > 0 ? Math.round(grossPerSlot * whtRate) : 0;
   const netPerSlot = grossPerSlot - whtPerSlot;
   const last = months[2];
 
