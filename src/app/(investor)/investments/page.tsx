@@ -15,6 +15,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { mudarabahDb } from "@/lib/mudarabah/db";
 import { CycleStatements, type CycleStatement } from "./_cycle-statements";
+import {
+  MaturityBanner,
+  MaturityDialog,
+} from "@/components/investor/maturity-prompt";
+import { loadMaturityPrompts } from "@/lib/maturity-prompts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "My Investments" };
@@ -118,8 +123,16 @@ export default async function InvestmentsPage() {
   const matured = investments?.filter((i) => i.status === "matured") ?? [];
   const completed = investments?.filter((i) => i.status === "completed") ?? [];
 
+  const maturityPrompts = await loadMaturityPrompts(supabase);
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Above the heading on purpose: someone opening this page in
+          the last days of a cycle should not have to scroll to find
+          the one thing being asked of them. */}
+      <MaturityDialog items={maturityPrompts} />
+      <MaturityBanner items={maturityPrompts} />
+
       <div>
         <h1 className="text-2xl font-bold text-foreground">My Investments</h1>
         <p className="text-muted text-sm mt-1">All your MaalGrow investments across all series</p>

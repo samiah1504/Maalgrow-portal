@@ -16,6 +16,11 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import {
+  MaturityBanner,
+  MaturityDialog,
+} from "@/components/investor/maturity-prompt";
+import { loadMaturityPrompts } from "@/lib/maturity-prompts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -151,8 +156,19 @@ export default async function DashboardPage() {
 
   const firstName = investor.full_name.split(" ")[0];
 
+  // Who to interrupt, and about what. Resolved inside the database
+  // from the session, so this page cannot ask about anyone else's
+  // holdings; empty until migration 027 is applied.
+  const maturityPrompts = await loadMaturityPrompts(supabase);
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Asked on arrival, and again at the top of the page, for as
+          long as the cycle's instruction window is open. Both vanish
+          the moment an instruction is recorded. */}
+      <MaturityDialog items={maturityPrompts} />
+      <MaturityBanner items={maturityPrompts} />
+
       {/* KYC update notice */}
       {kycUpdateNeeded && (
         <Link

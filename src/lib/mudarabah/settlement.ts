@@ -110,13 +110,28 @@ export type SettlementPreview = {
 /**
  * WHEN NOBODY ANSWERED.
  *
- * An investor with no instruction has their capital PAID OUT. Handing
- * back capital that someone wanted to keep working is a phone call.
- * Keeping capital that someone wanted returned is their money held
- * without their say-so. Only one of those is recoverable, so the
- * default goes that way — visibly, and overridable before commit.
+ * An investor with no instruction has their capital CONTINUE into the
+ * next cycle. Their profit is paid out either way — that was never
+ * conditional on answering.
+ *
+ * This was the other way round until the portal started asking
+ * properly. The reasoning then was that keeping someone's money
+ * without their say-so is worse than returning money they would
+ * rather have left working. Once the maturity window existed — a
+ * dialog on arrival and a banner on two pages for ten days — the
+ * population changed. Silence stopped meaning "I could not find the
+ * form" and started meaning "I am not paying attention", and those
+ * people are overwhelmingly the ones who would have continued.
+ *
+ * Continuing also asks nothing of anybody. Paying out capital nobody
+ * requested moves real money to a bank account on a guess, and
+ * unwinding that is worse than the reverse. Someone who wanted their
+ * capital and missed the window says so, and is answered by a person.
+ *
+ * Still shown prominently in the preview, and still overridable
+ * before the commit — a default is not a decision.
  */
-export const DEFAULT_WHEN_UNDECIDED: CapitalAction = "withdraw";
+export const DEFAULT_WHEN_UNDECIDED: CapitalAction = "rollover";
 
 function resolve(
   p: Participant,
@@ -237,7 +252,7 @@ export function settlementPreview(
       kind: "no-decision",
       message: `${undecided.length} investor${
         undecided.length === 1 ? " has" : "s have"
-      } no capital instruction on record. Their capital will be PAID OUT unless you change it below.`,
+      } no capital instruction on record. Their capital will CONTINUE into the next cycle and their profit will be paid out, unless you change it below.`,
       investors: names(undecided),
     });
   }
@@ -333,7 +348,7 @@ export function settlementPayload(preview: SettlementPreview) {
     capitalWithdrawn: h.capitalWithdrawn,
     amountPaid: h.amountPaid,
     amountPaidNote: h.defaulted
-      ? "No maturity instruction on record — capital paid out by default"
+      ? "No maturity instruction on record — capital continued by default; profit paid"
       : null,
   }));
 }
