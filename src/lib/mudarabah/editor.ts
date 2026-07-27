@@ -112,6 +112,24 @@ export type CycleTerms = {
   totalCapital: number;
   withdrawSlots: number;
   holders: CycleHolder[];
+  /**
+   * Enrolments in this cycle whose slots and confirmed payments do not
+   * agree, worst first. Kobo. Empty on a healthy cycle, and empty on a
+   * database that has not yet run migration 024.
+   */
+  fundingGaps: FundingGap[];
+};
+
+/** One investor whose slots and money are out of step. Kobo. */
+export type FundingGap = {
+  investmentId: string;
+  investorName: string;
+  investorCode: string;
+  units: number;
+  capital: number;
+  confirmedPaid: number;
+  /** Positive: slots not paid for. Negative: money not credited. */
+  gap: number;
 };
 
 export function emptyRow(productId: string): DraftRow {
@@ -245,6 +263,20 @@ export type LedgerPayload = {
     investorTin: string | null;
     slotsWithdrawn: number;
   }[];
+  /**
+   * Migration 024. Absent on a database that has not run it yet — the
+   * page must render either way, so this is optional and defaults to
+   * empty rather than being assumed present.
+   */
+  fundingGaps?: {
+    investmentId: string;
+    investorName: string;
+    investorCode: string;
+    units: number;
+    capital: number;
+    confirmedPaid: number;
+    gap: number;
+  }[];
 };
 
 /** Naira from the portal's own columns into the ledger's kobo */
@@ -268,6 +300,15 @@ export function termsFromLedger(p: LedgerPayload): CycleTerms {
     amountReceived: toKobo(p.amountReceived),
     totalCapital: toKobo(p.totalCapital),
     withdrawSlots: Number(p.withdrawSlots ?? 0),
+    fundingGaps: (p.fundingGaps ?? []).map((g) => ({
+      investmentId: g.investmentId,
+      investorName: g.investorName,
+      investorCode: g.investorCode,
+      units: Number(g.units ?? 0),
+      capital: toKobo(g.capital),
+      confirmedPaid: toKobo(g.confirmedPaid),
+      gap: toKobo(g.gap),
+    })),
     holders: (p.holders ?? []).map((h) => ({
       investmentId: h.investmentId,
       investorId: h.investorId,

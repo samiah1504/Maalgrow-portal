@@ -387,6 +387,9 @@ export default async function AdminInvestorDetailPage({
                               currentUnits={inv.units}
                               currentCapital={inv.capital}
                               pricePerUnit={inv.price_per_unit}
+                              confirmedPaid={inv.investment_payments
+                                .filter((p) => p.status === "confirmed")
+                                .reduce((s, p) => s + p.amount, 0)}
                             />
                             <AddPaymentButton
                               investor={investorSummary}

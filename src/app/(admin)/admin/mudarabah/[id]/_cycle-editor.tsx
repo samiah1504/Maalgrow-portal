@@ -473,6 +473,39 @@ export function CycleEditor({
               }}
             />
           )}
+
+          {/*
+            Which enrolments, by name. The notice above gives a total,
+            and a total is not something anyone can act on — "₦500,000
+            short" sends you to the SQL editor, whereas a name sends
+            you to that investor's page. Worst first.
+          */}
+          {terms.fundingGaps.length > 0 && (
+            <div
+              className="notice warning"
+              style={{ marginTop: 8, flexDirection: "column" }}
+            >
+              <p style={{ margin: 0, fontWeight: 600 }}>
+                {terms.fundingGaps.length} enrolment
+                {terms.fundingGaps.length === 1 ? "" : "s"} where the slots and
+                the confirmed payments disagree
+              </p>
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {terms.fundingGaps.map((g) => (
+                  <li key={g.investmentId} className="tiny">
+                    <strong>{g.investorName}</strong>{" "}
+                    <span className="num muted">({g.investorCode})</span> —{" "}
+                    {g.units} slot{g.units === 1 ? "" : "s"} ={" "}
+                    {naira(g.capital, symbol)}, but{" "}
+                    {naira(g.confirmedPaid, symbol)} confirmed:{" "}
+                    {g.gap > 0
+                      ? `${naira(g.gap, symbol)} unpaid`
+                      : `${naira(-g.gap, symbol)} uncredited`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {slotsDisagree && (
             <NoticeLine
               notice={{

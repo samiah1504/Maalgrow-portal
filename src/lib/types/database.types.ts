@@ -1280,6 +1280,17 @@ export type Database = {
         Args: { p_payment_id: string; p_reason: string };
         Returns: Json;
       };
+      // Migration 024 — the sole write path for an enrolment's slots.
+      // Refuses any edit that would leave capital and confirmed
+      // payments unequal.
+      set_investment_slots: {
+        Args: {
+          p_investment_id: string;
+          p_units: number;
+          p_reason?: string | null;
+        };
+        Returns: Json;
+      };
       confirm_investor_payment: {
         Args: { p_payment_id: string };
         Returns: Json;

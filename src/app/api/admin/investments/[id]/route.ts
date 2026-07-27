@@ -1,14 +1,24 @@
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-
-const ADMIN_ROLES = ["super_admin", "administrator", "finance"];
+import { createClient } from "@/lib/supabase/server";
 
 // PATCH /api/admin/investments/[id]
-// action: "set_slots" — directly adjust an investor's slot count.
-// Capital is recalculated as slots × slot value, and the cycle
-// totals update automatically via the update_cycle_totals trigger,
-// so every portfolio view (investor dashboard, series/cycle pages,
-// reports) reflects the change immediately.
+// action: "set_slots" — adjust an investor's slot count.
+//
+// This used to UPDATE the investments table directly, which is how
+// slots and money came apart: the enrolment moved and nothing was
+// asked of investment_payments, so a cycle could end up holding
+// slots no confirmed payment covered.
+//
+// It now goes through set_investment_slots (migration 024), which
+// refuses any edit that would break
+//
+//     investments.capital == SUM(confirmed payments)
+//
+// and names the exact shortfall when it does. The role check, the
+// step validation and the audit log all live in that function, in
+// one transaction with the write — so nothing here can drift from
+// what the database actually enforces. The session client is used so
+// auth.uid() is the administrator making the change.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -20,16 +30,6 @@ export async function PATCH(
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: callerProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!callerProfile || !ADMIN_ROLES.includes(callerProfile.role ?? "")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { id } = await params;
@@ -54,76 +54,37 @@ export async function PATCH(
       );
     }
 
-    const adminClient = await createAdminClient();
-    const { data: investment, error: invErr } = await adminClient
-      .from("investments")
-      .select("id, investor_id, units, capital, price_per_unit, status, investment_code")
-      .eq("id", id)
-      .single();
-
-    if (invErr || !investment) {
-      return NextResponse.json({ error: "Investment not found" }, { status: 404 });
-    }
-
-    if (investment.status !== "active") {
-      return NextResponse.json(
-        {
-          error: `Only active investments can be adjusted (this one is ${investment.status}). Matured or completed cycles are historical records.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const newCapital =
-      Math.round(units * investment.price_per_unit * 100) / 100;
-
-    if (units === investment.units && newCapital === investment.capital) {
-      return NextResponse.json({
-        success: true,
-        units,
-        capital: newCapital,
-        message: "No change",
-      });
-    }
-
-    // The update_cycle_totals trigger (migration 014) applies the
-    // delta to the cycle's total_capital / total_slots.
-    const { error: updateErr } = await adminClient
-      .from("investments")
-      .update({
-        units,
-        capital: newCapital,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-
-    if (updateErr) {
-      return NextResponse.json(
-        { error: "Failed to update slots: " + updateErr.message },
-        { status: 500 }
-      );
-    }
-
-    // Audit trail records who changed it, from what, to what
-    await supabase.rpc("create_audit_log", {
-      p_action: "investment_slots_adjusted",
-      p_entity_type: "investment",
-      p_entity_id: id,
-      p_old_values: {
-        units: investment.units,
-        capital: investment.capital,
-      },
-      p_new_values: {
-        units,
-        capital: newCapital,
-        reason: body.reason?.trim() || null,
-      },
+    const { data, error } = await supabase.rpc("set_investment_slots", {
+      p_investment_id: id,
+      p_units: units,
+      p_reason: body.reason?.trim() || null,
     });
+
+    if (error) {
+      // P0001 is a RAISE EXCEPTION — the funding invariant, a
+      // non-active enrolment, or a permission refusal. Every one of
+      // those is a message written for the administrator to read, so
+      // it goes through verbatim rather than being flattened to
+      // "something went wrong".
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.code === "P0001" ? 400 : 500 }
+      );
+    }
+
+    const result = (data ?? {}) as {
+      changed?: boolean;
+      units?: number;
+      capital?: number;
+      confirmedPaid?: number;
+    };
 
     return NextResponse.json({
       success: true,
-      units,
-      capital: newCapital,
+      units: result.units ?? units,
+      capital: result.capital ?? null,
+      confirmedPaid: result.confirmedPaid ?? null,
+      ...(result.changed === false ? { message: "No change" } : {}),
     });
   } catch (err) {
     console.error("[API] PATCH /admin/investments/[id] error:", err);

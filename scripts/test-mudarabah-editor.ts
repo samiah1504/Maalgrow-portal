@@ -64,6 +64,7 @@ function terms(over: Partial<CycleTerms> = {}): CycleTerms {
     amountReceived: 2_000_000 * 100,
     totalCapital: 2_000_000 * 100,
     withdrawSlots: 8,
+    fundingGaps: [],
     holders: [],
     ...over,
   };

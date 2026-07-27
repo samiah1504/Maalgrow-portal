@@ -23,6 +23,12 @@ interface Props {
   currentUnits: number;
   currentCapital: number;
   pricePerUnit: number;
+  /**
+   * Confirmed payments against this enrolment. Slots and money have to
+   * match — see migration 024 — so this is what the new slot count is
+   * checked against, shown here so the refusal is never a surprise.
+   */
+  confirmedPaid: number;
 }
 
 export function EditSlotsDialog({
@@ -31,6 +37,7 @@ export function EditSlotsDialog({
   currentUnits,
   currentCapital,
   pricePerUnit,
+  confirmedPaid,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -43,6 +50,13 @@ export function EditSlotsDialog({
   const validStep = unitsNum >= 0.5 && Number.isInteger(unitsNum * 2);
   const newCapital = Math.round(unitsNum * pricePerUnit * 100) / 100;
   const changed = validStep && unitsNum !== currentUnits;
+
+  // The same check set_investment_slots applies, mirrored here so the
+  // consequence is visible while you type rather than arriving as a
+  // rejection after you press Save. The database is still the one that
+  // decides — this never gates the request, it only explains it.
+  const gap = validStep ? newCapital - confirmedPaid : 0;
+  const funded = Math.abs(gap) <= 0.005;
 
   const handleSave = async () => {
     if (!validStep) {
@@ -90,8 +104,8 @@ export function EditSlotsDialog({
             <DialogDescription>
               <span className="font-mono text-xs">{investmentCode}</span> —
               capital is recalculated at {formatCurrency(pricePerUnit)} per
-              slot and reflects across the investor&apos;s portfolio
-              immediately.
+              slot. Slots must stay equal to the confirmed payments behind
+              them, so an edit that would open a gap is refused.
             </DialogDescription>
           </DialogHeader>
 
@@ -102,6 +116,10 @@ export function EditSlotsDialog({
                 <span className="font-medium">
                   {slotLabel(currentUnits)} · {formatCurrency(currentCapital)}
                 </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Confirmed payments</span>
+                <span className="font-medium">{formatCurrency(confirmedPaid)}</span>
               </div>
               <div className="flex justify-between items-center border-t border-border pt-1">
                 <span className="font-semibold flex items-center gap-1">
@@ -114,6 +132,28 @@ export function EditSlotsDialog({
                 </span>
               </div>
             </div>
+
+            {validStep && changed && !funded && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-800">
+                  {gap > 0 ? (
+                    <>
+                      This would leave {formatCurrency(gap)} of slots with no
+                      confirmed payment behind them, so it will be refused.
+                      Correct the payment record first — a payment that carries
+                      slots adjusts the enrolment by itself.
+                    </>
+                  ) : (
+                    <>
+                      This would leave {formatCurrency(-gap)} of confirmed money
+                      with no slots against it, so it will be refused. Reverse
+                      or correct the excess payment first.
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-foreground">

@@ -83,6 +83,7 @@ const TERMS: CycleTerms = {
   amountReceived: 2000000 * 100,
   totalCapital: 2000000 * 100,
   withdrawSlots: 8,
+  fundingGaps: [],
   holders: [
     { investmentId: "i1", investorId: "v1", investorName: "Aisha Bello", investorCode: "MG0001", investorTin: "TIN-1", units: 12.5, capitalAction: "withdraw", slotsWithdrawn: 12.5 },
     { investmentId: "i2", investorId: "v2", investorName: "Yusuf Ibrahim", investorCode: "MG0002", investorTin: null, units: 7.5, capitalAction: "rollover", slotsWithdrawn: 0 },
