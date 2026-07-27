@@ -20,6 +20,41 @@ const typeIcons: Record<string, string> = {
   system: "⚙️",
 };
 
+/**
+ * A notification's body, set to be read rather than glanced at.
+ *
+ * It used to render as a single <p> at text-xs in muted grey, which
+ * collapsed every line break the sender typed. A short "your payment
+ * was confirmed" survived that; a real announcement arrived as an
+ * unbroken grey slab several hundred words long, which is what
+ * prompted this.
+ *
+ * Blank lines become paragraphs and single newlines stay as line
+ * breaks, so what the sender laid out is what the investor reads.
+ * Type is at the size and line height of something meant to be read
+ * through, and in the foreground colour: muted grey is for the
+ * timestamp, not for the message itself.
+ */
+function NotificationBody({ text }: { text: string }) {
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="mt-2 space-y-3">
+      {paragraphs.map((p, i) => (
+        <p
+          key={i}
+          className="text-sm leading-7 text-foreground/85 whitespace-pre-line"
+        >
+          {p}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<{
     id: string;
@@ -119,7 +154,7 @@ export default function NotificationsPage() {
                 key={n.id}
                 href={n.action_url ?? "#"}
                 onClick={() => !n.is_read && markRead(n.id)}
-                className={`flex items-start gap-3 rounded-xl border p-4 transition-all ${
+                className={`flex items-start gap-3 rounded-xl border p-5 transition-all ${
                   !n.is_read
                     ? "bg-primary-50 border-primary-100 hover:border-primary-200"
                     : "bg-surface border-border hover:border-primary-100"
@@ -130,15 +165,15 @@ export default function NotificationsPage() {
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`text-sm font-medium ${!n.is_read ? "text-foreground" : "text-muted-foreground"}`}>
+                    <p className={`text-base font-semibold leading-snug ${!n.is_read ? "text-foreground" : "text-muted-foreground"}`}>
                       {n.title}
                     </p>
                     {!n.is_read && (
-                      <div className="h-2 w-2 rounded-full bg-primary-500 flex-shrink-0 mt-1" />
+                      <div className="h-2 w-2 rounded-full bg-primary-500 flex-shrink-0 mt-2" />
                     )}
                   </div>
-                  <p className="text-xs text-muted mt-0.5 leading-relaxed">{n.message}</p>
-                  <p className="text-[10px] text-muted/70 mt-1.5">{formatRelativeTime(n.created_at)}</p>
+                  <NotificationBody text={n.message} />
+                  <p className="text-[11px] text-muted/70 mt-3">{formatRelativeTime(n.created_at)}</p>
                 </div>
               </Wrapper>
             );

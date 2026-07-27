@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Megaphone, Plus, Globe, Lock, Trash2, Send, Loader2 } from "lucide-react";
+import { Megaphone, Plus, Globe, Lock, Trash2, Send, Loader2, Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,25 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<"all" | "investors" | "admins">("investors");
+  /** Set while correcting one that has already gone out. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const startEdit = (a: Announcement) => {
+    setEditingId(a.id);
+    setTitle(a.title);
+    setBody(a.body);
+    setAudience(a.audience);
+    setShowForm(true);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setTitle("");
+    setBody("");
+    setAudience("investors");
+  };
 
   const handleCreate = async () => {
     if (!title.trim() || !body.trim()) {
@@ -62,30 +81,42 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
     }
     setSending(true);
     try {
+      // Editing corrects the record AND every copy already delivered.
+      // The audience cannot change: those notifications are already in
+      // specific people's hands, and re-aiming them would mean sending
+      // to some and silently retracting from others.
       const res = await fetch("/api/admin/announcements", {
-        method: "POST",
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, message: body, audience }),
+        body: JSON.stringify(
+          editingId
+            ? { id: editingId, title, message: body }
+            : { title, message: body, audience }
+        ),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Could not send the announcement");
+      if (!res.ok) throw new Error(json.error ?? "Could not save the announcement");
 
-      // The count is what makes this real rather than reassuring —
-      // it is the number of notifications actually written.
-      const n = Number(json.recipients ?? 0);
-      toast.success(
-        n === 0
-          ? "Announcement saved, but it reached nobody — check the audience."
-          : `Sent to ${n} ${n === 1 ? "person" : "people"}`
-      );
-      setTitle("");
-      setBody("");
-      setAudience("investors");
-      setShowForm(false);
+      if (editingId) {
+        const n = Number(json.notificationsUpdated ?? 0);
+        toast.success(
+          `Updated — corrected in ${n} ${n === 1 ? "person's" : "people's"} notifications`
+        );
+      } else {
+        // The count is what makes this real rather than reassuring —
+        // it is the number of notifications actually written.
+        const n = Number(json.recipients ?? 0);
+        toast.success(
+          n === 0
+            ? "Announcement saved, but it reached nobody — check the audience."
+            : `Sent to ${n} ${n === 1 ? "person" : "people"}`
+        );
+      }
+      cancelForm();
       router.refresh();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Could not send the announcement"
+        err instanceof Error ? err.message : "Could not save the announcement"
       );
     } finally {
       setSending(false);
@@ -122,7 +153,10 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
           <h1 className="text-2xl font-bold text-foreground">Announcements</h1>
           <p className="text-sm text-muted mt-1">Publish notices to investors and staff</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2">
+        <Button
+          onClick={() => (showForm ? cancelForm() : setShowForm(true))}
+          className="flex items-center gap-2"
+        >
           <Plus className="h-4 w-4" />
           New Announcement
         </Button>
@@ -131,7 +165,9 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
       {showForm && (
         <Card className="border-primary-200">
           <CardHeader>
-            <CardTitle className="text-base">Create Announcement</CardTitle>
+            <CardTitle className="text-base">
+              {editingId ? "Edit Announcement" : "Create Announcement"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
@@ -145,12 +181,16 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder="Write your announcement here…"
-                rows={4}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                placeholder={"Write your announcement here…\n\nLeave a blank line between paragraphs — investors see them exactly as you lay them out."}
+                rows={10}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm leading-7 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y"
               />
+              <p className="text-xs text-muted">
+                A blank line starts a new paragraph. Long announcements are
+                much easier to read broken into a few short ones.
+              </p>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" hidden={Boolean(editingId)}>
               <label className="text-sm font-medium text-foreground">Audience</label>
               <div className="flex gap-3">
                 {(["investors", "all", "admins"] as const).map((a) => (
@@ -179,9 +219,15 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                {sending ? "Sending…" : "Publish"}
+                {sending
+                  ? editingId
+                    ? "Saving…"
+                    : "Sending…"
+                  : editingId
+                  ? "Save changes"
+                  : "Publish"}
               </Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button variant="outline" onClick={cancelForm}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
@@ -214,19 +260,31 @@ export function AnnouncementsScreen({ rows }: { rows: ApiRow[] }) {
                           <Badge variant="active" dot>Published</Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted leading-relaxed">{announcement.body}</p>
+                      <p className="text-sm text-foreground/80 leading-7 whitespace-pre-line">
+                        {announcement.body}
+                      </p>
                       <p className="text-xs text-muted mt-2">
                         {formatRelative(announcement.created_at)} · sent to{" "}
                         {announcement.recipients}{" "}
                         {announcement.recipients === 1 ? "person" : "people"}
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleDelete(announcement.id)}
-                      className="flex-shrink-0 rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex flex-shrink-0 items-center gap-1">
+                      <button
+                        onClick={() => startEdit(announcement)}
+                        title="Edit — corrects it in everyone's notifications too"
+                        className="rounded-lg p-1.5 text-muted hover:bg-primary-50 hover:text-primary-700 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(announcement.id)}
+                        title="Withdraw — removes it from everyone's notifications"
+                        className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

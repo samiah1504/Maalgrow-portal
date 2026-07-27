@@ -74,6 +74,54 @@ export async function POST(request: Request) {
   }
 }
 
+// PATCH — correct one that has already gone out. Updates the record
+// and every delivered copy, leaving read state alone: a correction to
+// wording should not relight anybody's bell.
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = (await request.json()) as {
+      id?: string;
+      title?: string;
+      message?: string;
+      actionUrl?: string;
+    };
+
+    if (!body.id) {
+      return NextResponse.json({ error: "Which announcement?" }, { status: 400 });
+    }
+    if (!body.title?.trim() || !body.message?.trim()) {
+      return NextResponse.json(
+        { error: "An announcement needs a title and a message" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase.rpc("update_announcement", {
+      p_id: body.id,
+      p_title: body.title.trim(),
+      p_body: body.message.trim(),
+      p_action_url: body.actionUrl?.trim() || null,
+    });
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.code === "P0001" ? 400 : 500 }
+      );
+    }
+    return NextResponse.json(data ?? {});
+  } catch (err) {
+    console.error("[API] PATCH /admin/announcements error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient();

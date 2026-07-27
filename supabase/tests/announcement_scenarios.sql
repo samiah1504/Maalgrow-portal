@@ -88,3 +88,64 @@ DO $$ DECLARE v_ok BOOLEAN := FALSE; BEGIN
   RAISE NOTICE 'PASS A7: only an administrator can announce';
 END $$;
 ROLLBACK;
+
+-- ------------------------------------------------------------
+-- A8 — correcting one that has already gone out (migration 029)
+--
+--   The whole reason this exists: an announcement sent as an
+--   unbroken wall of text, which had to be fixable without
+--   withdrawing it and sending it twice.
+-- ------------------------------------------------------------
+BEGIN;
+INSERT INTO auth.users (id,email) VALUES
+ ('a0000000-0000-0000-0000-0000000000e5','ed@t.com'),
+ ('10000000-0000-0000-0000-0000000000e5','er1@t.com') ON CONFLICT DO NOTHING;
+INSERT INTO profiles (id,email,full_name,role) VALUES
+ ('a0000000-0000-0000-0000-0000000000e5','ed@t.com','Edit Admin','super_admin'),
+ ('10000000-0000-0000-0000-0000000000e5','er1@t.com','Reader','investor')
+ON CONFLICT (id) DO UPDATE SET role=EXCLUDED.role;
+SELECT set_config('test.uid','a0000000-0000-0000-0000-0000000000e5',false);
+
+DO $$ DECLARE v JSONB; v_id UUID; v_msg TEXT; BEGIN
+  v := broadcast_announcement('Typo in the title', 'One long unbroken paragraph.', 'investors');
+  v_id := (v->>'id')::UUID;
+
+  -- The reader has already read it
+  UPDATE notifications SET is_read = TRUE
+   WHERE metadata->>'announcement_id' = v_id::TEXT;
+
+  v := update_announcement(v_id, 'Corrected title',
+        E'First paragraph.\n\nSecond paragraph.');
+
+  IF (v->>'notificationsUpdated')::INT < 1 THEN
+    RAISE EXCEPTION 'TEST FAIL A8: the delivered copies were not corrected: %', v;
+  END IF;
+
+  SELECT message INTO v_msg FROM notifications
+   WHERE metadata->>'announcement_id' = v_id::TEXT LIMIT 1;
+  IF v_msg NOT LIKE E'%First paragraph.\n\nSecond paragraph.%' THEN
+    RAISE EXCEPTION 'TEST FAIL A8: the investor still reads the old wording: %', v_msg;
+  END IF;
+  IF (SELECT title FROM notifications WHERE metadata->>'announcement_id'=v_id::TEXT LIMIT 1)
+     <> 'Corrected title' THEN
+    RAISE EXCEPTION 'TEST FAIL A8: the title was not corrected in the delivered copy';
+  END IF;
+
+  -- and it did NOT relight their bell
+  IF EXISTS (SELECT 1 FROM notifications
+             WHERE metadata->>'announcement_id'=v_id::TEXT AND NOT is_read) THEN
+    RAISE EXCEPTION 'TEST FAIL A8: an edit marked a read announcement unread again';
+  END IF;
+
+  RAISE NOTICE 'PASS A8: an edit corrects every delivered copy and leaves read state alone';
+END $$;
+
+DO $$ DECLARE v_ok BOOLEAN := FALSE; v_id UUID; BEGIN
+  SELECT id INTO v_id FROM announcements WHERE title='Corrected title';
+  PERFORM set_config('test.uid','10000000-0000-0000-0000-0000000000e5',false);
+  BEGIN PERFORM update_announcement(v_id, 'Hacked', 'By an investor');
+  EXCEPTION WHEN OTHERS THEN v_ok := TRUE; END;
+  IF NOT v_ok THEN RAISE EXCEPTION 'TEST FAIL A9: an investor edited an announcement'; END IF;
+  RAISE NOTICE 'PASS A9: only an administrator can correct one';
+END $$;
+ROLLBACK;

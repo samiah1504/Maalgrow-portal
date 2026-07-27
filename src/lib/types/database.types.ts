@@ -1301,6 +1301,17 @@ export type Database = {
         Args: { p_id: string };
         Returns: Json;
       };
+      // Migration 029 — corrects the record and every delivered copy,
+      // leaving read state untouched.
+      update_announcement: {
+        Args: {
+          p_id: string;
+          p_title: string;
+          p_body: string;
+          p_action_url?: string | null;
+        };
+        Returns: Json;
+      };
       // Migration 024 — the sole write path for an enrolment's slots.
       // Refuses any edit that would leave capital and confirmed
       // payments unequal.
