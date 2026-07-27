@@ -148,8 +148,8 @@ export function MaturityDialog({ items }: { items: MaturityPromptItem[] }) {
           </p>
           <p className="text-xs text-muted">
             Your profit is paid to you either way — this is only about your
-            capital. You can change your mind until{" "}
-            {formatDate(first.closesAt)}.
+            capital. You have until {formatDate(first.closesAt)} to decide, and
+            your answer is final once you give it.
           </p>
           {items.length > 1 && (
             <p className="text-xs text-muted">

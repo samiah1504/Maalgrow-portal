@@ -45,18 +45,40 @@ DO $$ DECLARE v JSONB; BEGIN
     RAISE EXCEPTION 'TEST FAIL: the instruction was not recorded';
   END IF;
 
-  -- and they can still change their mind
+  RAISE NOTICE 'PASS: a settled cycle still accepts a maturity instruction';
+END $$;
+
+-- 036: and that answer is final. It used to be changeable right up to
+-- the deadline; it is now one decision, and only a super admin can
+-- revise it afterwards.
+DO $$ DECLARE v_msg TEXT; BEGIN
+  BEGIN
+    PERFORM submit_rollover_decision(
+      (SELECT id FROM investments WHERE investment_code='Z-MAT'),
+      'continue'::maturity_decision);
+    RAISE EXCEPTION 'TEST FAIL: the investor changed a submitted instruction';
+  EXCEPTION WHEN OTHERS THEN
+    v_msg := SQLERRM;
+    IF v_msg LIKE 'TEST FAIL%' THEN RAISE; END IF;
+  END;
+  RAISE NOTICE 'PASS: a submitted instruction is final — %', v_msg;
+END $$;
+
+SELECT set_config('test.uid','a0000000-0000-0000-0000-00000000bb01',false);
+
+DO $$ BEGIN
   PERFORM submit_rollover_decision(
     (SELECT id FROM investments WHERE investment_code='Z-MAT'),
-    'continue'::maturity_decision);
+    'continue'::maturity_decision, NULL, NULL, NULL, 'Investor rang', TRUE);
   IF NOT EXISTS (SELECT 1 FROM rollover_decisions rd
                  JOIN investments i ON i.id = rd.investment_id
                  WHERE i.investment_code='Z-MAT' AND rd.decision::text='continue') THEN
-    RAISE EXCEPTION 'TEST FAIL: the instruction could not be changed';
+    RAISE EXCEPTION 'TEST FAIL: a super admin could not revise the instruction';
   END IF;
-
-  RAISE NOTICE 'PASS: a settled cycle still accepts and changes maturity instructions';
+  RAISE NOTICE 'PASS: a super admin can still revise it';
 END $$;
+
+SELECT set_config('test.uid','10000000-0000-0000-0000-00000000bb01',false);
 
 DO $$ DECLARE v_ok BOOLEAN := FALSE; v_msg TEXT; BEGIN
   -- Once the capital IS done with, it closes

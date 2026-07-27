@@ -89,9 +89,10 @@ SELECT submit_rollover_decision('30000000-0000-0000-0000-000000000002', 'exit', 
 SET test.uid = '10000000-0000-0000-0000-000000000003';
 SELECT submit_rollover_decision('30000000-0000-0000-0000-000000000003', 'continue', 'GTB', 'Investor Three', '0123456780', NULL);
 
--- I8: partial withdrawal (Option 3) — withdraw 0.5 of 2 slots
+-- Partial validation runs FIRST, because from migration 036 a valid
+-- instruction locks: the arithmetic has to be exercised before I8 has
+-- answered, or every attempt below is refused for being a second one.
 SET test.uid = '10000000-0000-0000-0000-000000000008';
-SELECT submit_rollover_decision('30000000-0000-0000-0000-000000000008', 'partial_exit', 'Zenith', 'Investor Eight', '0123456788', NULL, FALSE, 0.5);
 
 -- Partial validation: withdrawing ALL slots must direct to Option 2
 DO $$
@@ -122,9 +123,32 @@ BEGIN
   END;
 END $$;
 
+-- I8: partial withdrawal (Option 3) — withdraw 0.5 of 2 slots
+SELECT submit_rollover_decision('30000000-0000-0000-0000-000000000008', 'partial_exit', 'Zenith', 'Investor Eight', '0123456788', NULL, FALSE, 0.5);
+
+-- 036: and that answer is final. An investor gets one instruction;
+-- changing it afterwards is a super admin's job.
+DO $$
+BEGIN
+  BEGIN
+    PERFORM submit_rollover_decision('30000000-0000-0000-0000-000000000008', 'partial_exit', 'Zenith', 'Investor Eight', '0123456788', NULL, FALSE, 1.0);
+    RAISE EXCEPTION 'TEST FAIL: a submitted instruction was changed by the investor';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%locked%' OR SQLERRM LIKE '%already been rolled over%' THEN
+      RAISE NOTICE 'PASS: a submitted instruction is final';
+    ELSE RAISE; END IF;
+  END;
+END $$;
+
 -- Deadline lock: I4 tries after the deadline → must fail
 SET test.uid = 'a0000000-0000-0000-0000-000000000001';
-UPDATE cycles SET rollover_deadline = CURRENT_DATE - 1 WHERE id = 'c0000000-0000-0000-0000-000000000001';
+-- Both halves of the deadline, because from migration 027 the
+-- effective one is GREATEST(rollover_deadline, the window's close).
+-- Moving only rollover_deadline leaves the window holding it open —
+-- this test had been passing vacuously since 027.
+UPDATE cycles SET rollover_deadline = CURRENT_DATE - 1,
+                  instruction_closes_at = CURRENT_DATE - 1
+ WHERE id = 'c0000000-0000-0000-0000-000000000001';
 
 SET test.uid = '10000000-0000-0000-0000-000000000004';
 DO $$
@@ -133,8 +157,10 @@ BEGIN
     PERFORM submit_rollover_decision('30000000-0000-0000-0000-000000000004', 'rollover_all');
     RAISE EXCEPTION 'TEST FAIL: instruction accepted after lock';
   EXCEPTION WHEN OTHERS THEN
-    IF SQLERRM LIKE '%locked%' THEN
-      RAISE NOTICE 'PASS: post-deadline instruction rejected (locked)';
+    -- 034 reworded this: it is the CAPITAL being processed that
+    -- closes an instruction, not the profit being declared.
+    IF SQLERRM LIKE '%closed for this investment%' OR SQLERRM LIKE '%locked%' THEN
+      RAISE NOTICE 'PASS: post-deadline instruction rejected';
     ELSE RAISE; END IF;
   END;
 END $$;
@@ -142,7 +168,8 @@ END $$;
 -- Super admin approves the exception for I4 (legacy rollover_all)
 SET test.uid = 'a0000000-0000-0000-0000-000000000001';
 SELECT submit_rollover_decision('30000000-0000-0000-0000-000000000004', 'rollover_all', NULL, NULL, NULL, NULL, TRUE);
-UPDATE cycles SET rollover_deadline = NULL WHERE id = 'c0000000-0000-0000-0000-000000000001';
+UPDATE cycles SET rollover_deadline = NULL, instruction_closes_at = NULL
+ WHERE id = 'c0000000-0000-0000-0000-000000000001';
 
 -- I7: force a decision row that will FAIL at processing
 -- ('continue' payout with no bank details, inserted directly to
@@ -170,19 +197,6 @@ BEGIN
   RAISE NOTICE 'PASS: per-slot profit calculated from declared profit (no preset ROI)';
 END $$;
 
--- Locked at maturity: I5 tries to submit after declaration → blocked
-SET test.uid = '10000000-0000-0000-0000-000000000005';
-DO $$
-BEGIN
-  BEGIN
-    PERFORM submit_rollover_decision('30000000-0000-0000-0000-000000000005', 'exit', 'UBA', 'Investor Five', '0123456785');
-    RAISE EXCEPTION 'TEST FAIL: instruction accepted after maturity';
-  EXCEPTION WHEN OTHERS THEN
-    IF SQLERRM LIKE '%locked%' THEN
-      RAISE NOTICE 'PASS: instructions locked once investment matured';
-    ELSE RAISE; END IF;
-  END;
-END $$;
 SET test.uid = 'a0000000-0000-0000-0000-000000000001';
 
 -- ════════════════════════════════════════════════════════════
@@ -208,11 +222,42 @@ BEGIN
   SELECT end_date INTO v_src_end FROM cycles WHERE id = 'c0000000-0000-0000-0000-000000000001';
   SELECT create_next_cycle(s.id) INTO v_id FROM series s WHERE s.name = 'A';
   SELECT start_date, end_date INTO v_start, v_end FROM cycles WHERE id = v_id;
-  IF v_start != v_src_end OR v_end != (v_start + INTERVAL '3 months')::date THEN
-    RAISE EXCEPTION 'TEST FAIL: next cycle dates wrong (% → %)', v_start, v_end;
+  -- 036: the DAY AFTER the previous cycle ends, and ending the day
+  -- before the three months are up, so two cycles never share a date.
+  IF v_start != v_src_end + 1
+     OR v_end != (v_start + INTERVAL '3 months' - INTERVAL '1 day')::date THEN
+    RAISE EXCEPTION 'TEST FAIL: next cycle dates wrong (% → %), expected to start %',
+      v_start, v_end, v_src_end + 1;
   END IF;
-  RAISE NOTICE 'PASS: next cycle auto-generated with 3 calendar months (% → %)', v_start, v_end;
+  RAISE NOTICE 'PASS: next cycle auto-generated, starting the day after (% → %)', v_start, v_end;
 END $$;
+
+-- Still open after the declaration: I5 submits once the profit is out.
+--
+-- This asserted the opposite until migration 034, and that was the
+-- Series B failure — settling matures every investment, so a rule
+-- keyed on maturity shut out all twenty-eight investors the portal
+-- was still asking. Declaring the profit is the PROFIT event;
+-- an instruction is about CAPITAL, and stays open until the capital
+-- actually moves.
+SET test.uid = '10000000-0000-0000-0000-000000000005';
+DO $$
+BEGIN
+  PERFORM submit_rollover_decision('30000000-0000-0000-0000-000000000005', 'continue', 'UBA', 'Investor Five', '0123456785');
+  IF NOT EXISTS (SELECT 1 FROM rollover_decisions
+                 WHERE investment_id = '30000000-0000-0000-0000-000000000005'
+                   AND decision::text = 'continue') THEN
+    RAISE EXCEPTION 'TEST FAIL: a matured investment could not be instructed';
+  END IF;
+  -- 036: and because the profit IS declared, this one goes across to
+  -- the next cycle immediately rather than waiting for the bulk run.
+  IF (SELECT next_investment_id FROM investments
+       WHERE id = '30000000-0000-0000-0000-000000000005') IS NULL THEN
+    RAISE EXCEPTION 'TEST FAIL: instructing after settlement did not enrol I5';
+  END IF;
+  RAISE NOTICE 'PASS: instructions stay open after the profit is declared, and enrol at once';
+END $$;
+SET test.uid = 'a0000000-0000-0000-0000-000000000001';
 
 -- ════════════════════════════════════════════════════════════
 -- First processing run — I7 must fail, everyone else processes
@@ -226,8 +271,10 @@ DO $$
 DECLARE v RECORD; c RECORD; n INTEGER; dest UUID; r JSONB;
 BEGIN
   SELECT runs.r INTO r FROM runs WHERE name='run1';
-  IF (r->>'rolled')::int != 6 OR (r->>'withdrawn')::int != 1 OR (r->>'failed')::int != 1 THEN
-    RAISE EXCEPTION 'TEST FAIL: run1 rolled=% withdrawn=% failed=% (expected 6/1/1)',
+  -- 036: five, not six. I5 instructed after the profit was declared and
+  -- so went across on submission; the bulk run has one fewer to carry.
+  IF (r->>'rolled')::int != 5 OR (r->>'withdrawn')::int != 1 OR (r->>'failed')::int != 1 THEN
+    RAISE EXCEPTION 'TEST FAIL: run1 rolled=% withdrawn=% failed=% (expected 5/1/1)',
       r->>'rolled', r->>'withdrawn', r->>'failed';
   END IF;
 
@@ -352,7 +399,16 @@ BEGIN
     RAISE EXCEPTION 'TEST FAIL: source cycle not marked historical/processed';
   END IF;
   SELECT * INTO dest FROM cycles WHERE cycle_number = 2 AND series_id = (SELECT id FROM series WHERE name='A');
-  IF dest.status != 'active' THEN RAISE EXCEPTION 'TEST FAIL: destination cycle not activated'; END IF;
+  -- 036: it starts TOMORROW, so it is correctly still upcoming — the
+  -- rollover only activates a destination whose day has come.
+  IF dest.status != 'upcoming' THEN
+    RAISE EXCEPTION 'TEST FAIL: a cycle that has not started yet is already %', dest.status;
+  END IF;
+  -- and the nightly job starts it the moment it is due
+  UPDATE cycles SET start_date = CURRENT_DATE WHERE id = dest.id;
+  PERFORM mudarabah_open_next_cycles();
+  SELECT * INTO dest FROM cycles WHERE id = dest.id;
+  IF dest.status != 'active' THEN RAISE EXCEPTION 'TEST FAIL: destination cycle not activated when due'; END IF;
   IF dest.total_investors != 7 OR dest.total_slots != 7.5 OR dest.total_capital != 3850000 THEN
     RAISE EXCEPTION 'TEST FAIL: destination totals wrong (investors=% slots=% capital=%)',
       dest.total_investors, dest.total_slots, dest.total_capital;

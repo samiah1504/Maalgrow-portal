@@ -70,11 +70,18 @@ DO $$ DECLARE v_amt NUMERIC; v_n INT; BEGIN
   RAISE NOTICE 'PASS P1/P2: submitting raises the profit request, net of tax';
 END $$;
 
--- P3 — changing the instruction corrects it
+-- P3 — a super admin revising the instruction corrects it.
+--
+--      From migration 036 the investor gets one answer and it is
+--      final, so the revision here is an administrator's. What is
+--      being tested is unchanged: the requests must follow the
+--      instruction, whoever gives it.
+SELECT set_config('test.uid','a0000000-0000-0000-0000-00000000cc01',false);
+
 DO $$ DECLARE v_cap NUMERIC; BEGIN
   PERFORM submit_rollover_decision(
     (SELECT id FROM investments WHERE investment_code='P-1'),
-    'exit'::maturity_decision);
+    'exit'::maturity_decision, NULL, NULL, NULL, NULL, TRUE);
 
   SELECT amount INTO v_cap FROM payment_requests
    WHERE investment_id=(SELECT id FROM investments WHERE investment_code='P-1') AND type='capital';
@@ -95,7 +102,7 @@ DO $$ DECLARE v_n INT; BEGIN
 
   PERFORM submit_rollover_decision(
     (SELECT id FROM investments WHERE investment_code='P-1'),
-    'continue'::maturity_decision);
+    'continue'::maturity_decision, NULL, NULL, NULL, NULL, TRUE);
 
   IF NOT EXISTS (SELECT 1 FROM payment_requests
                  WHERE investment_id=(SELECT id FROM investments WHERE investment_code='P-1')

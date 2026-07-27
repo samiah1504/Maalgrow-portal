@@ -27,6 +27,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: rpcError.message }, { status: 500 });
     }
 
+    // Open the next cycle for anything that has settled, and start any
+    // cycle whose first day has arrived. Idempotent, so running it every
+    // night is the same as running it once (migration 036).
+    //
+    // Deliberately not fatal: a cycle failing to open must not stop
+    // maturities from being processed or campaigns from going out.
+    const { data: openedCycles, error: openError } = await supabase.rpc(
+      "mudarabah_open_next_cycles"
+    );
+    if (openError) {
+      console.error("[Cron] Next-cycle opening error:", openError);
+    }
+
     // Notify super_admin users about any cycles that matured today
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -93,6 +106,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       processed: rpcResult,
+      next_cycles: openedCycles ?? null,
       matured_cycles: (newlyMatured ?? []).length,
       scheduled_campaigns: commsResults,
       timestamp: new Date().toISOString(),

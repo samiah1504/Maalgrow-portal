@@ -205,6 +205,25 @@ export type RolloverDecisionRow = {
   source_cycle_id: string;
   decision: string;
   slots_to_withdraw: number | null;
+  submitted_at: string | null;
+  via: string | null;
+  locked: boolean;
+};
+
+/** A profit declaration, as the archive reads it back afterwards. */
+export type CycleProfitDeclarationRow = {
+  cycle_id: string;
+  investor_profit_share: number;
+  total_wht: number | null;
+};
+
+/** Money owed to an investor and how far it has got. */
+export type PaymentRequestRow = {
+  investment_id: string;
+  investor_id: string;
+  type: string;
+  amount: number;
+  status: string;
 };
 
 /**
@@ -221,6 +240,13 @@ export type InvestmentMembershipRow = {
   units: number;
   capital: number;
   status: string;
+  // Written by settlement, read by the archive. Nullable because they
+  // do not exist until the cycle settles.
+  investment_code: string;
+  declared_profit: number | null;
+  declared_profit_net: number | null;
+  next_investment_id: string | null;
+  created_at: string;
 };
 
 type Table<Row> = {
@@ -244,6 +270,8 @@ export type MudarabahDatabase = {
       mudarabah_cycle_events: Table<MudarabahCycleEventRow>;
       wht_issuer_settings: Table<WhtIssuerSettingsRow>;
       rollover_decisions: Table<RolloverDecisionRow>;
+      cycle_profit_declarations: Table<CycleProfitDeclarationRow>;
+      payment_requests: Table<PaymentRequestRow>;
       wht_credit_notes: Table<WhtCreditNoteRow>;
       mudarabah_statements: Table<MudarabahStatementRow>;
       investors: Table<InvestorRow>;

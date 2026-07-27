@@ -1184,6 +1184,12 @@ export type Database = {
         Args: Record<string, never>;
         Returns: number;
       };
+      // Migration 036. Creates the successor of any settled cycle and
+      // starts any cycle whose first day has arrived. Idempotent.
+      mudarabah_open_next_cycles: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
       submit_maturity_decision: {
         Args: {
           p_investment_id: string;

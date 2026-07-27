@@ -263,7 +263,13 @@ export function MaturityInstructions({
               </p>
             )}
           <p className="text-xs text-muted">
-            You can edit this instruction any time before {formatDate(deadline)}.
+            {/* Only reachable for instructions given before 036 made
+                them final — those rows carry locked = false, and the
+                promise they were given when they answered still
+                stands. Everything submitted since locks on the spot
+                and renders the locked view above instead. */}
+            You can still change this until {formatDate(deadline)}. Once you
+            change it, it is final.
           </p>
         </CardContent>
       </Card>
@@ -474,11 +480,13 @@ export function MaturityInstructions({
           </Button>
         </div>
         <p className="text-xs text-muted text-center">
-          {/* Not "locks at maturity" — 034 keeps it open until the
-              capital is actually processed, which is the whole point
-              of settling the profit first. */}
-          You can change this any time up to {formatDate(deadline)}. Your profit
-          is paid either way.
+          {/* 036 made the instruction final. It used to say this could
+              be changed up to the deadline, and that stopped being true
+              the moment submitting started moving the capital — the
+              slots go into the next cycle there and then. Saying so
+              before they press the button is the only honest order. */}
+          This instruction is final once submitted, so please check it. You have
+          until {formatDate(deadline)} to decide. Your profit is paid either way.
         </p>
       </CardContent>
     </Card>
