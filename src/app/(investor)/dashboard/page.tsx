@@ -230,13 +230,22 @@ export default async function DashboardPage() {
             Investor ID: {investor.investor_code} · Here&apos;s your investment overview
           </p>
         </div>
-        {maturedInvestments.length > 0 && (
+        {/* Only where action IS required. This used to key on
+            status === 'matured', and settling matures EVERY investment
+            in the cycle — so the moment a cycle settled, a pulsing
+            "Action Required" appeared for all of them, including the
+            investors who had already answered and could no longer
+            change anything. maturityPrompts is the set the portal is
+            genuinely still waiting on: it excludes anyone who has
+            given an instruction, anyone whose capital has moved, and
+            anyone whose window has closed. */}
+        {maturityPrompts.length > 0 && (
           <Link
             href="/investments"
             className="flex items-center gap-2 bg-gold-500 text-primary-900 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gold-400 transition-colors animate-pulse-gold"
           >
             <Bell className="h-4 w-4" />
-            {maturedInvestments.length} Investment{maturedInvestments.length !== 1 ? "s" : ""} Matured — Action Required
+            {maturityPrompts.length} Investment{maturityPrompts.length !== 1 ? "s" : ""} Matured — Action Required
             <ChevronRight className="h-4 w-4" />
           </Link>
         )}

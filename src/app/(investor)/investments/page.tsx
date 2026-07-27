@@ -125,6 +125,10 @@ export default async function InvestmentsPage() {
 
   const maturityPrompts = await loadMaturityPrompts(supabase);
 
+  // Which matured holdings are still being asked about. Everything
+  // else has been answered, or its capital has already moved.
+  const awaitingDecision = new Set(maturityPrompts.map((p) => p.investmentId));
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Above the heading on purpose: someone opening this page in
@@ -138,13 +142,18 @@ export default async function InvestmentsPage() {
         <p className="text-muted text-sm mt-1">All your MaalGrow investments across all series</p>
       </div>
 
-      {/* Matured — Action Required Banner */}
-      {matured.length > 0 && (
+      {/* Matured — Action Required Banner
+          Counted from the outstanding prompts, not from how many
+          investments are matured. Settling matures all of them, so
+          keying on status told an investor who had already answered
+          that they still had to. */}
+      {maturityPrompts.length > 0 && (
         <div className="flex items-start gap-3 rounded-xl border-2 border-gold-400 bg-gold-50 p-4">
           <AlertCircle className="h-5 w-5 text-gold-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-semibold text-gold-800">
-              {matured.length} investment{matured.length !== 1 ? "s" : ""} require your attention
+              {maturityPrompts.length} investment
+              {maturityPrompts.length !== 1 ? "s" : ""} require your attention
             </p>
             <p className="text-sm text-gold-700 mt-0.5">
               Please submit your maturity decision for each matured investment below.
@@ -167,16 +176,26 @@ export default async function InvestmentsPage() {
         <>
           <CycleStatements statements={statements} />
 
-          {/* Matured Investments */}
+          {/* Matured Investments
+              The heading only claims a decision is required when one
+              actually is, and only the cards still being asked about
+              are marked urgent. An investor who has answered sees
+              their matured holding plainly, with no red flag on it. */}
           {matured.length > 0 && (
             <section>
               <h2 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-gold-500" />
-                Matured — Decision Required ({matured.length})
+                {awaitingDecision.size > 0
+                  ? `Matured — Decision Required (${awaitingDecision.size} of ${matured.length})`
+                  : `Matured (${matured.length})`}
               </h2>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {matured.map((inv) => (
-                  <InvestmentCard key={inv.id} investment={inv} urgent />
+                  <InvestmentCard
+                    key={inv.id}
+                    investment={inv}
+                    urgent={awaitingDecision.has(inv.id)}
+                  />
                 ))}
               </div>
             </section>

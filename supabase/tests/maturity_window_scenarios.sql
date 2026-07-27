@@ -105,6 +105,40 @@ DO $$ DECLARE v_deadline DATE; BEGIN
   RAISE NOTICE 'PASS M6: what the window invites, submission accepts';
 END $$;
 
+-- M7 — and it stops asking the person who answered.
+--
+--     THE REPORTED FAULT. The gold "Investment Matured — Action
+--     Required" banner keyed on status = 'matured', and settling
+--     matures EVERY investment in the cycle. So an investor who had
+--     already given a locked instruction was still shown a pulsing
+--     demand for a decision they could no longer change. The banner
+--     now counts these prompts instead, so this is what makes it go.
+DO $$ DECLARE v JSONB; BEGIN
+  PERFORM set_config('test.uid','10000000-0000-0000-0000-0000000000d1',false);
+
+  IF NOT (SELECT locked FROM rollover_decisions
+           WHERE investment_id=(SELECT id FROM investments WHERE investment_code='W-NOW-1')) THEN
+    RAISE EXCEPTION 'TEST FAIL M7: the submitted instruction was not locked';
+  END IF;
+
+  v := my_maturity_prompts();
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v) e
+     WHERE e->>'investmentCode' = 'W-NOW-1'
+  ) THEN
+    RAISE EXCEPTION 'TEST FAIL M7: still being asked about a locked instruction: %', v;
+  END IF;
+
+  -- The holding is still MATURED. That is the whole point: the
+  -- status has not changed and must not be what the banner reads.
+  IF (SELECT status::TEXT FROM investments WHERE investment_code='W-NOW-1')
+     NOT IN ('active','matured') THEN
+    RAISE EXCEPTION 'TEST FAIL M7: the fixture no longer reproduces the reported case';
+  END IF;
+
+  RAISE NOTICE 'PASS M7: locked and answered, so nothing is asked — though still matured';
+END $$;
+
 -- M4 — a closed window asks nothing of anybody
 DO $$ DECLARE v JSONB; BEGIN
   DELETE FROM rollover_decisions
