@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, Bell, Shield, Globe, Save, RefreshCw, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Settings, Bell, Shield, Globe, Save, RefreshCw, CheckCircle2, CreditCard, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +18,7 @@ type SettingSection = {
 const sections: SettingSection[] = [
   { id: "general", title: "General", description: "Company info and branding", icon: <Globe className="h-4 w-4" /> },
   { id: "notifications", title: "Notifications", description: "Email and SMS alerts", icon: <Bell className="h-4 w-4" /> },
+  { id: "payments", title: "Payments", description: "Who may approve payouts", icon: <CreditCard className="h-4 w-4" /> },
   { id: "security", title: "Security", description: "Auth and session policy", icon: <Shield className="h-4 w-4" /> },
   { id: "automation", title: "Automation", description: "Cron jobs and triggers", icon: <RefreshCw className="h-4 w-4" /> },
 ];
@@ -39,6 +42,54 @@ export default function AdminSettingsPage() {
   // Security settings
   const [sessionTimeout, setSessionTimeout] = useState("60");
   const [requireMFA, setRequireMFA] = useState(false);
+
+  // Payments — the one setting on this page with a row behind it.
+  // Everything above is still local state that resets on reload; this
+  // reads and writes portal_settings through migration 038.
+  const supabase = useMemo(() => createClient(), []);
+  const [officerCanApprove, setOfficerCanApprove] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [savingApproval, setSavingApproval] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const [{ data: perms }, { data: { user } }] = await Promise.all([
+        supabase.rpc("my_payment_permissions"),
+        supabase.auth.getUser(),
+      ]);
+      const p = (perms ?? {}) as { officerCanApprove?: boolean };
+      setOfficerCanApprove(Boolean(p.officerCanApprove));
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles").select("role").eq("id", user.id).single();
+        setIsSuperAdmin(profile?.role === "super_admin");
+      }
+      setPaymentsLoading(false);
+    };
+    load();
+  }, [supabase]);
+
+  const toggleOfficerApproval = async () => {
+    const next = !officerCanApprove;
+    setSavingApproval(true);
+    setOfficerCanApprove(next); // optimistic
+    const { error } = await supabase.rpc("set_payment_officer_can_approve", {
+      p_enabled: next,
+    });
+    setSavingApproval(false);
+    if (error) {
+      setOfficerCanApprove(!next);
+      toast.error(error.message);
+      return;
+    }
+    toast.success(
+      next
+        ? "Payment Officers can now approve payments"
+        : "Payment Officers can no longer approve payments"
+    );
+  };
 
   const handleSave = () => {
     setSaved(true);
@@ -153,6 +204,61 @@ export default function AdminSettingsPage() {
                       </button>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeSection === "payments" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" /> Payment Approvals
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start justify-between gap-4 py-1">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Payment Officers can approve payments
+                    </p>
+                    <p className="text-xs text-muted mt-0.5 max-w-md">
+                      Off by default. Approving authorises the money; marking
+                      as paid records that it left. With this off, a Payment
+                      Officer can only confirm payments that someone else has
+                      already approved.
+                    </p>
+                  </div>
+                  {paymentsLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted" />
+                  ) : (
+                    <button
+                      onClick={toggleOfficerApproval}
+                      disabled={!isSuperAdmin || savingApproval}
+                      title={isSuperAdmin ? undefined : "Only a super admin can change this"}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        officerCanApprove ? "bg-primary-600" : "bg-border"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform mt-0.5 ${
+                          officerCanApprove ? "translate-x-5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  )}
+                </div>
+
+                {!isSuperAdmin && !paymentsLoading && (
+                  <p className="text-xs text-muted">
+                    Only a super admin can change this.
+                  </p>
+                )}
+
+                <div className="rounded-lg bg-surface-2 border border-border p-3 text-xs text-muted">
+                  Every approval, rejection and payment is written to the audit
+                  log with the person who did it — including changes to this
+                  switch.
                 </div>
               </CardContent>
             </Card>

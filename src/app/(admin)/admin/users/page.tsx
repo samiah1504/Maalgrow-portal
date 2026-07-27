@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { UserCog, ShieldCheck, Crown, Headphones, DollarSign, Wrench } from "lucide-react";
+import { UserCog, ShieldCheck, Crown, Headphones, DollarSign, Wrench, CreditCard } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ const roleConfig: Record<string, { label: string; icon: React.ReactNode; color: 
   finance: { label: "Finance", icon: <DollarSign className="h-3.5 w-3.5" />, color: "bg-emerald-100 text-emerald-800" },
   operations: { label: "Operations", icon: <Wrench className="h-3.5 w-3.5" />, color: "bg-blue-100 text-blue-800" },
   customer_support: { label: "Customer Support", icon: <Headphones className="h-3.5 w-3.5" />, color: "bg-purple-100 text-purple-800" },
+  payment_officer: { label: "Payment Officer", icon: <CreditCard className="h-3.5 w-3.5" />, color: "bg-emerald-100 text-emerald-800" },
 };
 
 export default async function AdminUsersPage() {
@@ -36,7 +37,7 @@ export default async function AdminUsersPage() {
   const { data: rawUsers } = await supabase
     .from("profiles")
     .select("id, full_name, email, role, created_at, kyc_status")
-    .in("role", ["super_admin", "administrator", "finance", "operations", "customer_support"])
+    .in("role", ["super_admin", "administrator", "finance", "operations", "customer_support", "payment_officer"])
     .order("created_at", { ascending: false });
 
   const users = rawUsers as AdminUserRow[] | null;

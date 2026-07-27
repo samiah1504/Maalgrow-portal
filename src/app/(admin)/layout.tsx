@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userName, setUserName] = useState<string>("");
+  const [role, setRole] = useState<string | null>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
 
   useEffect(() => {
@@ -19,18 +20,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name")
+        .select("full_name, role")
         .eq("id", user.id)
         .single();
 
       if (profile?.full_name) setUserName(profile.full_name);
+      if (profile?.role) setRole(profile.role);
 
-      const { count } = await supabase
-        .from("payment_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending");
-
-      setPendingPayments(count ?? 0);
+      // Through the RPC, not a direct count: a Payment Officer has no
+      // SELECT policy on payment_requests at all, so a table query
+      // would silently return zero for the one person who most needs
+      // the badge. The function checks the role from inside.
+      const { data: counts } = await supabase.rpc("payment_request_counts");
+      const c = (counts ?? {}) as Record<string, number>;
+      // An officer cannot approve, so what is waiting on THEM is the
+      // approved queue. Everyone else is looking at what needs a
+      // decision.
+      setPendingPayments(
+        profile?.role === "payment_officer"
+          ? c.approved ?? 0
+          : c.pending ?? 0
+      );
     };
 
     load();
@@ -42,6 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         pendingPayments={pendingPayments}
+        role={role}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar

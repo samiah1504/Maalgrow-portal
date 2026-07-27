@@ -16,7 +16,7 @@ export type Database = {
           full_name: string | null;
           phone: string | null;
           avatar_url: string | null;
-          role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "investor";
+          role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "payment_officer" | "investor";
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -27,7 +27,7 @@ export type Database = {
           full_name?: string | null;
           phone?: string | null;
           avatar_url?: string | null;
-          role?: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "investor";
+          role?: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "payment_officer" | "investor";
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -38,7 +38,7 @@ export type Database = {
           full_name?: string | null;
           phone?: string | null;
           avatar_url?: string | null;
-          role?: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "investor";
+          role?: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "payment_officer" | "investor";
           is_active?: boolean;
           updated_at?: string;
         };
@@ -1190,6 +1190,46 @@ export type Database = {
         Args: Record<string, never>;
         Returns: unknown;
       };
+      // Migration 038. The Payment Officer's entire surface area:
+      // these functions are the only way the role touches anything.
+      payment_request_queue: {
+        Args: { p_status?: string | null; p_limit?: number | null };
+        Returns: unknown;
+      };
+      payment_request_counts: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
+      my_payment_permissions: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
+      approve_payment_request: {
+        Args: { p_id: string };
+        Returns: unknown;
+      };
+      reject_payment_request: {
+        Args: { p_id: string; p_reason: string };
+        Returns: unknown;
+      };
+      mark_payment_request_paid: {
+        Args: { p_id: string; p_paid_on?: string | null; p_reference?: string | null };
+        Returns: unknown;
+      };
+      process_payment_requests: {
+        Args: {
+          p_ids: string[];
+          p_action: string;
+          p_reason?: string | null;
+          p_paid_on?: string | null;
+          p_reference?: string | null;
+        };
+        Returns: unknown;
+      };
+      set_payment_officer_can_approve: {
+        Args: { p_enabled: boolean };
+        Returns: unknown;
+      };
       submit_maturity_decision: {
         Args: {
           p_investment_id: string;
@@ -1385,7 +1425,7 @@ export type Database = {
       };
     };
     Enums: {
-      user_role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "investor";
+      user_role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "payment_officer" | "investor";
       investment_status: "active" | "matured" | "completed" | "cancelled";
       payment_status: "pending" | "approved" | "processing" | "paid" | "rejected";
       kyc_status: "pending" | "approved" | "rejected";

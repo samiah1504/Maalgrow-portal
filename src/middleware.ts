@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const ADMIN_ROUTES = ["/admin"];
+const PAYMENT_OFFICER = "payment_officer";
+const PAYMENT_OFFICER_HOME = "/admin/payment-requests";
 const PUBLIC_ROUTES = ["/login", "/forgot-password", "/reset-password", "/auth/callback"];
 
 export async function middleware(request: NextRequest) {
@@ -39,8 +41,7 @@ export async function middleware(request: NextRequest) {
     // Redirect authenticated users away from auth pages
     if (user && (pathname === "/login" || pathname === "/forgot-password")) {
       const profile = await getProfile(supabase, user.id);
-      const redirectPath = isAdminRole(profile?.role) ? "/admin/dashboard" : "/dashboard";
-      return NextResponse.redirect(new URL(redirectPath, request.url));
+      return NextResponse.redirect(new URL(homeFor(profile?.role), request.url));
     }
     return supabaseResponse;
   }
@@ -51,8 +52,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     const profile = await getProfile(supabase, user.id);
-    const redirectPath = isAdminRole(profile?.role) ? "/admin/dashboard" : "/dashboard";
-    return NextResponse.redirect(new URL(redirectPath, request.url));
+    return NextResponse.redirect(new URL(homeFor(profile?.role), request.url));
   }
 
   // Protected routes require authentication
@@ -65,6 +65,17 @@ export async function middleware(request: NextRequest) {
   // Admin routes require admin role
   if (ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {
     const profile = await getProfile(supabase, user.id);
+
+    // The Payment Officer is not an admin — deliberately, so that
+    // every is_admin() policy in the database refuses them. Here they
+    // get the one route their job needs and nothing else. This is the
+    // convenience half; the database is the half that matters.
+    if (profile?.role === PAYMENT_OFFICER) {
+      return pathname.startsWith(PAYMENT_OFFICER_HOME)
+        ? supabaseResponse
+        : NextResponse.redirect(new URL(PAYMENT_OFFICER_HOME, request.url));
+    }
+
     if (!isAdminRole(profile?.role)) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
@@ -80,6 +91,12 @@ async function getProfile(supabase: ReturnType<typeof createServerClient>, userI
     .eq("id", userId)
     .single();
   return data;
+}
+
+/** Where signing in lands you. An officer has one page; that is it. */
+function homeFor(role?: string | null): string {
+  if (role === PAYMENT_OFFICER) return PAYMENT_OFFICER_HOME;
+  return isAdminRole(role) ? "/admin/dashboard" : "/dashboard";
 }
 
 function isAdminRole(role?: string | null): boolean {

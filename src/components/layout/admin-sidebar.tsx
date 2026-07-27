@@ -102,10 +102,34 @@ interface AdminSidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   pendingPayments?: number;
+  role?: string | null;
 }
 
-export function AdminSidebar({ isOpen, onClose, pendingPayments = 0 }: AdminSidebarProps) {
+/**
+ * What the Payment Officer is shown. One item, because one item is all
+ * the role can reach.
+ *
+ * This is presentation only. The confinement that matters is that
+ * payment_officer is not in is_admin(), so every other table's policy
+ * refuses them at the database — hiding menu entries would be no
+ * protection on its own.
+ */
+const PAYMENT_OFFICER_NAV: NavGroup[] = [
+  {
+    label: "Payments",
+    items: [
+      {
+        label: "Payment Requests",
+        href: "/admin/payment-requests",
+        icon: <CreditCard className="h-4 w-4" />,
+      },
+    ],
+  },
+];
+
+export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, role }: AdminSidebarProps) {
   const pathname = usePathname();
+  const groups = role === "payment_officer" ? PAYMENT_OFFICER_NAV : navGroups;
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -156,7 +180,7 @@ export function AdminSidebar({ isOpen, onClose, pendingPayments = 0 }: AdminSide
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-          {navGroups.map((group) => (
+          {groups.map((group) => (
             <div key={group.label}>
               <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-primary-500">
                 {group.label}
