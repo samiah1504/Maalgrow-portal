@@ -46,6 +46,9 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
       start_date: string;
       end_date: string;
       rollover_deadline?: string | null;
+      // 027's window. The instruction is accepted until whichever of
+      // these is later, so the date shown must be that one too.
+      instruction_closes_at?: string | null;
     } | null;
   };
   type LinkedInvestment = { investment_code: string; status: string; cycle: { cycle_label: string } | null };

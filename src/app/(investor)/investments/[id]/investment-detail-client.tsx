@@ -40,7 +40,12 @@ export interface MaturityInstructionsProps {
     status: string;
     maturity_date: string;
     series?: { name: string };
-    cycle?: { cycle_label: string; end_date?: string; rollover_deadline?: string | null };
+    cycle?: {
+      cycle_label: string;
+      end_date?: string;
+      rollover_deadline?: string | null;
+      instruction_closes_at?: string | null;
+    };
   };
   savedInstruction: {
     decision: string;
@@ -90,10 +95,26 @@ export function MaturityInstructions({
   });
   const [submitting, setSubmitting] = useState(false);
 
-  const deadline =
-    investment.cycle?.rollover_deadline ??
-    investment.cycle?.end_date ??
-    investment.maturity_date;
+  /*
+   * The date the portal will actually stop accepting an answer.
+   *
+   * This read rollover_deadline and fell back to the cycle's end
+   * date, so it showed 30 July while the window — and the function —
+   * accepted instructions until 4 August. It told investors they had
+   * five days less than they had.
+   *
+   * rollover_decision_deadline() takes the LATER of the two, so the
+   * same rule applies here.
+   */
+  const deadlineCandidates = [
+    investment.cycle?.instruction_closes_at,
+    investment.cycle?.rollover_deadline,
+    investment.cycle?.end_date,
+    investment.maturity_date,
+  ].filter((d): d is string => Boolean(d));
+  const deadline = deadlineCandidates.length
+    ? deadlineCandidates.reduce((a, b) => (a > b ? a : b))
+    : investment.maturity_date;
 
   const totalSlots = Number(investment.units);
 
@@ -453,8 +474,11 @@ export function MaturityInstructions({
           </Button>
         </div>
         <p className="text-xs text-muted text-center">
-          You can edit this instruction any time before {formatDate(deadline)}. It locks
-          automatically at maturity.
+          {/* Not "locks at maturity" — 034 keeps it open until the
+              capital is actually processed, which is the whole point
+              of settling the profit first. */}
+          You can change this any time up to {formatDate(deadline)}. Your profit
+          is paid either way.
         </p>
       </CardContent>
     </Card>
