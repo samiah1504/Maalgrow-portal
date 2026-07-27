@@ -573,23 +573,35 @@ export default async function SeriesPage() {
                         in the records rather than a statistic, so it
                         appears below as a warning instead.
                       */}
-                      <div className="grid grid-cols-3 gap-2">
+                      {/*
+                        Two columns on a phone, three from sm up. Capital
+                        takes the whole second row on narrow screens —
+                        ₦39,000,000.00 is fourteen characters and will not
+                        fit a third of a 390px viewport, which is where
+                        this page is most often read.
+                      */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {[
-                          { label: "Investors", value: currentCycle.total_investors.toString() },
-                          { label: "Slots Sold", value: currentCycle.total_slots.toString() },
+                          { label: "Investors", value: currentCycle.total_investors.toString(), wide: false },
+                          { label: "Slots Sold", value: currentCycle.total_slots.toString(), wide: false },
                           {
                             label: "Capital",
                             value: formatCurrency(currentCycle.total_capital),
+                            wide: true,
                           },
-                        ].map(({ label, value }) => (
+                        ].map(({ label, value, wide }) => (
                           <div
                             key={label}
-                            className="rounded-lg bg-white/60 dark:bg-black/10 px-3 py-2.5 text-center"
+                            className={`rounded-lg bg-white/60 dark:bg-black/10 px-3 py-2.5 text-center ${
+                              wide ? "col-span-2 sm:col-span-1" : ""
+                            }`}
                           >
                             <p className="text-[10px] text-muted uppercase tracking-wide">
                               {label}
                             </p>
-                            <p className="text-sm font-bold text-foreground mt-0.5">{value}</p>
+                            <p className="text-sm font-bold text-foreground mt-0.5 tabular-nums break-words">
+                              {value}
+                            </p>
                           </div>
                         ))}
                       </div>
