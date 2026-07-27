@@ -16,6 +16,10 @@ const profileSchema = z.object({
   full_name: z.string().min(2, "Name must be at least 2 characters"),
   phone: z.string().optional(),
   address: z.string().optional(),
+  // Optional everywhere. A missing tax number never blocks an
+  // investment, a settlement or a payout — it only means we cannot
+  // issue a withholding tax credit note until it is supplied.
+  tin: z.string().optional(),
 });
 
 const bankSchema = z.object({
@@ -38,6 +42,7 @@ export default function ProfilePage() {
     bank_name: string | null;
     account_name: string | null;
     account_number: string | null;
+    tin: string | null;
     kyc_status: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +69,7 @@ export default function ProfilePage() {
           full_name: data.full_name,
           phone: data.phone ?? "",
           address: data.address ?? "",
+          tin: data.tin ?? "",
         });
         bankForm.reset({
           bank_name: data.bank_name ?? "",
@@ -80,7 +86,12 @@ export default function ProfilePage() {
     if (!investor) return;
     const { error } = await supabase
       .from("investors")
-      .update({ full_name: data.full_name, phone: data.phone, address: data.address })
+      .update({
+        full_name: data.full_name,
+        phone: data.phone,
+        address: data.address,
+        tin: data.tin?.trim() ? data.tin.trim() : null,
+      })
       .eq("id", investor.id);
 
     if (error) { toast.error("Failed to update profile"); return; }
@@ -172,6 +183,13 @@ export default function ProfilePage() {
                 className="flex w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 resize-none"
               />
             </div>
+            <Input
+              {...profileForm.register("tin")}
+              label="Tax Identification Number (TIN)"
+              placeholder="Optional"
+              error={profileForm.formState.errors.tin?.message}
+              hint="Only used to issue your withholding tax credit note. Leaving it blank affects nothing else."
+            />
             <div className="flex justify-end">
               <Button type="submit" loading={profileForm.formState.isSubmitting}>
                 <Save className="h-4 w-4" />

@@ -413,28 +413,56 @@ END $$;
 -- ------------------------------------------------------------
 DO $$
 DECLARE
-  v_settle UUID; v_res JSONB; v_again JSONB;
+  v_settle UUID; v_res JSONB; v_again JSONB; v_rem UUID;
   v_ref TEXT; v_amount BIGINT; v_ref2 TEXT; v_amount2 BIGINT;
   v_total BIGINT; v_declared BIGINT; v_ok BOOLEAN := FALSE;
 BEGIN
   SET LOCAL test.uid = 'a0000000-0000-0000-0000-0000000000f1';
 
-  SELECT id INTO v_settle FROM mudarabah_settlements
-  WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1'
-  ORDER BY settled_at DESC LIMIT 1;
+  -- Scenario 6 reopened this cycle, so it has no CURRENT settlement.
+  -- Since migration 023 a filing can only cover a settled cycle — you
+  -- cannot remit tax on figures that have been withdrawn — so settle
+  -- it again before anything can be certified.
+  PERFORM mudarabah_settle_cycle(
+    '40000000-0000-0000-0000-0000000000f1', '1.0.0',
+    jsonb_build_object('revenue', 500000001, 'profit', 100000001,
+                       'holderPot', 65000001, 'managerPot', 35000000),
+    jsonb_build_array(
+      jsonb_build_object(
+        'investmentId', (SELECT id FROM investments WHERE investment_code='MGA901-0001'),
+        'investorId', '20000000-0000-0000-0000-0000000000f1',
+        'units', 12.5, 'capital', 125000000,
+        'grossProfit', 40625001, 'wht', 4062500, 'netProfit', 36562501,
+        'capitalAction', 'rollover', 'slotsWithdrawn', 0,
+        'capitalWithdrawn', 0, 'amountPaid', 36562501),
+      jsonb_build_object(
+        'investmentId', (SELECT id FROM investments WHERE investment_code='MGA901-0002'),
+        'investorId', '20000000-0000-0000-0000-0000000000f2',
+        'units', 7.5, 'capital', 75000000,
+        'grossProfit', 24375000, 'wht', 2437500, 'netProfit', 21937500,
+        'capitalAction', 'withdraw', 'slotsWithdrawn', 7.5,
+        'capitalWithdrawn', 75000000, 'amountPaid', 96937500)));
 
-  -- Issuing without a remittance reference is refused: a note must
-  -- never claim a filing that has not happened
+  SELECT id INTO v_settle FROM mudarabah_settlements
+  WHERE cycle_id = '40000000-0000-0000-0000-0000000000f1' AND is_current;
+
+  -- Issuing with no filing on record is refused: a note must never
+  -- claim a remittance that has not happened. Since migration 023 the
+  -- filing is a RECORD, not a string, so there is nothing to type in.
   BEGIN
-    PERFORM mudarabah_issue_credit_notes(v_settle, '');
+    PERFORM mudarabah_issue_credit_notes('00000000-0000-0000-0000-000000000000'::UUID);
   EXCEPTION WHEN OTHERS THEN v_ok := TRUE;
   END;
   IF NOT v_ok THEN
     RAISE EXCEPTION 'TEST FAIL S8: a credit note was issued before the tax was filed';
   END IF;
 
+  v_rem := mudarabah_create_remittance(
+    'FIRS/2026/00123', '2026-04-30', 100000,
+    ARRAY['40000000-0000-0000-0000-0000000000f1']::UUID[]);
+
   -- Neither investor has a tax number yet, so nobody gets a note
-  v_res := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  v_res := mudarabah_issue_credit_notes(v_rem);
   IF (v_res->>'issued')::INT <> 0 OR (v_res->>'skipped_no_tin')::INT <> 2 THEN
     RAISE EXCEPTION 'TEST FAIL S8: expected nobody issued and 2 skipped, got %', v_res;
   END IF;
@@ -446,7 +474,7 @@ BEGIN
   UPDATE investors SET tin = '12345678-0001'
   WHERE id = '20000000-0000-0000-0000-0000000000f1';
 
-  v_res := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  v_res := mudarabah_issue_credit_notes(v_rem);
   IF (v_res->>'issued')::INT <> 1 OR (v_res->>'skipped_no_tin')::INT <> 1 THEN
     RAISE EXCEPTION 'TEST FAIL S8: expected 1 issued and 1 still waiting, got %', v_res;
   END IF;
@@ -466,7 +494,7 @@ BEGIN
   END IF;
 
   -- Running it again issues nothing new and changes nothing
-  v_again := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  v_again := mudarabah_issue_credit_notes(v_rem);
   IF (v_again->>'issued')::INT <> 0 OR (v_again->>'already_issued')::INT <> 1 THEN
     RAISE EXCEPTION 'TEST FAIL S8: reissuing created a duplicate, got %', v_again;
   END IF;
@@ -486,7 +514,7 @@ BEGIN
   -- Once the second investor fills theirs in, they are caught up
   UPDATE investors SET tin = '12345678-0002'
   WHERE id = '20000000-0000-0000-0000-0000000000f2';
-  v_res := mudarabah_issue_credit_notes(v_settle, 'FIRS/2026/00123', '2026-04-30');
+  v_res := mudarabah_issue_credit_notes(v_rem);
   IF (v_res->>'issued')::INT <> 1 THEN
     RAISE EXCEPTION 'TEST FAIL S8: the investor who caught up was not issued a note';
   END IF;

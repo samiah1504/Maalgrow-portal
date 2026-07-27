@@ -27,6 +27,8 @@ const schema = z.object({
     .string()
     .optional()
     .refine((v) => !v || v.length === 11, "NIN must be 11 digits"),
+  // Optional. Its only use is the withholding tax credit note.
+  tin: z.string().optional(),
   kyc_status: z.enum(["pending", "approved", "rejected"]),
   kyc_notes: z.string().optional(),
   preferred_channel: z.enum(["sms", "whatsapp", "both"]),
@@ -44,6 +46,7 @@ interface Investor {
   account_number: string | null;
   bvn: string | null;
   nin: string | null;
+  tin: string | null;
   kyc_status: string;
   kyc_notes: string | null;
   preferred_channel: string | null;
@@ -68,6 +71,7 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
       account_number: investor.account_number ?? "",
       bvn: investor.bvn ?? "",
       nin: investor.nin ?? "",
+      tin: investor.tin ?? "",
       kyc_status: investor.kyc_status as "pending" | "approved" | "rejected",
       kyc_notes: investor.kyc_notes ?? "",
       preferred_channel: (investor.preferred_channel ?? "sms") as "sms" | "whatsapp" | "both",
@@ -171,6 +175,13 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
               error={errors.nin?.message}
             />
           </div>
+          <Input
+            {...register("tin")}
+            label="Tax Identification Number (TIN)"
+            placeholder="Optional"
+            error={errors.tin?.message}
+            hint="Needed only to issue a withholding tax credit note. A blank TIN blocks nothing else."
+          />
         </CardContent>
       </Card>
 

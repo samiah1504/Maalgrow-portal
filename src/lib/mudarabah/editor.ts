@@ -69,8 +69,16 @@ export type CycleHolder = {
   investorId: string;
   investorName: string;
   investorCode: string;
+  /** For the settlement preview's "who has no tax number" warning */
+  investorTin: string | null;
   units: number;
-  capitalAction: "withdraw" | "rollover" | "partial";
+  /**
+   * NULL when no maturity instruction was ever recorded. Deliberately
+   * not folded into "rollover": someone who never answered is not
+   * someone who chose to leave their capital in, and settlement has to
+   * be able to tell them apart.
+   */
+  capitalAction: "withdraw" | "rollover" | "partial" | null;
   slotsWithdrawn: number;
 };
 
@@ -233,7 +241,8 @@ export type LedgerPayload = {
     investorName: string;
     investorCode: string;
     units: number;
-    capitalAction: string;
+    capitalAction: string | null;
+    investorTin: string | null;
     slotsWithdrawn: number;
   }[];
 };
@@ -265,12 +274,15 @@ export function termsFromLedger(p: LedgerPayload): CycleTerms {
       investorName: h.investorName,
       investorCode: h.investorCode,
       units: Number(h.units),
+      investorTin: h.investorTin ?? null,
       capitalAction:
         h.capitalAction === "withdraw"
           ? "withdraw"
           : h.capitalAction === "partial"
           ? "partial"
-          : "rollover",
+          : h.capitalAction === "rollover"
+          ? "rollover"
+          : null,
       slotsWithdrawn: Number(h.slotsWithdrawn ?? 0),
     })),
   };

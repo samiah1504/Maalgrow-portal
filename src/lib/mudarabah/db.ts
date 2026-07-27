@@ -130,6 +130,83 @@ export type MudarabahCycleEventRow = {
   created_at: string;
 };
 
+/** A generated document: the file an investor downloads AND is emailed. */
+export type MudarabahStatementRow = {
+  id: string;
+  cycle_id: string;
+  settlement_id: string;
+  investment_id: string;
+  investor_id: string;
+  kind: string;
+  storage_path: string | null;
+  state: string;
+  attempts: number;
+  last_error: string | null;
+  bytes: number | null;
+  generated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A frozen credit note. The document renders this and computes nothing. */
+export type WhtCreditNoteRow = {
+  id: string;
+  reference: string;
+  cycle_id: string;
+  settlement_id: string;
+  remittance_id: string | null;
+  investment_id: string;
+  investor_id: string;
+  investor_name: string;
+  investor_address: string | null;
+  investor_tin: string | null;
+  period_start: string;
+  period_end: string;
+  gross_profit: number;
+  wht_rate: number;
+  wht_amount: number;
+  net_paid: number;
+  deducted_on: string;
+  remittance_reference: string | null;
+  remitted_at: string | null;
+  filed_on: string | null;
+  issued_at: string;
+  reissue_count: number;
+};
+
+/** A filing with the tax authority. One filing may cover several cycles. */
+export type WhtRemittanceRow = {
+  id: string;
+  reference: string;
+  remitted_on: string;
+  amount: number;
+  authority: string | null;
+  notes: string | null;
+  recorded_by: string | null;
+  recorded_at: string;
+};
+
+/** Read-only: the few investor columns a statement needs to be addressed. */
+export type InvestorRow = {
+  id: string;
+  full_name: string;
+  investor_code: string;
+  tin: string | null;
+  address: string | null;
+};
+
+/**
+ * Read-only, and only the columns the report needs. The maturity
+ * instruction is what decides whether an investor's capital continues
+ * — the ledger never records it, it only reads it.
+ */
+export type RolloverDecisionRow = {
+  investment_id: string;
+  source_cycle_id: string;
+  decision: string;
+  slots_to_withdraw: number | null;
+};
+
 type Table<Row> = {
   Row: Row;
   Insert: Partial<Row>;
@@ -149,6 +226,12 @@ export type MudarabahDatabase = {
       mudarabah_balance_entries: Table<MudarabahBalanceEntryRow>;
       mudarabah_cycle_events: Table<MudarabahCycleEventRow>;
       wht_issuer_settings: Table<WhtIssuerSettingsRow>;
+      rollover_decisions: Table<RolloverDecisionRow>;
+      wht_credit_notes: Table<WhtCreditNoteRow>;
+      mudarabah_statements: Table<MudarabahStatementRow>;
+      investors: Table<InvestorRow>;
+      wht_remittances: Table<WhtRemittanceRow>;
+      wht_remittance_cycles: Table<{ remittance_id: string; cycle_id: string }>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -196,10 +279,63 @@ export type MudarabahDatabase = {
       };
       mudarabah_issue_credit_notes: {
         Args: {
-          p_settlement_id: string;
-          p_remittance_reference: string;
-          p_filed_on?: string;
+          p_remittance_id: string;
+          p_cycle_id?: string | null;
+          p_investment_id?: string | null;
         };
+        Returns: unknown;
+      };
+      mudarabah_create_remittance: {
+        Args: {
+          p_reference: string;
+          p_remitted_on: string;
+          p_amount: number;
+          p_cycle_ids: string[];
+          p_authority?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      mudarabah_issuance_preview: {
+        Args: { p_remittance_id: string };
+        Returns: unknown;
+      };
+      mudarabah_wht_overview: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
+      mudarabah_my_credit_note: {
+        Args: { p_cycle_id: string };
+        Returns: unknown;
+      };
+      mudarabah_queue_statements: {
+        Args: { p_settlement_id: string };
+        Returns: number;
+      };
+      mudarabah_requeue_statements: {
+        Args: { p_cycle_id: string };
+        Returns: number;
+      };
+      mudarabah_mark_statement: {
+        Args: {
+          p_id: string;
+          p_state: string;
+          p_path?: string | null;
+          p_bytes?: number | null;
+          p_error?: string | null;
+        };
+        Returns: undefined;
+      };
+      mudarabah_my_statement: {
+        Args: { p_cycle_id: string };
+        Returns: unknown;
+      };
+      mudarabah_statement_status: {
+        Args: { p_cycle_id: string };
+        Returns: unknown;
+      };
+      mudarabah_investor_cycle_history: {
+        Args: { p_investor_id: string };
         Returns: unknown;
       };
       mudarabah_record_payment: {

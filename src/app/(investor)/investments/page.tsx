@@ -13,6 +13,8 @@ import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { mudarabahDb } from "@/lib/mudarabah/db";
+import { CycleStatements, type CycleStatement } from "./_cycle-statements";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "My Investments" };
@@ -68,6 +70,50 @@ export default async function InvestmentsPage() {
     (rawInvestments as unknown as InvestmentRow[] | null) ?? []
   ).filter((i) => i.status !== "cancelled");
 
+  /* ── Settled cycles, from the frozen snapshot ─────────────────
+     Read with the SESSION client, so row level security decides what
+     comes back — the investor id is never a parameter here. A cycle
+     with no ledger simply returns no row, and its existing card below
+     renders exactly as it always has, with no statement and no
+     explanation of the absence. */
+  type HistoryRow = {
+    cycle_id: string; series_name: string; cycle_label: string;
+    start_date: string; end_date: string; units: number; capital: number;
+    gross_profit: number; wht: number; net_profit: number;
+    net_return_pct: number; capital_action: string;
+    slots_withdrawn: number; wht_state: string;
+  };
+
+  const mud = mudarabahDb(supabase);
+  const { data: historyRaw } = await mud.rpc("mudarabah_investor_cycle_history", {
+    p_investor_id: investor.id,
+  });
+  const history = ((historyRaw ?? []) as unknown as HistoryRow[]) ?? [];
+
+  const { data: docs } = await mud
+    .from("mudarabah_statements")
+    .select("cycle_id, state")
+    .eq("kind", "statement");
+  const docState = new Map((docs ?? []).map((d) => [d.cycle_id, d.state]));
+
+  const statements: CycleStatement[] = history.map((h) => ({
+    cycleId: h.cycle_id,
+    seriesName: h.series_name,
+    cycleLabel: h.cycle_label,
+    startDate: h.start_date,
+    endDate: h.end_date,
+    units: Number(h.units),
+    capital: Number(h.capital),
+    grossProfit: Number(h.gross_profit),
+    wht: Number(h.wht),
+    netProfit: Number(h.net_profit),
+    netReturnPct: Number(h.net_return_pct),
+    capitalAction: h.capital_action,
+    slotsWithdrawn: Number(h.slots_withdrawn),
+    whtState: h.wht_state,
+    documentState: docState.get(h.cycle_id) ?? null,
+  }));
+
   const active = investments?.filter((i) => i.status === "active") ?? [];
   const matured = investments?.filter((i) => i.status === "matured") ?? [];
   const completed = investments?.filter((i) => i.status === "completed") ?? [];
@@ -106,6 +152,8 @@ export default async function InvestmentsPage() {
         </Card>
       ) : (
         <>
+          <CycleStatements statements={statements} />
+
           {/* Matured Investments */}
           {matured.length > 0 && (
             <section>

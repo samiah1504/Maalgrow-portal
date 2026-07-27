@@ -25,7 +25,9 @@ const OPTION_LABEL: Record<string, string> = {
   continue: "Receive My Profit and Continue with My Capital",
   exit: "Receive My Profit and Withdraw All My Capital",
   partial_exit: "Receive My Profit and Withdraw Part of My Capital",
-  rollover_all: "Roll over capital and profit (set by administrator)",
+  // Profit is never rolled forward — it is paid out at the end of every
+  // cycle, to everyone. Only capital can continue.
+  rollover_all: "Receive My Profit and Continue with My Capital (set by administrator)",
 };
 
 export interface MaturityInstructionsProps {
@@ -168,7 +170,10 @@ export function MaturityInstructions({
   if (isLocked) {
     const label = savedInstruction
       ? OPTION_LABEL[savedInstruction.decision] ?? savedInstruction.decision
-      : "No instruction submitted — default applies: your profit is paid to your bank account and your capital continues into the next cycle";
+      : // Settlement pays out the capital of anyone who left no
+        // instruction. Telling them the opposite here would be worse
+        // than telling them nothing.
+        "No instruction submitted — your profit is paid to your bank account, and your capital is returned to you as well unless you tell us otherwise";
     return (
       <Card className="border-primary-200">
         <CardHeader className="pb-3">

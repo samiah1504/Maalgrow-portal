@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Layers } from "lucide-react";
+import Link from "next/link";
+import { FileText, Layers } from "lucide-react";
 import { mudarabahDb } from "@/lib/mudarabah/db";
 import { CyclePicker, type PickerCycle, type PickerSeries } from "./_cycle-picker";
 import type { Metadata } from "next";
@@ -60,7 +61,7 @@ export default async function MudarabahPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 text-primary-700">
           <Layers className="h-5 w-5" />
         </div>
@@ -71,6 +72,13 @@ export default async function MudarabahPage() {
             shared as a ratio of what the trade actually realised
           </p>
         </div>
+        <div className="flex-1" />
+        <Link
+          href="/admin/mudarabah/report"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground hover:border-primary-300"
+        >
+          <FileText className="h-3.5 w-3.5" /> Preview an investor report
+        </Link>
       </div>
 
       <CyclePicker series={pickerSeries} cycles={pickerCycles} />

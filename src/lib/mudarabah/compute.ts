@@ -782,7 +782,16 @@ export type HolderAllocation = {
  * before allocation, so the amount remitted for an investor matches
  * the amount on their statement.
  */
-export function allocateHolders(
+/**
+ * The allocation itself, with NO final check.
+ *
+ * The settlement preview has to be able to display an allocation that
+ * does not add up — an assertion the administrator can see failing is
+ * worth far more than a stack trace. Everything that commits goes
+ * through allocateHolders() below, which refuses to return at all
+ * unless the total is exact.
+ */
+export function allocateHoldersUnchecked(
   cycle: CycleResult,
   holders: HolderInput[],
   whtRate = cycle.slots > 0 && cycle.grossPerSlot > 0
@@ -829,11 +838,26 @@ export function allocateHolders(
     };
   });
 
-  // Fail loudly rather than silently absorbing a difference
+  return out;
+}
+
+/**
+ * The allocation, checked. Nothing may be written from an allocation
+ * that does not add up to the pot exactly, in kobo — that is a defect,
+ * not a rounding difference to be absorbed.
+ */
+export function allocateHolders(
+  cycle: CycleResult,
+  holders: HolderInput[],
+  whtRate = cycle.slots > 0 && cycle.grossPerSlot > 0
+    ? cycle.whtPerSlot / cycle.grossPerSlot
+    : 0
+): HolderAllocation[] {
+  const out = allocateHoldersUnchecked(cycle, holders, whtRate);
   const sum = out.reduce((s, h) => s + h.grossProfit, 0);
-  if (sum !== pot) {
+  if (out.length > 0 && sum !== cycle.holderPot) {
     throw new Error(
-      `Holder allocation does not add up: holders total ${sum} kobo, investor pot is ${pot} kobo`
+      `Holder allocation does not add up: holders total ${sum} kobo, investor pot is ${cycle.holderPot} kobo`
     );
   }
   return out;
