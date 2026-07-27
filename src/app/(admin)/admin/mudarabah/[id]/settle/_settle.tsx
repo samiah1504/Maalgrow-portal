@@ -14,7 +14,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type CapitalAction = "withdraw" | "rollover" | "partial";
+type CapitalAction = "withdraw" | "rollover" | "partial" | "undecided";
 
 type Holder = {
   investmentId: string;
@@ -63,6 +63,7 @@ const ACTION_WORD: Record<CapitalAction, string> = {
   withdraw: "Paid out",
   rollover: "Continues",
   partial: "Part out",
+  undecided: "Not decided yet",
 };
 
 export function Settle({
@@ -321,13 +322,17 @@ export function Settle({
                         h.defaulted ? "border-amber-400" : "border-border"
                       )}
                     >
+                      {/* "Not decided yet" is a real outcome, not an
+                          empty one: the profit is paid and the capital
+                          question stays open for the investor. */}
+                      <option value="undecided">Not decided yet</option>
                       <option value="withdraw">Paid out</option>
                       <option value="rollover">Continues</option>
                       <option value="partial">Part out</option>
                     </select>
                     {h.defaulted && (
                       <div className="text-[10px] text-amber-700 mt-0.5">
-                        no instruction — default
+                        awaiting their answer
                       </div>
                     )}
                     {h.overridden && (

@@ -745,7 +745,15 @@ export type HolderInput = {
   /** May be a half slot — investments.units is NUMERIC(12,2) */
   units: number;
   /** Capital only: profit is ALWAYS paid out */
-  capitalAction: "withdraw" | "rollover" | "partial";
+  /**
+   * "undecided" is a real state, not a missing value. An investor
+   * cannot sensibly choose what to do with their capital until they
+   * know what they earned, so settlement must be able to pay the
+   * profit and leave the capital question open. Arithmetically it
+   * behaves as rollover — nothing is withdrawn — but it must stay
+   * distinguishable, because the statement says something different.
+   */
+  capitalAction: "withdraw" | "rollover" | "partial" | "undecided";
   slotsWithdrawn: number;
 };
 
@@ -757,7 +765,7 @@ export type HolderAllocation = {
   grossProfit: number;
   wht: number;
   netProfit: number;
-  capitalAction: "withdraw" | "rollover" | "partial";
+  capitalAction: "withdraw" | "rollover" | "partial" | "undecided";
   slotsWithdrawn: number;
   capitalWithdrawn: number;
   /** What actually moves: profit always, plus withdrawn capital */

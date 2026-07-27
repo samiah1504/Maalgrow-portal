@@ -25,8 +25,14 @@ import {
   type HolderAllocation,
 } from "./compute";
 
-/** What an investor decided about their CAPITAL. Profit is never part of it. */
-export type CapitalAction = "withdraw" | "rollover" | "partial";
+/**
+ * What an investor decided about their CAPITAL. Profit is never part
+ * of it — profit is paid whatever they decide, and whether they have
+ * decided at all.
+ *
+ * "undecided" is one of the four, not the absence of the other three.
+ */
+export type CapitalAction = "withdraw" | "rollover" | "partial" | "undecided";
 
 /**
  * One member of the cycle, as the ledger and their maturity
@@ -108,30 +114,32 @@ export type SettlementPreview = {
 };
 
 /**
- * WHEN NOBODY ANSWERED.
+ * WHEN NOBODY ANSWERED — SETTLE ANYWAY, AND DO NOT PRETEND.
  *
- * An investor with no instruction has their capital CONTINUE into the
- * next cycle. Their profit is paid out either way — that was never
- * conditional on answering.
+ * Settlement used to demand an answer from everybody, guessing on
+ * behalf of anyone who had not given one. First it guessed "paid
+ * out", then "continues". Both were wrong in the same way: they wrote
+ * a decision into a frozen snapshot that the investor had not made,
+ * and then told them so on their statement.
  *
- * This was the other way round until the portal started asking
- * properly. The reasoning then was that keeping someone's money
- * without their say-so is worse than returning money they would
- * rather have left working. Once the maturity window existed — a
- * dialog on arrival and a banner on two pages for ten days — the
- * population changed. Silence stopped meaning "I could not find the
- * form" and started meaning "I am not paying attention", and those
- * people are overwhelmingly the ones who would have continued.
+ * The ordering was the real mistake. An investor cannot sensibly
+ * decide whether to take their capital until they know what they
+ * earned, and what they earned is only known once the cycle is
+ * settled. Requiring the instruction first asks them to choose in the
+ * dark, and holds up everybody else's profit while they do.
  *
- * Continuing also asks nothing of anybody. Paying out capital nobody
- * requested moves real money to a bank account on a guess, and
- * unwinding that is worse than the reverse. Someone who wanted their
- * capital and missed the window says so, and is answered by a person.
+ * So the two are separated. Settlement declares and pays the PROFIT,
+ * which is unconditional. Capital stays open until the investor
+ * says — and if they never do, process_cycle_rollover applies its own
+ * long-standing default of continuing, at the moment the capital
+ * actually has to move rather than weeks earlier.
  *
- * Still shown prominently in the preview, and still overridable
- * before the commit — a default is not a decision.
+ * Arithmetically this is rollover: nothing is withdrawn, so the
+ * payout is the net profit. It is kept distinct because the statement
+ * must say "we have not received your instruction yet" rather than
+ * claiming a choice on their behalf.
  */
-export const DEFAULT_WHEN_UNDECIDED: CapitalAction = "rollover";
+export const DEFAULT_WHEN_UNDECIDED: CapitalAction = "undecided";
 
 function resolve(
   p: Participant,
@@ -141,7 +149,7 @@ function resolve(
     const slots =
       override.action === "withdraw"
         ? p.units
-        : override.action === "rollover"
+        : override.action === "rollover" || override.action === "undecided"
         ? 0
         : Math.max(0, Math.min(p.units, Number(override.slotsWithdrawn ?? 0)));
     return { action: override.action, slotsWithdrawn: slots, defaulted: false, overridden: true };
@@ -150,7 +158,9 @@ function resolve(
   if (p.decision === null) {
     return {
       action: DEFAULT_WHEN_UNDECIDED,
-      slotsWithdrawn: DEFAULT_WHEN_UNDECIDED === "withdraw" ? p.units : 0,
+      // Undecided withdraws nothing: the profit is paid, the capital
+      // waits for an answer.
+      slotsWithdrawn: 0,
       defaulted: true,
       overridden: false,
     };
@@ -159,7 +169,7 @@ function resolve(
   const slots =
     p.decision === "withdraw"
       ? p.units
-      : p.decision === "rollover"
+      : p.decision === "rollover" || p.decision === "undecided"
       ? 0
       : Math.max(0, Math.min(p.units, Number(p.slotsWithdrawn ?? 0)));
   return { action: p.decision, slotsWithdrawn: slots, defaulted: false, overridden: false };
@@ -252,7 +262,7 @@ export function settlementPreview(
       kind: "no-decision",
       message: `${undecided.length} investor${
         undecided.length === 1 ? " has" : "s have"
-      } no capital instruction on record. Their capital will CONTINUE into the next cycle and their profit will be paid out, unless you change it below.`,
+      } not said what to do with their capital. Their PROFIT is paid now and their statement asks them to decide — settling does not commit their capital either way. If they never answer, it continues into the next cycle when the rollover is processed. You can still decide for any of them below.`,
       investors: names(undecided),
     });
   }
@@ -348,7 +358,7 @@ export function settlementPayload(preview: SettlementPreview) {
     capitalWithdrawn: h.capitalWithdrawn,
     amountPaid: h.amountPaid,
     amountPaidNote: h.defaulted
-      ? "No maturity instruction on record — capital continued by default; profit paid"
+      ? "No maturity instruction yet — profit paid, capital decision still open"
       : null,
   }));
 }

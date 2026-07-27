@@ -150,11 +150,17 @@ export async function generateStatements(
         investorName: name,
         investorCode: String(investor?.investor_code ?? ""),
         units: Number(holder.units),
+        // "undecided" must reach the renderer intact. Folding it into
+        // "rollover" here is what made a statement claim a choice the
+        // investor had never made — the renderer has always had the
+        // right wording for "none" and simply never received it.
         decision:
           holder.capital_action === "withdraw"
             ? "withdraw"
             : holder.capital_action === "partial"
             ? "partial"
+            : holder.capital_action === "undecided"
+            ? "none"
             : "rollover",
         slotsWithdrawn: Number(holder.slots_withdrawn ?? 0),
       };
