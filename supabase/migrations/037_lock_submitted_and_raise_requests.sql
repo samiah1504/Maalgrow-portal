@@ -19,6 +19,8 @@
 --   1. marks it locked, so it is as final as one given today
 --   2. raises the payment request it implies — the profit for
 --      everyone, and the capital too for a withdrawal
+--   3. carries the slots that continue into the next cycle, creating
+--      that cycle if it does not exist yet
 --
 -- WHOSE INSTRUCTIONS ARE NOT TOUCHED. Anyone who has not answered
 -- yet. Their window stays open and they follow the normal flow; they
@@ -34,9 +36,20 @@
 -- declared profit, so there is no amount to ask for and the helper
 -- does nothing. Only settled cycles produce requests here.
 --
--- NOT ENROLMENT. This locks and pays; it does not move anybody's
--- capital into the next cycle. That is what the rollover run is for,
--- and it is a separate decision about a separate thing.
+-- ENROLMENT IS PART OF IT. A submission made today locks, pays AND
+-- goes across in one motion; there is no reason for an instruction
+-- given last week to end up somewhere different. So this finishes the
+-- job rather than leaving the capital for a later rollover run.
+--
+-- Only where continuing is what was asked for. An exit is not
+-- enrolled, an unsettled cycle is not enrolled, and an enrolment that
+-- already went across is not enrolled again — mudarabah_enrol_next_cycle
+-- refuses all three, and it is the same function a live submission
+-- calls, so the rows it writes are identical either way.
+--
+-- Bank details are not needed to continue. An investor whose account
+-- is missing still keeps their slots; it is only their profit that
+-- cannot be paid until the details are on record.
 --
 -- Re-runnable.
 -- ============================================================
@@ -56,9 +69,11 @@ RETURNS JSONB AS $$
 DECLARE
   v_rec      RECORD;
   v_sync     JSONB;
+  v_enrol    JSONB;
   v_locked   INTEGER := 0;
   v_raised   INTEGER := 0;
   v_skipped  INTEGER := 0;
+  v_enrolled INTEGER := 0;
   v_detail   JSONB := '[]'::JSONB;
 BEGIN
   FOR v_rec IN
@@ -95,6 +110,13 @@ BEGIN
       v_skipped := v_skipped + 1;
     END IF;
 
+    -- The capital, after the money. Same order a live submission
+    -- uses, and the same function, so the rows match exactly.
+    v_enrol := mudarabah_enrol_next_cycle(v_rec.investment_id);
+    IF (v_enrol->>'enrolled')::BOOLEAN THEN
+      v_enrolled := v_enrolled + 1;
+    END IF;
+
     v_detail := v_detail || jsonb_build_object(
       'investor',       v_rec.full_name,
       'investorCode',   v_rec.investor_code,
@@ -102,7 +124,8 @@ BEGIN
       'cycle',          v_rec.cycle_label,
       'decision',       v_rec.decision,
       'wasAlreadyLocked', v_rec.was_locked,
-      'payment',        v_sync
+      'payment',        v_sync,
+      'enrolment',      v_enrol
     );
   END LOOP;
 
@@ -110,6 +133,7 @@ BEGIN
     'lockedNow',       v_locked,
     'requestsRaised',  v_raised,
     'couldNotRaise',   v_skipped,
+    'enrolledInNext',  v_enrolled,
     'instructions',    v_detail
   );
 END;
@@ -132,8 +156,9 @@ DO $$
 DECLARE v_result JSONB;
 BEGIN
   v_result := mudarabah_lock_submitted_instructions();
-  RAISE NOTICE '037: locked % instruction(s), raised % payment request(s), % could not be raised',
-    v_result->>'lockedNow', v_result->>'requestsRaised', v_result->>'couldNotRaise';
+  RAISE NOTICE '037: locked % instruction(s), raised % payment request(s), % could not be raised, % carried into the next cycle',
+    v_result->>'lockedNow', v_result->>'requestsRaised',
+    v_result->>'couldNotRaise', v_result->>'enrolledInNext';
 END $$;
 
 -- ------------------------------------------------------------
@@ -166,7 +191,14 @@ SELECT
       ORDER BY pr.created_at DESC LIMIT 1),
     CASE WHEN rd.decision::TEXT IN ('exit', 'partial_exit')
          THEN 'NOT RAISED' ELSE 'n/a — capital continues' END
-  )                                              AS capital_request
+  )                                              AS capital_request,
+  COALESCE(
+    (SELECT n.investment_code || ' in ' || nc.cycle_label
+       FROM investments n JOIN cycles nc ON nc.id = n.cycle_id
+      WHERE n.id = i.next_investment_id),
+    CASE WHEN rd.decision::TEXT = 'exit'
+         THEN 'n/a — capital withdrawn' ELSE 'NOT CARRIED' END
+  )                                              AS continued_as
 FROM rollover_decisions rd
 JOIN investments i  ON i.id  = rd.investment_id
 JOIN investors  inv ON inv.id = i.investor_id

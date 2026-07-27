@@ -15,6 +15,9 @@
 --   R7  no bank details — reported, not invented
 --   R8  an enrolment whose capital already moved is not reopened
 --   R9  and once locked, the investor cannot change it
+--   R10 a continuing investor is carried into the next cycle, funded
+--   R11 an exit is not carried anywhere
+--   R12 missing bank details do not stop the slots continuing
 -- ============================================================
 \set ON_ERROR_STOP on
 BEGIN;
@@ -48,12 +51,21 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO series (id,name,description,start_month_offset,price_per_unit,mudarabah_investor_ratio)
  VALUES ('30000000-0000-0000-0000-0000000ee001','C','Series C',0,500000,0.50)
 ON CONFLICT (name) DO UPDATE SET price_per_unit=EXCLUDED.price_per_unit;
+INSERT INTO series (id,name,description,start_month_offset,price_per_unit,mudarabah_investor_ratio)
+ VALUES ('30000000-0000-0000-0000-0000000ee002','A','Series A',0,500000,0.50)
+ON CONFLICT (name) DO UPDATE SET price_per_unit=EXCLUDED.price_per_unit;
 
--- A settled cycle, and an unsettled one.
+-- A settled cycle in one series, and a running one in ANOTHER.
+--
+-- Two live cycles in the SAME series would be the wrong shape here:
+-- the successor is created after the series' last cycle, so a running
+-- cycle numbered above the settled one would be the thing followed,
+-- and the new cycle would land after IT. That is correct behaviour
+-- and not what is being tested.
 INSERT INTO cycles (id,series_id,cycle_number,cycle_label,start_date,end_date,status,unit_value) VALUES
  ('40000000-0000-0000-0000-0000000ee001',(SELECT id FROM series WHERE name='C'),
    9601,'R-SETTLED', CURRENT_DATE - 90, CURRENT_DATE, 'completed', 500000),
- ('40000000-0000-0000-0000-0000000ee002',(SELECT id FROM series WHERE name='C'),
+ ('40000000-0000-0000-0000-0000000ee002',(SELECT id FROM series WHERE name='A'),
    9611,'R-RUNNING', CURRENT_DATE - 30, CURRENT_DATE + 60, 'active', 500000);
 
 INSERT INTO cycle_profit_declarations (cycle_id,total_revenue,total_expenses,net_profit,
@@ -73,7 +85,7 @@ VALUES
   '40000000-0000-0000-0000-0000000ee001',2,500000,1000000,CURRENT_DATE-90,CURRENT_DATE,'matured',100000,10000,90000),
  ('R-4','20000000-0000-0000-0000-0000000ee004',(SELECT id FROM series WHERE name='C'),
   '40000000-0000-0000-0000-0000000ee001',2,500000,1000000,CURRENT_DATE-90,CURRENT_DATE,'matured',100000,10000,90000),
- ('R-5','20000000-0000-0000-0000-0000000ee005',(SELECT id FROM series WHERE name='C'),
+ ('R-5','20000000-0000-0000-0000-0000000ee005',(SELECT id FROM series WHERE name='A'),
   '40000000-0000-0000-0000-0000000ee002',1,500000,500000,CURRENT_DATE-30,CURRENT_DATE+60,'active',
   NULL,NULL,NULL);
 
@@ -146,6 +158,56 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------
+-- R10 / R11 / R12 — the capital, in the same run
+-- ------------------------------------------------------------
+DO $$
+DECLARE
+  v_new UUID; v_units NUMERIC; v_capital NUMERIC; v_dest UUID;
+BEGIN
+  -- R10 — R One chose to continue, and their 4 slots went across.
+  SELECT next_investment_id INTO v_new FROM investments WHERE investment_code='R-1';
+  IF v_new IS NULL THEN
+    RAISE EXCEPTION 'TEST FAIL R10: a continuing investor was not carried into the next cycle';
+  END IF;
+
+  SELECT units, capital, cycle_id INTO v_units, v_capital, v_dest
+    FROM investments WHERE id = v_new;
+  IF v_units <> 4 OR v_capital <> 2000000 THEN
+    RAISE EXCEPTION 'TEST FAIL R10: carried % slots / %, expected 4 / 2000000', v_units, v_capital;
+  END IF;
+
+  -- and the carried capital is recorded, so the new cycle is funded
+  -- rather than reading as one big shortfall on its first day.
+  IF investment_confirmed_paid(v_new) <> 2000000 THEN
+    RAISE EXCEPTION 'TEST FAIL R10: carry-forward payment is %, expected 2000000',
+      investment_confirmed_paid(v_new);
+  END IF;
+  IF (SELECT COUNT(*) FROM investment_funding_gaps(v_dest)) <> 0 THEN
+    RAISE EXCEPTION 'TEST FAIL R10: the next cycle reports a funding gap';
+  END IF;
+
+  -- The destination was created by the run itself, starting the day
+  -- after the settled cycle ended.
+  IF (SELECT start_date FROM cycles WHERE id = v_dest) <> CURRENT_DATE + 1 THEN
+    RAISE EXCEPTION 'TEST FAIL R10: the next cycle starts %, expected %',
+      (SELECT start_date FROM cycles WHERE id = v_dest), CURRENT_DATE + 1;
+  END IF;
+
+  -- R11 — R Two withdrew. Nothing of theirs continues.
+  IF (SELECT next_investment_id FROM investments WHERE investment_code='R-2') IS NOT NULL THEN
+    RAISE EXCEPTION 'TEST FAIL R11: an investor who withdrew was carried into the next cycle';
+  END IF;
+
+  -- R12 — R Four has no bank details. Their profit cannot be paid,
+  -- but their slots are theirs and must still continue.
+  IF (SELECT next_investment_id FROM investments WHERE investment_code='R-4') IS NULL THEN
+    RAISE EXCEPTION 'TEST FAIL R12: missing bank details stopped the slots continuing';
+  END IF;
+
+  RAISE NOTICE 'PASS R10/R11/R12 — capital carried, withdrawals left out, no account needed to continue';
+END $$;
+
+-- ------------------------------------------------------------
 -- R4 — someone who never answered is untouched
 -- ------------------------------------------------------------
 DO $$ BEGIN
@@ -175,6 +237,14 @@ DO $$ DECLARE v JSONB; v_n INT; BEGIN
   IF v_n <> 1 THEN
     RAISE EXCEPTION 'TEST FAIL R5: R One now has % requests — they would be paid twice', v_n;
   END IF;
+
+  -- And exactly one continuation. A second one would double their
+  -- slots in the next cycle out of nothing.
+  SELECT COUNT(*) INTO v_n FROM investments
+   WHERE parent_investment_id=(SELECT id FROM investments WHERE investment_code='R-1');
+  IF v_n <> 1 THEN
+    RAISE EXCEPTION 'TEST FAIL R5: R One has % continuations — their slots would double', v_n;
+  END IF;
   RAISE NOTICE 'PASS R5 — a rerun is a no-op';
 END $$;
 
@@ -201,7 +271,7 @@ DO $$ DECLARE v JSONB; v_n INT; BEGIN
   -- Pretend R Three answered and was already carried across.
   INSERT INTO investments (investment_code,investor_id,series_id,cycle_id,units,price_per_unit,
     capital,investment_date,maturity_date,status)
-  VALUES ('R-3-NEXT','20000000-0000-0000-0000-0000000ee003',(SELECT id FROM series WHERE name='C'),
+  VALUES ('R-3-NEXT','20000000-0000-0000-0000-0000000ee003',(SELECT id FROM series WHERE name='A'),
     '40000000-0000-0000-0000-0000000ee002',2,500000,1000000,CURRENT_DATE,CURRENT_DATE+60,'active');
 
   UPDATE investments SET next_investment_id=(SELECT id FROM investments WHERE investment_code='R-3-NEXT')
