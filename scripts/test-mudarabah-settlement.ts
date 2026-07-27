@@ -168,7 +168,15 @@ const holder = (
     p.holders.every((h) => h.netProfit === h.grossProfit - h.wht));
 }
 
-/* ── 6. No decision defaults to payout, and says so ──────────────── */
+/* ── 6. No decision commits nothing, and says so ─────────────────
+ *
+ * This asserted that silence meant "pay the capital out". It stopped
+ * being true when the default became "undecided": settling pays the
+ * PROFIT and leaves the capital question open, because an investor
+ * who has not answered has not asked for their money back — and
+ * telling twenty-eight of them their capital was leaving when it was
+ * not would have been the worst version of getting this wrong.
+ */
 
 {
   const input = cycleOf(20);
@@ -178,18 +186,21 @@ const holder = (
   ]);
 
   const undecided = p.holders.find((h) => h.investmentId === "inv-1")!;
-  check("6. an investor with no instruction has their capital paid out",
-    undecided.capitalAction === "withdraw" && undecided.slotsWithdrawn === 12.5,
+  check("6. an investor with no instruction has their capital left alone",
+    undecided.capitalAction === "undecided" && undecided.slotsWithdrawn === 0,
     undecided);
   check("6. and is flagged as defaulted, not as having chosen",
     undecided.defaulted === true && undecided.overridden === false);
-  check("6. their capital is included in the cash needed",
-    undecided.amountPaid === undecided.netProfit + undecided.capitalWithdrawn);
+  check("6. so only their profit is in the cash needed",
+    undecided.amountPaid === undecided.netProfit,
+    { amountPaid: undecided.amountPaid, netProfit: undecided.netProfit });
 
   const warn = p.warnings.find((w) => w.kind === "no-decision");
   check("6. the preview warns, naming them", warn?.investors.includes("Investor 1") === true, warn);
-  check("6. and the warning says the capital will be paid out",
-    /PAID OUT/i.test(warn?.message ?? ""), warn?.message);
+  check("6. and the warning says the capital is NOT committed either way",
+    /does not commit their capital/i.test(warn?.message ?? "") &&
+      !/PAID OUT/i.test(warn?.message ?? ""),
+    warn?.message);
 
   check("6. an investor who did decide is not flagged",
     p.holders.find((h) => h.investmentId === "inv-2")?.defaulted === false);

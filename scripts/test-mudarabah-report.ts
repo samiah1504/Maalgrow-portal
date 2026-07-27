@@ -187,30 +187,103 @@ function nairaAfter(doc: string, label: string): number | null {
   return (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, ""));
 }
 
-const sales = nairaAfter(html, "Total sales");
-const cogs = nairaAfter(html, "Cost of the goods sold");
-const running = nairaAfter(html, "Running costs");
-const unaccounted = nairaAfter(html, "Stock unaccounted for") ?? 0;
-const netShown = nairaAfter(html, "Net profit");
+/** …<div class="csrow"><span>LABEL</span><span class="val">−₦1,234</span>… */
+function summaryRow(doc: string, label: string): number | null {
+  const re = new RegExp(
+    `<span>${label}</span><span class="val">(−?)₦([\\d,]+)</span>`
+  );
+  const m = re.exec(doc);
+  if (!m) return null;
+  return (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, ""));
+}
+
+const sales = summaryRow(html, "Total sales");
+const cogs = summaryRow(html, "Total cost of the goods sold");
+const grossShown = summaryRow(html, "Total gross profit");
+const running = summaryRow(html, "Total operating expenses");
+const unaccounted = summaryRow(html, "Stock unaccounted for") ?? 0;
+const netShown = summaryRow(html, "Total net profit for the cycle");
 
 check(
   "the cycle summary states sales, its costs and the profit",
-  sales !== null && cogs !== null && running !== null && netShown !== null,
-  { sales, cogs, running, unaccounted, netShown }
+  sales !== null && cogs !== null && grossShown !== null &&
+    running !== null && netShown !== null,
+  { sales, cogs, grossShown, running, unaccounted, netShown }
+);
+check(
+  "sales less the cost of the goods is exactly the gross profit printed",
+  sales! + cogs! === grossShown!,
+  { sales, cogs, grossShown, sum: sales! + cogs! }
 );
 check(
   "and those figures subtract to exactly the profit printed beside them",
-  sales! + cogs! + running! + unaccounted === netShown!,
-  { sales, cogs, running, unaccounted, netShown, sum: sales! + cogs! + running! + unaccounted }
+  grossShown! + running! + unaccounted === netShown!,
+  { grossShown, running, unaccounted, netShown, sum: grossShown! + running! + unaccounted }
+);
+
+// The division has to reconcile too — and it is the half that would
+// otherwise contradict page 1, where the holder's own profit is
+// printed. A page 2 that divided total net profit by the slot count
+// would show a figure roughly a fifth above what anyone receives.
+const managerCut = summaryRow(html, "MaalGrow&#39;s share as manager \\(\\d+%\\)")
+  ?? summaryRow(html, "MaalGrow's share as manager \\(\\d+%\\)");
+const holderPot = summaryRow(html, "Slot holders&#39; share \\(\\d+%\\)")
+  ?? summaryRow(html, "Slot holders' share \\(\\d+%\\)");
+/** A count, not money — no naira sign to match on. */
+function summaryCount(doc: string, label: string): number | null {
+  const m = new RegExp(
+    `<span>${label}</span><span class="val">([\\d,.]+)</span>`
+  ).exec(doc);
+  return m ? Number(m[1].replace(/,/g, "")) : null;
+}
+const slotsShown = summaryCount(html, "Total investment slots in the Series");
+
+check(
+  "the summary shows how the profit was divided",
+  managerCut !== null && holderPot !== null && slotsShown !== null,
+  { managerCut, holderPot, slotsShown }
+);
+check(
+  "net profit less the manager's share is exactly the slot holders' share",
+  netShown! + managerCut! === holderPot!,
+  { netShown, managerCut, holderPot, sum: netShown! + managerCut! }
+);
+
+const perSlotShown = /<div class="k">Profit per slot<\/div>\s*<div class="v">₦([\d,]+)<\/div>/.exec(html);
+check(
+  "profit per slot is the slot holders' share divided by the slots",
+  perSlotShown !== null &&
+    Math.abs(
+      Number(perSlotShown[1].replace(/,/g, "")) - holderPot! / slotsShown!
+    ) <= 1,
+  {
+    printed: perSlotShown && Number(perSlotShown[1].replace(/,/g, "")),
+    expected: holderPot! / slotsShown!,
+  }
+);
+check(
+  "and it is the per-slot profit the declaration settled, not net profit ÷ slots",
+  perSlotShown !== null &&
+    Math.abs(Number(perSlotShown[1].replace(/,/g, "")) - live.grossPerSlot / 100) <= 1,
+  {
+    printed: perSlotShown && Number(perSlotShown[1].replace(/,/g, "")),
+    settled: live.grossPerSlot / 100,
+    naive: netShown! / slotsShown!,
+  }
 );
 
 // Each month card must reconcile the same way, and the months must add
 // up to the cycle total — no figure on the page is orphaned.
 const cards = html.split('<div class="mcard">').slice(1);
 const cardSums = cards.map((c) => {
-  const money = [...c.matchAll(/<span class="val">(−?)₦([\d,]+)<\/span>/g)].map(
-    (m) => (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, ""))
-  );
+  // A subtotal is not a part. Gross profit sits in the middle of the
+  // card and is already sales less cost — counting it as a component
+  // would add the same money to the month twice.
+  const money = [
+    ...c.matchAll(/<div class="mline([^"]*)"><span>[^<]*<\/span><span class="val">(−?)₦([\d,]+)<\/span>/g),
+  ]
+    .filter((m) => !m[1].includes("sub"))
+    .map((m) => (m[2] ? -1 : 1) * Number(m[3].replace(/,/g, "")));
   // last is the month's net; the ones before it are its parts
   const net = money[money.length - 1];
   const parts = money.slice(0, -1).reduce((t, v) => t + v, 0);
@@ -401,9 +474,28 @@ check(
   "the tax line names the rate",
   html.includes("Less withholding tax (10%)")
 );
+/**
+ * Gross profit used to appear nowhere in an investor's report at all.
+ * It is now shown on page 2, deliberately, because that page reports
+ * how the SERIES traded and a trading account without a gross margin
+ * is not a trading account.
+ *
+ * What has NOT changed is page 1. That page is the investor's own
+ * money, and a gross figure there would be a number they could mistake
+ * for something owed to them — their profit is net, after the
+ * manager's share and after tax. So the rule is now placement, not
+ * absence, and this checks the placement.
+ */
+const pages = html.split('<section class="page">').slice(1);
+check("the report still has four pages", pages.length === 4, pages.length);
 check(
-  "gross profit never appears as a heading investor-facing",
-  !/Gross profit/i.test(html)
+  "gross profit never appears on page 1, beside the investor's own figures",
+  !/Gross profit/i.test(pages[0]),
+  pages[0].match(/.{0,60}Gross profit.{0,60}/i)?.[0]
+);
+check(
+  "and it does appear on page 2, where the Series is reported",
+  /Total gross profit/.test(pages[1])
 );
 
 /* ── 5. Snapshot stability ───────────────────────────────────────── */

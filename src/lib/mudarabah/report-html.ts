@@ -13,8 +13,13 @@
  * description — "home furniture", a category. ReportFigures carries no
  * product-shaped field, so this holds by construction.
  *
- * Net profit only. Gross profit is an internal figure and appears
- * nowhere investor-facing.
+ * Gross profit: SERIES level only. Page 2 reports how the whole cycle
+ * traded, and a trading account with no gross margin is not a trading
+ * account — it was asked for there explicitly. Page 1 stays net-only:
+ * that page is the investor's own money, and a gross figure beside it
+ * is a number they could mistake for something owed to them. The rule
+ * is placement, not absence, and the test suite checks the placement
+ * rather than merely the words.
  *
  * Money arrives as integer kobo and is formatted here, at the edge.
  */
@@ -255,19 +260,36 @@ export const REPORT_CSS = `
  * month showing an unaccounted-stock line. The rhythm below is sized
  * for that case, not for the common one.
  */
-.mgr .mcard {
-  border: 1px solid var(--line); border-radius: 8px; margin-top: 3mm;
-  page-break-inside: avoid; break-inside: avoid;
+/*
+ * Three months ACROSS, not down. Stacked cards plus the cycle summary
+ * ran 105mm past the bottom of the sheet and pushed page 2 onto a
+ * second one — measured in Chromium, not guessed. Side by side they
+ * also read better: the months are meant to be compared, and
+ * comparing is what columns are for.
+ */
+.mgr .mrow {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-top: 3mm;
 }
+.mgr .mcard {
+  border: 1px solid var(--line); border-radius: 8px;
+  page-break-inside: avoid; break-inside: avoid;
+  /* Column + auto margin on the net line, so the three months' bottom
+     lines sit on ONE baseline even when only one of them carries an
+     unaccounted-stock row. Without it the eye reads three different
+     answers at three different heights. */
+  display: flex; flex-direction: column;
+}
+.mgr .mcard .b { display: flex; flex-direction: column; flex: 1; }
+.mgr .mcard .mline.net { margin-top: auto; }
 .mgr .mcard .h {
-  background: var(--parchment-2); padding: 2.5mm 5mm; font-family: var(--font-head);
-  font-size: 11pt; color: var(--plum); border-radius: 7px 7px 0 0;
+  background: var(--parchment-2); padding: 2mm 3.5mm; font-family: var(--font-head);
+  font-size: 10.5pt; color: var(--plum); border-radius: 7px 7px 0 0;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.mgr .mcard .b { padding: 3mm 5mm; }
+.mgr .mcard .b { padding: 2.5mm 3.5mm; }
 .mgr .mline {
-  display: flex; justify-content: space-between; gap: 4mm; font-size: 9.5pt;
-  padding: 1.1mm 0; border-bottom: 1px dotted var(--line);
+  display: flex; justify-content: space-between; gap: 2mm; font-size: 8.5pt;
+  padding: 0.9mm 0; border-bottom: 1px dotted var(--line);
 }
 .mgr .mline:last-of-type { border-bottom: none; }
 .mgr .mline .val { font-family: var(--font-mono); }
@@ -275,6 +297,82 @@ export const REPORT_CSS = `
 .mgr .mline.net {
   border-top: 1.5px solid var(--plum); margin-top: 1.5mm; padding-top: 2mm;
   font-weight: 700; color: var(--plum); border-bottom: none;
+}
+
+/* A subtotal, not a total: the line the reader can check by
+   subtracting the two above it. Lighter than .net so the eye still
+   lands on the month's net profit first. */
+.mgr .mline.sub {
+  font-weight: 600; color: var(--plum-800);
+  border-bottom: 1px solid var(--line);
+}
+
+/* ── Page 2: the cycle summary ───────────────────────────────────
+ *
+ * Sized to close the page rather than start a new one. Three month
+ * cards and this block have to sit on ONE sheet even in the worst
+ * case — every month carrying an unaccounted-stock line — so the
+ * rhythm here is deliberately tighter than the cards above it.
+ */
+.mgr .cyclesum {
+  border: 1.5px solid var(--plum); border-radius: 8px; margin-top: 4mm;
+  overflow: hidden;
+  page-break-inside: avoid; break-inside: avoid;
+}
+.mgr .cyclesum .csh {
+  background: var(--plum); color: #fff; padding: 2.5mm 5mm;
+  font-family: var(--font-head); font-size: 11.5pt;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 4mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .cyclesum .csh span {
+  font-family: var(--font-body); font-size: 7.5pt; opacity: .8;
+  letter-spacing: .02em; text-align: right;
+}
+.mgr .cyclesum .csb { padding: 2.5mm 5mm 3mm; }
+.mgr .csrow {
+  display: flex; justify-content: space-between; gap: 4mm; font-size: 9.5pt;
+  padding: 1mm 0; border-bottom: 1px dotted var(--line);
+}
+.mgr .csrow .val { font-family: var(--font-mono); }
+.mgr .csrow.minus .val { color: #9B2C2C; }
+.mgr .csrow.sub {
+  font-weight: 600; color: var(--plum-800); border-bottom: 1px solid var(--line);
+}
+.mgr .csrow.big {
+  border-top: 1.5px solid var(--plum); border-bottom: none;
+  margin-top: 1.5mm; padding-top: 2mm;
+  font-family: var(--font-head); font-size: 12pt; color: var(--plum);
+}
+.mgr .csrow.big .val { font-size: 12pt; font-weight: 700; }
+.mgr .csdiv {
+  margin: 3mm 0 1.5mm; padding-top: 2.5mm; border-top: 1px solid var(--line);
+  font-size: 7.5pt; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--ink-soft);
+}
+/* The one per-slot figure on the page, and the only one that has to
+   agree with page 1. Given its own band so it reads as the answer
+   rather than another row. */
+.mgr .cyclesum .csfinal {
+  background: var(--parchment-2); border-top: 1.5px solid var(--plum);
+  padding: 3.5mm 5mm; text-align: center;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.mgr .csfinal .k {
+  font-size: 8pt; text-transform: uppercase; letter-spacing: .16em;
+  color: var(--plum-800);
+}
+.mgr .csfinal .v {
+  font-family: var(--font-head); font-size: 20pt; color: var(--plum);
+  line-height: 1.15; margin-top: 0.5mm;
+}
+.mgr .csfinal .n {
+  font-size: 7.5pt; color: var(--ink-soft); margin-top: 1mm; line-height: 1.5;
+}
+
+/* The one-line orientation under a page heading. */
+.mgr .lede {
+  font-size: 9pt; line-height: 1.6; color: var(--ink-soft); margin: 0 0 1mm;
 }
 
 .mgr .panel {
@@ -596,33 +694,59 @@ function monthSplit(
   };
 }
 
+/**
+ * Page 2 — how the SERIES traded, month by month.
+ *
+ * WHAT CHANGED AND WHY. This page used to divide every figure by the
+ * slot count, so an investor read "sales ₦676,282" when the cycle had
+ * actually sold ₦52m of goods. It answered a question nobody asked:
+ * the reader already has their own numbers on page 1, and dividing the
+ * trading account by 78 tells them nothing about how the business
+ * performed. So every figure here is now the whole Series, added up
+ * across all slot holders — except the one per-slot figure that
+ * belongs at the end of a trading account, which is what each slot
+ * earned out of it.
+ *
+ * THE SUMMARY HAS TO RECONCILE WITH PAGE 1, or the report contradicts
+ * itself and the reader trusts neither number. "Total net profit ÷
+ * slots" is NOT what a holder receives — the manager's share comes out
+ * first, and withholding tax after that. Printing that division on its
+ * own would have put a figure on page 2 roughly 18% above the one on
+ * page 1, with nothing to explain the gap. So the summary walks the
+ * whole way down: net profit, less the manager's share, to the slot
+ * holders' pot, divided by the slots. Every line is subtractable from
+ * the one above it.
+ */
 function page2(f: ReportFigures, cycle: ReportCycle): string {
-  const perSlot = cycle.discloseMode === "perSlot";
-  const d = (v: number) =>
-    perSlot && f.totalUnits > 0 ? Math.round(v / f.totalUnits) : v;
-  const du = (v: number) =>
-    perSlot && f.totalUnits > 0 ? Math.round((v / f.totalUnits) * 10) / 10 : v;
-
-  // Every figure on this page is the figure the reader SEES, added up.
-  // Rounding each month to the naira and then printing an unrounded
-  // total would leave a statement whose own columns disagree by a naira
-  // — which reads as an error even when the kobo underneath are exact.
+  // Whole cycle, always. No scaling — see the note above.
+  //
+  // ROUNDED TO THE NAIRA AT THE MONTH, then added upwards. Every
+  // figure on this page is therefore the figure the reader SEES,
+  // summed — so the summary's own columns subtract exactly. Adding
+  // the kobo and rounding only at the end left the printed totals a
+  // naira out of step with the printed parts, which reads as a
+  // statement that cannot add up even when the kobo underneath are
+  // exact.
+  const r = (v: number) => Math.round(v / 100) * 100;
   const shown = f.months.map((m) => {
-    const split = monthSplit(m, d);
+    const split = monthSplit(m, r);
+    const cogs = r(m.revenue - m.net - m.expenses - m.lostValue);
+    const revenue = r(m.revenue);
     return {
       i: m.i,
-      unitsBought: du(m.unitsBought),
-      unitsSold: du(m.unitsSold),
-      revenue: d(m.revenue),
-      cogs: d(m.revenue - m.net - m.expenses - m.lostValue),
+      unitsBought: m.unitsBought,
+      unitsSold: m.unitsSold,
+      revenue,
+      cogs,
+      grossProfit: revenue - cogs,
       // When the itemisation is known, the month's running costs are
       // the sum of the printed items — so page 3, which lists them,
       // reaches the identical total rather than one a naira away.
       expenses: split
         ? split.ads + split.logistics + split.misc + split.bankCharges
-        : d(m.expenses),
+        : r(m.expenses),
       split,
-      lost: d(m.lostValue),
+      lost: r(m.lostValue),
     };
   });
   const sum = (pick: (s: (typeof shown)[number]) => number) =>
@@ -631,32 +755,41 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
   const total = {
     unitsBought: Math.round(sum((s) => s.unitsBought) * 10) / 10,
     unitsSold: Math.round(sum((s) => s.unitsSold) * 10) / 10,
-    unitsLeft: du(f.unitsLeft),
+    unitsLeft: f.unitsLeft,
     revenue: sum((s) => s.revenue),
     cogs: sum((s) => s.cogs),
+    grossProfit: sum((s) => s.grossProfit),
     expenses: sum((s) => s.expenses),
     lost: sum((s) => s.lost),
   };
-  const totalNet = total.revenue - total.cogs - total.expenses - total.lost;
+  const totalNet = total.grossProfit - total.expenses - total.lost;
+
+  // The split, taken from the settled figures rather than recomputed,
+  // so this page cannot drift from what was actually paid.
+  const holderShare = Math.round(f.ratio);
+  const managerCut = totalNet - f.holderPot;
 
   const months = shown
     .map(
       (m) => `<div class="mcard">
     <div class="h">${monthWord(m.i)}</div>
     <div class="b">
-      <div class="mline"><span>Products purchased</span><span class="val">${units(
+      <div class="mline"><span>Purchased</span><span class="val">${units(
         m.unitsBought
       )}</span></div>
-      <div class="mline"><span>Products sold</span><span class="val">${units(
+      <div class="mline"><span>Sold</span><span class="val">${units(
         m.unitsSold
       )}</span></div>
       <div class="mline"><span>Sales</span><span class="val">${naira(
         m.revenue
       )}</span></div>
-      <div class="mline minus"><span>Cost of the goods sold</span><span class="val">−${naira(
+      <div class="mline minus"><span>Cost of goods sold</span><span class="val">−${naira(
         m.cogs
       )}</span></div>
-      <div class="mline minus"><span>Running costs — advertising, delivery, bank charges and other</span><span class="val">−${naira(
+      <div class="mline sub"><span>Gross profit</span><span class="val">${naira(
+        m.grossProfit
+      )}</span></div>
+      <div class="mline minus"><span>Operating expenses</span><span class="val">−${naira(
         m.expenses
       )}</span></div>
       ${
@@ -666,8 +799,8 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
             )}</span></div>`
           : ""
       }
-      <div class="mline net"><span>Net profit for the month</span><span class="val">${naira(
-        m.revenue - m.cogs - m.expenses - m.lost
+      <div class="mline net"><span>Net profit</span><span class="val">${naira(
+        m.grossProfit - m.expenses - m.lost
       )}</span></div>
     </div>
   </div>`
@@ -676,47 +809,86 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
 
   return `<section class="page">
   <h2 class="sect">The trading, month by month
-    <span class="mode">${
-      perSlot ? "Figures shown per slot" : "Figures shown for the whole cycle"
-    }</span>
+    <span class="mode">The whole Series · all slot holders combined</span>
   </h2>
 
-  <div class="qty">Products purchased <b>${units(
-    total.unitsBought
-  )}</b> · sold <b>${units(total.unitsSold)}</b> · still in stock <b>${units(
-    total.unitsLeft
-  )}</b></div>
+  <p class="lede">Everything on this page is the performance of the entire cycle —
+    every slot, every investor, added together. Your own capital and earnings are on
+    page one.</p>
+
+  <div class="mrow">${months}</div>
 
   <!--
-    These four cells SUBTRACT to the fifth. The earlier version put
-    total sales beside the total cost of PURCHASE, which are not the two
-    figures profit is the difference of — stock is bought before it is
-    sold — so anyone who did the subtraction got a number that was not
-    the profit printed next to it, and concluded we could not add up.
+    AFTER the months, because this is what they add up to. Each line
+    subtracts from the one above it, all the way down to what a single
+    slot earned — the only per-slot figure on the page, and the one
+    that has to agree with page 1.
   -->
-  <div class="totals recon ${total.lost !== 0 ? "c4" : ""}">
-    <div class="tot"><div class="k">Total sales</div><div class="v">${naira(
-      total.revenue
-    )}</div></div>
-    <div class="tot neg"><div class="k">Cost of the goods sold</div><div class="v">−${naira(
-      total.cogs
-    )}</div></div>
-    <div class="tot neg"><div class="k">Running costs</div><div class="v">−${naira(
-      total.expenses
-    )}</div></div>
-    ${
-      total.lost !== 0
-        ? `<div class="tot neg"><div class="k">Stock unaccounted for</div><div class="v">−${naira(
-            total.lost
-          )}</div></div>`
-        : ""
-    }
-    <div class="tot result"><div class="k">Net profit</div><div class="v">${naira(
-      totalNet
-    )}</div></div>
-  </div>
+  <div class="cyclesum">
+    <div class="csh">Total cycle summary
+      <span>Three months · Series ${esc(cycle.seriesName)} · ${esc(cycle.cycleLabel)}</span>
+    </div>
+    <div class="csb">
+      <div class="csrow"><span>Total goods purchased</span><span class="val">${units(
+        total.unitsBought
+      )}</span></div>
+      <div class="csrow"><span>Total goods sold</span><span class="val">${units(
+        total.unitsSold
+      )}</span></div>
+      ${
+        total.unitsLeft !== 0
+          ? `<div class="csrow"><span>Still in stock at the end</span><span class="val">${units(
+              total.unitsLeft
+            )}</span></div>`
+          : ""
+      }
+      <div class="csrow"><span>Total sales</span><span class="val">${naira(
+        total.revenue
+      )}</span></div>
+      <div class="csrow minus"><span>Total cost of the goods sold</span><span class="val">−${naira(
+        total.cogs
+      )}</span></div>
+      <div class="csrow sub"><span>Total gross profit</span><span class="val">${naira(
+        total.grossProfit
+      )}</span></div>
+      <div class="csrow minus"><span>Total operating expenses</span><span class="val">−${naira(
+        total.expenses
+      )}</span></div>
+      ${
+        total.lost !== 0
+          ? `<div class="csrow minus"><span>Stock unaccounted for</span><span class="val">−${naira(
+              total.lost
+            )}</span></div>`
+          : ""
+      }
+      <div class="csrow big"><span>Total net profit for the cycle</span><span class="val">${naira(
+        totalNet
+      )}</span></div>
 
-  ${months}
+      <div class="csdiv">How that was divided</div>
+
+      <div class="csrow minus"><span>MaalGrow's share as manager (${
+        100 - holderShare
+      }%)</span><span class="val">−${naira(managerCut)}</span></div>
+      <div class="csrow sub"><span>Slot holders' share (${holderShare}%)</span><span class="val">${naira(
+        f.holderPot
+      )}</span></div>
+      <div class="csrow"><span>Total investment slots in the Series</span><span class="val">${units(
+        f.totalUnits
+      )}</span></div>
+    </div>
+    <div class="csfinal">
+      <div class="k">Profit per slot</div>
+      <div class="v">${naira(f.grossPerSlot)}</div>
+      <div class="n">Slot holders' share ÷ ${units(f.totalUnits)} slot${
+        f.totalUnits === 1 ? "" : "s"
+      }${
+    f.whtPerSlot > 0
+      ? ` · before the ${percent(f.whtRate * 100, 0)} withholding tax shown on page one`
+      : ""
+  }</div>
+    </div>
+  </div>
 
   <div class="foot">
     <span>MaalGrow · ${esc(cycle.description ?? "Trading cycle")}</span>
@@ -746,19 +918,13 @@ function page4(f: ReportFigures, cycle: ReportCycle): string {
       f.profit
     )}</div></div>
   </div>
-  ${
-    // These are WHOLE-CYCLE figures; the previous page is per slot and
-    // rounded to the naira. Multiply one by the slot count and you land
-    // a few naira from the other — say so, rather than let a reader
-    // find the gap and wonder which figure to trust.
-    cycle.discloseMode === "perSlot" && f.totalUnits > 0
-      ? `<p class="rounding">The month-by-month figures on the previous page are shown
-      per slot and rounded to the nearest naira, so multiplying them by the
-      ${units(f.totalUnits)} slots in the cycle lands within a few naira of the totals
-      above rather than exactly on them. Nothing is lost in the rounding: every payment
-      is worked out from the exact figures, to the kobo.</p>`
-      : ""
-  }
+  <!--
+    The rounding note that used to sit here explained why page 2's
+    per-slot figures did not multiply back to these totals. Page 2 now
+    prints the same whole-cycle figures, so there is no gap left to
+    explain and the note would only invite doubt about one that is not
+    there.
+  -->
 
   <div class="panel">
     <h3>Your capital and your profit are two different things</h3>
@@ -835,9 +1001,16 @@ function icon(name: keyof typeof ICONS): string {
 }
 
 function page3(f: ReportFigures, cycle: ReportCycle): string {
-  const perSlot = cycle.discloseMode === "perSlot";
-  const d = (v: number) =>
-    perSlot && f.totalUnits > 0 ? Math.round(v / f.totalUnits) : v;
+  // Whole cycle, following page 2. This page calls itself "the same
+  // numbers, drawn out" — if page 2 shows the Series and this showed
+  // per-slot figures, that sentence would be false and the two pages
+  // would put different amounts against identical labels.
+  //
+  // And rounded to the naira at the MONTH, exactly as page 2 rounds.
+  // Summing raw kobo here and rounding at the end put this page's
+  // total sales income one naira above page 2's — the same figure,
+  // printed twice, disagreeing.
+  const d = (v: number) => Math.round(v / 100) * 100;
 
   /* The journey — four steps, whole cycle, said so plainly */
   const goods = cycle.description ?? "goods bought to sell";
@@ -859,8 +1032,12 @@ function page3(f: ReportFigures, cycle: ReportCycle): string {
     },
     {
       n: "Four", k: "shared" as const, t: "Profit shared",
+      // "after tax", because page 2 prints a per-slot figure too and
+      // it is the one BEFORE tax. Two different amounts under the same
+      // words, three pages apart, is a support call waiting to happen.
       lines: [`${Math.round(f.ratio)} : ${100 - Math.round(f.ratio)}`,
-              `${naira(f.netPerSlot)} per slot`],
+              `${naira(f.netPerSlot)} per slot`,
+              f.whtPerSlot > 0 ? "after tax" : ""].filter(Boolean),
     },
   ]
     .map(
@@ -974,7 +1151,7 @@ function page3(f: ReportFigures, cycle: ReportCycle): string {
   <div class="journey">${steps}</div>
 
   <h3 class="pic-h">Every naira of sales income, divided
-    <span class="mode">${perSlot ? "Figures per slot" : "Whole cycle"}</span>
+    <span class="mode">The whole Series</span>
   </h3>
   <p class="pic-p">What customers paid us, and what it went on. The largest slice is
     always the goods themselves — that is the nature of trading.</p>
