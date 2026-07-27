@@ -91,7 +91,10 @@ export async function loadPickerCycles(
         )
         .order("start_date", { ascending: false }),
       db.from("mudarabah_ledgers").select("cycle_id, status"),
-      db.from("investments").select("cycle_id, units").eq("status", "active"),
+      // NOT "active": settling matures every investment in the cycle,
+      // so an active-only filter empties a cycle the moment it settles.
+      // Only "cancelled" was never genuinely a member — see 033.
+      db.from("investments").select("cycle_id, units").neq("status", "cancelled"),
     ]);
 
   const ledgerByCycle = new Map(

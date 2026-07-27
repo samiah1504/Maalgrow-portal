@@ -263,7 +263,10 @@ export default async function SeriesPage() {
     supabase
       .from("investments")
       .select("cycle_id, units, capital")
-      .eq("status", "active"),
+      // Not "active": settling matures them all, and a settled cycle
+      // still had the investors it had. Only "cancelled" was never
+      // genuinely a member — see migration 033.
+      .neq("status", "cancelled"),
   ]);
 
   const series = rawSeries as unknown as SeriesRow[] | null;
