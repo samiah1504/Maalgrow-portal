@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { ADMIN_ROLE_VALUES } from "@/lib/staff-roles";
 
 const ADMIN_ROUTES = ["/admin"];
 const PAYMENT_OFFICER = "payment_officer";
@@ -99,10 +100,15 @@ function homeFor(role?: string | null): string {
   return isAdminRole(role) ? "/admin/dashboard" : "/dashboard";
 }
 
+/**
+ * From ONE list, not a fourth hand-written copy. This must mirror
+ * is_admin() in the database — if payment_officer ever appeared here
+ * it would be waved through every admin route while the database
+ * still refused it, which reads as a broken portal rather than a
+ * blocked one.
+ */
 function isAdminRole(role?: string | null): boolean {
-  return ["super_admin", "administrator", "finance", "operations", "customer_support"].includes(
-    role ?? ""
-  );
+  return ADMIN_ROLE_VALUES.includes(role as never);
 }
 
 export const config = {

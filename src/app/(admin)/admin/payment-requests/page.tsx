@@ -42,6 +42,8 @@ import {
   Landmark,
   Copy,
   Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -118,6 +120,16 @@ export default function PaymentRequestsAdminPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [confirmBulk, setConfirmBulk] = useState<"approve" | "paid" | null>(null);
   const [reference, setReference] = useState("");
+
+  // PREVIEW, NOT IMPERSONATION. This narrows what the page offers to
+  // what a Payment Officer would see; it does not sign you in as
+  // anybody. Anything done while previewing is still recorded against
+  // you, which is the whole reason it works this way — an audit log
+  // that can name the wrong person is worse than none.
+  //
+  // Nothing is hidden that the officer can actually do, so the preview
+  // is exact: her view IS this page with approving withheld.
+  const [preview, setPreview] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
@@ -298,7 +310,14 @@ export default function PaymentRequestsAdminPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [visible, cursor, perms, runOne, toggle]);
 
-  const canApproveHere = perms?.canAuthorise ?? false;
+  const isOfficer = perms?.isPaymentOfficer ?? false;
+  const previewing = preview && !isOfficer;
+  // In preview the officer's own permission decides, exactly as it
+  // would for her — including the Settings switch being on.
+  const canApproveHere = previewing
+    ? perms?.officerCanApprove ?? false
+    : perms?.canAuthorise ?? false;
+  const showOfficerNotice = isOfficer || previewing;
   const bulkAction: "approve" | "paid" | null =
     tab === "pending" && canApproveHere ? "approve"
     : tab === "approved" ? "paid"
@@ -316,28 +335,60 @@ export default function PaymentRequestsAdminPage() {
 
   return (
     <div className="space-y-4 animate-fade-in pb-24">
+      {previewing && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm">
+          <Eye className="h-4 w-4 shrink-0 text-primary-700" />
+          <span className="text-primary-900">
+            <strong>Previewing as Payment Officer.</strong> This is her view of
+            this page. You are still signed in as yourself — anything you do is
+            recorded under your own name.
+          </span>
+          <button
+            onClick={() => setPreview(false)}
+            className="ml-auto inline-flex items-center gap-1 rounded-md bg-primary-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-primary-800"
+          >
+            <EyeOff className="h-3 w-3" />
+            Exit preview
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Payment Requests</h1>
           <p className="text-sm text-muted mt-1">
-            {perms?.isPaymentOfficer
+            {isOfficer || previewing
               ? "Confirm payments as you send them."
               : "Approve, then confirm once the money has gone."}
           </p>
         </div>
-        <div className="flex gap-4 text-right">
+        <div className="flex items-start gap-4 text-right">
           <Figure label="Awaiting approval" value={counts.pending ?? 0} money={counts.pendingAmount} />
           <Figure label="Ready to pay" value={counts.approved ?? 0} money={counts.approvedAmount} gold />
+          {perms && !isOfficer && !previewing && (
+            <button
+              onClick={() => {
+                setPreview(true);
+                setSelected(new Set());
+                setTab("approved");
+              }}
+              title="See this page as the Payment Officer sees it"
+              className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted hover:border-primary-300 hover:text-foreground"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Preview as officer</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* An officer who cannot approve should be told so once, plainly,
           rather than wondering where the button went. */}
-      {perms?.isPaymentOfficer && !perms.canAuthorise && (
+      {showOfficerNotice && !canApproveHere && (
         <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
           <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <span>
-            Approving is switched off for your role. Work the{" "}
+            {previewing ? "Approving is switched off for the Payment Officer role. She works the " : "Approving is switched off for your role. Work the "}
             <strong className="text-foreground">Approved</strong> tab — those have
             been authorised and are waiting on payment.
           </span>

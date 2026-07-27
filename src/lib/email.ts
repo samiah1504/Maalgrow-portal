@@ -481,3 +481,135 @@ export async function sendOnboardingEmail(
     return { success: false, error: message };
   }
 }
+
+// ============================================================
+// Staff invitation
+//
+// A staff member is not an investor: there is no portfolio to
+// summarise and no slot value to quote. What they need is who they
+// are, what they can do, and a link to set their own password.
+//
+// The password is NEVER in this email — only a link they redeem
+// themselves, exactly as the investor invitation works.
+// ============================================================
+
+export type StaffInviteEmailParams = {
+  to: string;
+  fullName: string;
+  roleLabel: string;
+  /** One line on what this role can reach. Sets expectations before
+      they log in and find one menu item. */
+  roleSummary: string;
+  passwordSetupLink: string;
+  portalLink: string;
+  invitedBy?: string;
+};
+
+function buildStaffInviteHtml(p: StaffInviteEmailParams): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Your MaalGrow Portal Account</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;">
+<tr><td align="center" style="padding:32px 16px;">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+  <tr>
+    <td style="background:#1e3a5f;padding:32px;text-align:center;">
+      <img src="${SITE_URL}/logo-192.png" width="64" height="64" alt="MaalGrow"
+           style="border-radius:14px;margin-bottom:10px;display:inline-block;" />
+      <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;">MaalGrow Portal</div>
+      <div style="font-size:13px;color:#8fb0d8;margin-top:4px;">Staff Access</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:32px;">
+      <div style="font-size:18px;font-weight:600;color:#111827;margin-bottom:12px;">
+        As-salamu alaykum, ${p.fullName}
+      </div>
+      <p style="font-size:15px;color:#4b5563;line-height:1.6;margin:0 0 20px;">
+        An account has been created for you on the MaalGrow Portal${
+          p.invitedBy ? ` by ${p.invitedBy}` : ""
+        }. Set your password below and you can sign in straight away.
+      </p>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+        <tr><td style="padding:16px 18px;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:#9ca3af;margin-bottom:4px;">Your role</div>
+          <div style="font-size:16px;font-weight:700;color:#111827;">${p.roleLabel}</div>
+          <div style="font-size:13px;color:#6b7280;line-height:1.6;margin-top:6px;">${p.roleSummary}</div>
+          <div style="font-size:12px;color:#9ca3af;margin-top:12px;">Sign in with: <span style="color:#374151;font-weight:600;">${p.to}</span></div>
+        </td></tr>
+      </table>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+        <tr>
+          <td align="center">
+            <a href="${p.passwordSetupLink}"
+               style="display:inline-block;background:#1e3a5f;color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.3px;">
+              Set Your Password →
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0 0 24px;word-break:break-all;">
+        If the button doesn't work, copy this URL:<br />
+        <span style="color:#3b82f6;">${p.passwordSetupLink}</span>
+      </p>
+
+      <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0;">
+        Nobody at MaalGrow will ever ask you for your password. If you did not
+        expect this email, please tell us at
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:#3b82f6;">${SUPPORT_EMAIL}</a>
+        rather than clicking the link.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f9fafb;padding:24px 32px;border-top:1px solid #e5e7eb;text-align:center;">
+      <p style="font-size:12px;color:#9ca3af;margin:4px 0;">MaalGrow · Shariah-Compliant Mudārabah Investments</p>
+      <p style="font-size:12px;margin:4px 0;">
+        <a href="${p.portalLink}" style="color:#3b82f6;text-decoration:none;">Portal</a>
+      </p>
+      <p style="font-size:11px;color:#d1d5db;margin:4px 0;">Do not reply to this email.</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+export async function sendStaffInviteEmail(
+  params: StaffInviteEmailParams
+): Promise<{ success: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[email] RESEND_API_KEY not set — skipping staff invite email");
+    return { success: false, error: "RESEND_API_KEY not configured" };
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: params.to,
+      subject: `Your MaalGrow Portal account — ${params.roleLabel}`,
+      html: buildStaffInviteHtml(params),
+    });
+
+    if (error) {
+      console.error("[email] Resend staff invite error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown email error";
+    console.error("[email] sendStaffInviteEmail error:", message);
+    return { success: false, error: message };
+  }
+}
