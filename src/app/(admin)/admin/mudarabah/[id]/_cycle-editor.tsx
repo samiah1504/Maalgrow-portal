@@ -227,6 +227,12 @@ export function CycleEditor({
   const whtDirty =
     whtValid && Math.abs(whtNum / 100 - terms.whtRate) > 1e-9;
 
+  // The share investors actually subscribed on. Once subscriptions
+  // close this is the floor, not just the starting position.
+  const ratioFloor = Math.round(terms.ratio * 100);
+  const [savingRatio, setSavingRatio] = useState(false);
+  const ratioDirty = ratio !== ratioFloor;
+
   const readOnly = isReadOnly(draft);
   const symbol = "₦";
 
@@ -379,6 +385,31 @@ export function CycleEditor({
       );
     } finally {
       setSavingWht(false);
+    }
+  }
+
+  async function saveRatio() {
+    setSavingRatio(true);
+    try {
+      const res = await fetch(`/api/admin/mudarabah/${draft.cycleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_investor_ratio",
+          investorRatio: ratio / 100,
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not change the ratio");
+      toast.success(
+        `Slot holders now take ${ratio}% — the manager takes ${100 - ratio}%`
+      );
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not change the ratio");
+      setRatio(ratioFloor);
+    } finally {
+      setSavingRatio(false);
     }
   }
 
@@ -649,21 +680,52 @@ export function CycleEditor({
                 <strong className="num">{100 - ratio}%</strong> manager
               </span>
             </div>
+            {/*
+              Once subscriptions close the slider's floor becomes the
+              advertised share rather than 1%. The manager may take
+              less than agreed — that is a gift and breaks nothing —
+              but may not take more, which is what the lock was always
+              really for. Before close it moves freely, as before.
+            */}
             <input
               id="mud-ratio"
               type="range"
-              min={1}
+              min={terms.termsLocked ? ratioFloor : 1}
               max={99}
               step={1}
               value={ratio}
-              disabled={readOnly || terms.termsLocked}
+              disabled={readOnly || settlementFrozen}
               onChange={(e) => setRatio(Number(e.target.value))}
               style={{ marginTop: 10 }}
             />
-            <p className="muted tiny">
-              {terms.termsLocked
-                ? "Fixed for this cycle. Investors subscribed on the strength of this ratio, so it cannot change now."
-                : "This cycle's own ratio. Changing it here does not touch the series default or any other cycle, and it locks when subscriptions close."}{" "}
+            {!settlementFrozen && ratioDirty && (
+              <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ padding: "6px 12px", fontSize: ".78rem" }}
+                  onClick={saveRatio}
+                  disabled={savingRatio}
+                >
+                  {savingRatio ? "Saving…" : `Give slot holders ${ratio}%`}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: "6px 12px", fontSize: ".78rem" }}
+                  onClick={() => setRatio(ratioFloor)}
+                  disabled={savingRatio}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            <p className="muted tiny" style={{ marginTop: 8 }}>
+              {settlementFrozen
+                ? "Fixed — this cycle is settled and the profit was declared on this ratio."
+                : terms.termsLocked
+                ? `Subscriptions have closed at ${ratioFloor}% to slot holders. You can still give them more — taking a smaller manager's share breaks no promise — but it cannot go back below ${ratioFloor}% without reopening the cycle.`
+                : "This cycle's own ratio. Changing it here does not touch the series default or any other cycle."}{" "}
               A ratio applied to profit the trade actually realised — never a rate
               on capital. On a loss the manager&apos;s share is nothing at all.
             </p>

@@ -106,8 +106,35 @@ export async function PATCH(
       return NextResponse.json({ ok: true });
     }
 
+    // The ratio has its own action for the same reason the withholding
+    // rate does, but the rule is different: after subscriptions close
+    // it may only move in the investors' favour. See migration 026.
+    if (body.action === "set_investor_ratio") {
+      const r = Number(body.investorRatio);
+      if (!Number.isFinite(r) || r <= 0 || r >= 1) {
+        return NextResponse.json(
+          {
+            error:
+              "The slot holders' share must be a fraction of one — 0.60 for sixty per cent.",
+          },
+          { status: 400 }
+        );
+      }
+      const { error } = await mudarabahDb(supabase).rpc(
+        "mudarabah_set_investor_ratio",
+        { p_cycle_id: id, p_ratio: r, p_reason: body.reason?.trim() || null }
+      );
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     return NextResponse.json(
-      { error: "action must be unsettle, set_terms or set_wht_rate" },
+      {
+        error:
+          "action must be unsettle, set_terms, set_wht_rate or set_investor_ratio",
+      },
       { status: 400 }
     );
   } catch (err) {

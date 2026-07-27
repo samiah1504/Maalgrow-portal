@@ -281,6 +281,18 @@ export type MudarabahDatabase = {
         };
         Returns: unknown;
       };
+      // Migration 026 — after subscriptions close the slot holders'
+      // share may only rise. A smaller manager's share is a gift and
+      // is always allowed; a larger one breaks the bargain investors
+      // subscribed on.
+      mudarabah_set_investor_ratio: {
+        Args: {
+          p_cycle_id: string;
+          p_ratio: number;
+          p_reason?: string | null;
+        };
+        Returns: unknown;
+      };
       mudarabah_settle_cycle: {
         Args: {
           p_cycle_id: string;
