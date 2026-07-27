@@ -210,6 +210,12 @@ export default async function AdminInvestorDetailPage({
       cycle_id: i.cycle_id,
       units: i.units,
       capital: i.capital,
+      // Carried so the payment form can offer a top-up that adds no
+      // slots, and cap it at what is actually outstanding — the same
+      // ceiling record_investor_payment enforces.
+      confirmed_paid: i.investment_payments
+        .filter((p) => p.status === "confirmed")
+        .reduce((s, p) => s + p.amount, 0),
     }));
 
   const isActive = investor.profile?.is_active !== false;

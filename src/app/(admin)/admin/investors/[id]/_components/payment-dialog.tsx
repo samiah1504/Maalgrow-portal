@@ -48,6 +48,8 @@ export type EnrolmentInfo = {
   cycle_id: string;
   units: number;
   capital: number;
+  /** Confirmed payments against this enrolment. capital − this = outstanding. */
+  confirmed_paid: number;
 };
 
 export type PaymentForEdit = {
@@ -156,6 +158,30 @@ function PaymentDialog({
   const amountMatches =
     Math.round(unitsNum * unitPrice * 100) === Math.round(amountNum * 100);
 
+  /*
+   * TOPPING UP THE MONEY WITHOUT MOVING THE SLOTS.
+   *
+   * record_investor_payment has supported this since migration 014
+   * (p_apply_to_outstanding), and the API has always passed it
+   * through, but nothing in this form ever set it on a NEW payment —
+   * it was only ever switched on when editing a payment that already
+   * carried no slots. So the only way to record money against an
+   * enrolment was to buy slots with it, which is wrong whenever the
+   * slots are already right and only the money record is short: a
+   * payment reversed in error, or one keyed below what arrived.
+   *
+   * Offered only where it can actually succeed. The function refuses
+   * an instalment with no enrolment to attach to, and refuses one
+   * larger than the outstanding balance, so a toggle that appears
+   * without an enrolment would only ever produce an error.
+   */
+  const outstanding = enrolment
+    ? Math.round((enrolment.capital - enrolment.confirmed_paid) * 100) / 100
+    : 0;
+  const canTopUp = !isEdit && Boolean(enrolment) && outstanding > 0.005;
+  const overOutstanding =
+    applyToOutstanding && !isEdit && amountNum > outstanding + 0.005;
+
   const handleSeriesChange = (id: string) => {
     setSeriesId(id);
     setApplyToOutstanding(false);
@@ -194,7 +220,14 @@ function PaymentDialog({
     if (!amount || isNaN(amountNum) || amountNum <= 0)
       return "Enter a payment amount greater than 0.";
     if (applyToOutstanding) {
-      // Editing a legacy payment record: amount-only change.
+      // No slots change hands: amount only. The one ceiling is the
+      // outstanding balance, checked here so the message arrives
+      // before the round trip — the function enforces it regardless.
+      if (overOutstanding) {
+        return `${formatCurrency(amountNum)} is more than the ${formatCurrency(
+          outstanding
+        )} outstanding on this enrolment. To add slots as well, clear the tick box.`;
+      }
       return null;
     }
     if (!validStep)
@@ -283,7 +316,11 @@ function PaymentDialog({
               You are {isEdit ? "updating this payment to" : "adding"}{" "}
               <strong>{formatCurrency(amountNum)}</strong>
               {applyToOutstanding ? (
-                <> as an instalment toward the outstanding balance</>
+                <>
+                  {" "}
+                  as money only — <strong>no new slots</strong>, toward the
+                  outstanding balance
+                </>
               ) : (
                 <>
                   , equal to <strong>{slotLabel(unitsNum)}</strong>,
@@ -412,6 +449,33 @@ function PaymentDialog({
                   {formatCurrency(enrolment.capital)}) — this payment will be
                   added to the existing enrolment.
                 </p>
+              )}
+
+              {canTopUp && (
+                <label className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyToOutstanding}
+                    onChange={(e) => {
+                      setApplyToOutstanding(e.target.checked);
+                      setUnits("");
+                      if (e.target.checked) setAmount(String(outstanding));
+                    }}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs text-foreground">
+                    <strong>Money only — add no slots.</strong>
+                    <span className="block text-muted mt-0.5">
+                      This enrolment holds {slotLabel(enrolment!.units)} worth{" "}
+                      {formatCurrency(enrolment!.capital)} but only{" "}
+                      {formatCurrency(enrolment!.confirmed_paid)} is confirmed
+                      against it — {formatCurrency(outstanding)} outstanding.
+                      Tick this when the slots are already right and it is the
+                      payment record that is short, such as a payment reversed
+                      in error.
+                    </span>
+                  </span>
+                </label>
               )}
             </div>
 

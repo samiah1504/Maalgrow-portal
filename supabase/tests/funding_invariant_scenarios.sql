@@ -18,6 +18,8 @@
 --   F7  investment_funding_gaps sees only active enrolments, and
 --       only the cycle asked about
 --   F8  a non-admin session cannot move slots at all
+--   F9  the reported case end to end: a money-only top-up closes
+--       the gap and leaves her slot count alone
 --
 -- Run against a DB with 001–024 applied.
 -- ============================================================
@@ -340,4 +342,83 @@ BEGIN
   RAISE NOTICE 'PASS F8: only a payments administrator moves slots';
 END $$;
 
+ROLLBACK;
+
+-- ------------------------------------------------------------
+-- F9 — the reported case end to end, with her real figures.
+--
+--   6 slots worth ₦3,000,000, ₦2,500,000 confirmed, and a
+--   ₦500,000 payment reversed in the belief it was excess.
+--   The slots were always right; only the money record was
+--   short. Proves the money-only top-up closes the gap without
+--   touching her slot count, and that a second one is refused.
+-- ------------------------------------------------------------
+BEGIN;
+INSERT INTO auth.users (id, email) VALUES
+  ('a0000000-0000-0000-0000-0000000000f9','a9@t.com'),
+  ('10000000-0000-0000-0000-0000000000f9','i9@t.com') ON CONFLICT DO NOTHING;
+INSERT INTO profiles (id,email,full_name,role) VALUES
+  ('a0000000-0000-0000-0000-0000000000f9','a9@t.com','A9','super_admin'),
+  ('10000000-0000-0000-0000-0000000000f9','i9@t.com','Reversed In Error','investor')
+ON CONFLICT (id) DO UPDATE SET role=EXCLUDED.role;
+INSERT INTO investors (id,profile_id,investor_code,full_name,email) VALUES
+  ('20000000-0000-0000-0000-0000000000f9','10000000-0000-0000-0000-0000000000f9','MGF0009','Reversed In Error','i9@t.com')
+ON CONFLICT DO NOTHING;
+INSERT INTO series (id,name,description,start_month_offset,price_per_unit,mudarabah_investor_ratio)
+VALUES ('30000000-0000-0000-0000-0000000000f9','B','Series B',0,500000,0.50)
+ON CONFLICT (name) DO UPDATE SET price_per_unit=EXCLUDED.price_per_unit;
+INSERT INTO cycles (id,series_id,cycle_number,cycle_label,start_date,end_date,status,unit_value)
+VALUES ('40000000-0000-0000-0000-0000000000f9',(SELECT id FROM series WHERE name='B'),909,'Apr 2026 - July 2026','2026-04-30','2026-07-30','active',500000);
+-- Her enrolment exactly as the portal shows it
+INSERT INTO investments (investment_code,investor_id,series_id,cycle_id,units,price_per_unit,capital,investment_date,maturity_date,status)
+VALUES ('MG-B-001-MG-TBKJDN','20000000-0000-0000-0000-0000000000f9',(SELECT id FROM series WHERE name='B'),'40000000-0000-0000-0000-0000000000f9',6,500000,3000000,'2026-04-30','2026-07-30','active');
+-- #1 confirmed 2,500,000 ; #2 500,000 booked with NO slots, then reversed
+INSERT INTO investment_payments (investment_id,investor_id,series_id,cycle_id,amount,units,payment_date,status,reference)
+VALUES
+ ((SELECT id FROM investments WHERE investment_code='MG-B-001-MG-TBKJDN'),'20000000-0000-0000-0000-0000000000f9',(SELECT id FROM series WHERE name='B'),'40000000-0000-0000-0000-0000000000f9',2500000,5,'2026-04-30','confirmed','P1'),
+ ((SELECT id FROM investments WHERE investment_code='MG-B-001-MG-TBKJDN'),'20000000-0000-0000-0000-0000000000f9',(SELECT id FROM series WHERE name='B'),'40000000-0000-0000-0000-0000000000f9',500000,0,'2026-04-30','confirmed','P2');
+SELECT set_config('test.uid','a0000000-0000-0000-0000-0000000000f9',false);
+DO $$ BEGIN
+  PERFORM reverse_investor_payment((SELECT id FROM investment_payments WHERE reference='P2'),'Believed to be an excess payment');
+END $$;
+
+DO $$
+DECLARE v_gap NUMERIC; v_units NUMERIC; v_recv NUMERIC;
+BEGIN
+  SELECT gap INTO v_gap FROM investment_funding_gaps('40000000-0000-0000-0000-0000000000f9');
+  IF v_gap <> 500000 THEN RAISE EXCEPTION 'F9 setup: expected a 500000 gap, got %', v_gap; END IF;
+
+  -- THE FIX: money only, no new slots
+  PERFORM record_investor_payment(
+    '20000000-0000-0000-0000-0000000000f9',
+    (SELECT id FROM series WHERE name='B'),
+    '40000000-0000-0000-0000-0000000000f9',
+    500000, NULL, '2026-04-30', 'bank_transfer',
+    'P2-RESTORED', 'Restores 500000 reversed in error', 'confirmed', TRUE);
+
+  SELECT units INTO v_units FROM investments WHERE investment_code='MG-B-001-MG-TBKJDN';
+  IF v_units <> 6 THEN RAISE EXCEPTION 'F9: the top-up moved her slots to %', v_units; END IF;
+
+  IF investment_confirmed_paid((SELECT id FROM investments WHERE investment_code='MG-B-001-MG-TBKJDN')) <> 3000000
+    THEN RAISE EXCEPTION 'F9: confirmed money did not reach 3000000'; END IF;
+
+  IF EXISTS (SELECT 1 FROM investment_funding_gaps('40000000-0000-0000-0000-0000000000f9'))
+    THEN RAISE EXCEPTION 'F9: the gap did not close'; END IF;
+
+  SELECT amount_received INTO v_recv FROM cycles WHERE id='40000000-0000-0000-0000-0000000000f9';
+  IF v_recv <> 3000000 THEN RAISE EXCEPTION 'F9: cycle amount_received is %, expected 3000000', v_recv; END IF;
+
+  RAISE NOTICE 'PASS F9: a money-only top-up closes the gap, her slots untouched at 6';
+END $$;
+
+-- and a second top-up on a now-funded enrolment is refused
+DO $$ DECLARE v_ok BOOLEAN := FALSE; BEGIN
+  BEGIN
+    PERFORM record_investor_payment('20000000-0000-0000-0000-0000000000f9',
+      (SELECT id FROM series WHERE name='B'),'40000000-0000-0000-0000-0000000000f9',
+      500000, NULL, '2026-04-30', NULL, 'P3', NULL, 'confirmed', TRUE);
+  EXCEPTION WHEN OTHERS THEN v_ok := TRUE; END;
+  IF NOT v_ok THEN RAISE EXCEPTION 'F9: a top-up past the outstanding balance was accepted'; END IF;
+  RAISE NOTICE 'PASS F9b: topping up a fully funded enrolment is refused';
+END $$;
 ROLLBACK;
