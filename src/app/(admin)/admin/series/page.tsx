@@ -236,6 +236,7 @@ export default async function SeriesPage() {
     { data: rawSeries },
     { data: profitDeclarations },
     { count: awaitingRollover },
+    { data: memberships },
   ] = await Promise.all([
     supabase
       .from("series")
@@ -258,10 +259,39 @@ export default async function SeriesPage() {
       .select("*", { count: "exact", head: true })
       .eq("status", "matured")
       .is("maturity_decision", null),
+    supabase
+      .from("investments")
+      .select("cycle_id, units, capital")
+      .eq("status", "active"),
   ]);
 
   const series = rawSeries as unknown as SeriesRow[] | null;
   const allCycles = series?.flatMap((s) => s.cycles ?? []) ?? [];
+
+  // cycles.total_slots / total_investors / total_capital are running
+  // totals maintained by trigger deltas — nothing recalculates them, so
+  // a missed delta leaves them stale and this page would then disagree
+  // with the Mudarabah ledger, which counts the memberships themselves.
+  // Recount here, over the same rows the ledger and settlement use.
+  // Mutating in place so every consumer below sees the derived figure.
+  const held = new Map<string, { slots: number; investors: number; capital: number }>();
+  for (const m of (memberships ?? []) as {
+    cycle_id: string;
+    units: number | null;
+    capital: number | null;
+  }[]) {
+    const at = held.get(m.cycle_id) ?? { slots: 0, investors: 0, capital: 0 };
+    at.slots += Number(m.units ?? 0);
+    at.capital += Number(m.capital ?? 0);
+    at.investors += 1;
+    held.set(m.cycle_id, at);
+  }
+  for (const c of allCycles) {
+    const at = held.get(c.id) ?? { slots: 0, investors: 0, capital: 0 };
+    c.total_slots = at.slots;
+    c.total_investors = at.investors;
+    c.total_capital = at.capital;
+  }
 
   // Build profit declaration map: cycle_id → declaration
   const profitMap = new Map<string, ProfitDeclaration>(

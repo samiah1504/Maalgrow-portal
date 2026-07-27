@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileText } from "lucide-react";
 import { mudarabahDb } from "@/lib/mudarabah/db";
-import type { PickerCycle, PickerSeries } from "../_cycle-picker";
+import { loadPickerCycles } from "@/lib/mudarabah/cycle-picker-data";
 import { ReportPreview } from "./_report-preview";
 import type { Metadata } from "next";
 
@@ -34,35 +34,9 @@ export default async function MudarabahReportPreviewPage() {
 
   const db = mudarabahDb(await createAdminClient());
 
-  const [{ data: series }, { data: cycles }, { data: ledgers }] = await Promise.all([
-    db.from("series").select("id, name").order("name"),
-    db
-      .from("cycles")
-      .select("id, series_id, cycle_label, start_date, end_date, status, total_slots, total_investors")
-      .order("start_date", { ascending: false }),
-    db.from("mudarabah_ledgers").select("cycle_id, status"),
-  ]);
-
-  const ledgerByCycle = new Map(
-    (ledgers ?? []).map((l) => [l.cycle_id, l.status as string])
-  );
-
-  const pickerSeries: PickerSeries[] = (series ?? []).map((s) => ({
-    id: s.id,
-    name: String(s.name),
-  }));
-
-  const pickerCycles: PickerCycle[] = (cycles ?? []).map((c) => ({
-    id: c.id,
-    seriesId: c.series_id,
-    label: c.cycle_label,
-    startDate: c.start_date,
-    endDate: c.end_date,
-    status: c.status,
-    totalSlots: Number(c.total_slots ?? 0),
-    investors: Number(c.total_investors ?? 0),
-    ledgerStatus: ledgerByCycle.get(c.id) ?? null,
-  }));
+  // Same derived figures as the ledger picker — one loader, so the two
+  // screens cannot report a cycle differently.
+  const { series: pickerSeries, cycles: pickerCycles } = await loadPickerCycles(db);
 
   return (
     <div className="space-y-6 animate-fade-in">

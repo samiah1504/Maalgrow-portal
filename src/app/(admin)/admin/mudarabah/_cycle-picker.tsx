@@ -3,23 +3,16 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { ArrowRight, FilePlus2 } from "lucide-react";
+import { cn, formatCurrency } from "@/lib/utils";
+import { ArrowRight, FilePlus2, AlertTriangle } from "lucide-react";
+import {
+  fundingGap,
+  slotsDrifted,
+  type PickerCycle,
+  type PickerSeries,
+} from "@/lib/mudarabah/cycle-picker-data";
 
-export type PickerSeries = { id: string; name: string };
-
-export type PickerCycle = {
-  id: string;
-  seriesId: string;
-  label: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-  totalSlots: number;
-  investors: number;
-  /** null when this cycle has no ledger — nothing is backfilled */
-  ledgerStatus: string | null;
-};
+export type { PickerCycle, PickerSeries };
 
 /**
  * Pick an existing series, then a cycle within it. Settled cycles are
@@ -117,6 +110,9 @@ export function CyclePicker({
                     {c.investors} investor{c.investors === 1 ? "" : "s"} ·{" "}
                     {c.totalSlots} slot{c.totalSlots === 1 ? "" : "s"}
                   </p>
+
+                  <CycleNotices cycle={c} />
+
                   <p className="pt-2 border-t border-border text-xs font-medium text-primary-700 flex items-center gap-1">
                     {c.ledgerStatus ? (
                       <>
@@ -133,6 +129,57 @@ export function CyclePicker({
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The two ways a cycle can be inconsistent before anyone opens it.
+ *
+ * Both were previously invisible here — the first because this card
+ * showed the accumulator instead of the memberships, so it agreed with
+ * itself and disagreed with the ledger; the second because nothing
+ * outside the ledger editor ever compared slots held against money
+ * received. A slot nobody paid for divides real profit at settlement,
+ * so it belongs on the first screen, not the third.
+ *
+ * These are warnings, never blocks. A cycle mid-subscription is
+ * legitimately underfunded, and the administrator knows which is which.
+ */
+export function CycleNotices({ cycle }: { cycle: PickerCycle }) {
+  const drifted = slotsDrifted(cycle);
+  const gap = fundingGap(cycle);
+  if (!drifted && gap === 0) return null;
+
+  return (
+    <div className="space-y-1 pt-1">
+      {drifted && (
+        <p className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700">
+          <AlertTriangle className="h-3 w-3 shrink-0 mt-px" />
+          <span>
+            The cycle record says {cycle.storedSlots} slot
+            {cycle.storedSlots === 1 ? "" : "s"}; the memberships hold{" "}
+            {cycle.totalSlots}. Profit is divided by the memberships.
+          </span>
+        </p>
+      )}
+      {gap !== 0 && (
+        <p className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700">
+          <AlertTriangle className="h-3 w-3 shrink-0 mt-px" />
+          <span>
+            {gap > 0 ? (
+              <>
+                {formatCurrency(gap)} of slots held with no confirmed payment
+                against them.
+              </>
+            ) : (
+              <>
+                {formatCurrency(-gap)} received beyond the slots held.
+              </>
+            )}
+          </span>
+        </p>
       )}
     </div>
   );

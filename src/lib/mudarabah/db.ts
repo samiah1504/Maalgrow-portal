@@ -207,6 +207,22 @@ export type RolloverDecisionRow = {
   slots_to_withdraw: number | null;
 };
 
+/**
+ * A membership row, as the pickers read it.
+ *
+ * These are the rows that decide how much capital is actually in a
+ * cycle. cycles.total_slots is a running total maintained by trigger
+ * deltas and can drift; this is the thing itself.
+ */
+export type InvestmentMembershipRow = {
+  id: string;
+  cycle_id: string;
+  investor_id: string;
+  units: number;
+  capital: number;
+  status: string;
+};
+
 type Table<Row> = {
   Row: Row;
   Insert: Partial<Row>;
@@ -220,6 +236,7 @@ export type MudarabahDatabase = {
       mudarabah_ledgers: Table<MudarabahLedgerRow>;
       cycles: Table<CycleRow>;
       series: Table<SeriesRow>;
+      investments: Table<InvestmentMembershipRow>;
       mudarabah_settlements: Table<MudarabahSettlementRow>;
       mudarabah_settlement_holders: Table<MudarabahSettlementHolderRow>;
       mudarabah_settlement_products: Table<MudarabahSettlementProductRow>;
