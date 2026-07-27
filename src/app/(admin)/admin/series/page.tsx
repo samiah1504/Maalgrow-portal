@@ -47,6 +47,7 @@ type CycleRow = {
   total_slots: number;
   total_investors: number;
   amount_received: number;
+  unit_value: number | null;
   rollover_processed_at?: string | null;
 };
 
@@ -247,7 +248,7 @@ export default async function SeriesPage() {
            id, cycle_number, cycle_label, start_date, end_date, status,
            subscription_open_date, subscription_close_date,
            total_capital, total_slots, total_investors, amount_received,
-           rollover_processed_at
+           unit_value, rollover_processed_at
          )`
       )
       .order("name"),
@@ -266,7 +267,6 @@ export default async function SeriesPage() {
   ]);
 
   const series = rawSeries as unknown as SeriesRow[] | null;
-  const allCycles = series?.flatMap((s) => s.cycles ?? []) ?? [];
 
   // cycles.total_slots / total_investors / total_capital are running
   // totals maintained by trigger deltas — nothing recalculates them, so
@@ -274,23 +274,35 @@ export default async function SeriesPage() {
   // with the Mudarabah ledger, which counts the memberships themselves.
   // Recount here, over the same rows the ledger and settlement use.
   // Mutating in place so every consumer below sees the derived figure.
-  const held = new Map<string, { slots: number; investors: number; capital: number }>();
+  //
+  // CAPITAL IS SLOTS × SLOT VALUE, not the sum of each enrolment's
+  // stored capital column. They should be identical — an enrolment's
+  // capital IS its units × price — but summing the column would hide a
+  // row where the two had come apart. Defining capital as the product
+  // makes that impossible: one slot count, one price, one answer.
+  const held = new Map<string, { slots: number; investors: number }>();
   for (const m of (memberships ?? []) as {
     cycle_id: string;
     units: number | null;
-    capital: number | null;
   }[]) {
-    const at = held.get(m.cycle_id) ?? { slots: 0, investors: 0, capital: 0 };
+    const at = held.get(m.cycle_id) ?? { slots: 0, investors: 0 };
     at.slots += Number(m.units ?? 0);
-    at.capital += Number(m.capital ?? 0);
     at.investors += 1;
     held.set(m.cycle_id, at);
   }
-  for (const c of allCycles) {
-    const at = held.get(c.id) ?? { slots: 0, investors: 0, capital: 0 };
-    c.total_slots = at.slots;
-    c.total_investors = at.investors;
-    c.total_capital = at.capital;
+  for (const s of series ?? []) {
+    for (const c of s.cycles ?? []) {
+      const at = held.get(c.id) ?? { slots: 0, investors: 0 };
+      // The same COALESCE(cycle.unit_value, series.price_per_unit) the
+      // Mudarabah engine applies, so a slot is never worth two
+      // different amounts on two different pages.
+      const slotValue = c.unit_value != null
+        ? Number(c.unit_value)
+        : Number(s.price_per_unit ?? 0);
+      c.total_slots = at.slots;
+      c.total_investors = at.investors;
+      c.total_capital = at.slots * slotValue;
+    }
   }
 
   // Build profit declaration map: cycle_id → declaration
@@ -546,18 +558,28 @@ export default async function SeriesPage() {
                         </div>
                       </div>
 
-                      {/* Stats grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {/*
+                        Stats grid.
+
+                        There is no "Collected" tile. An investor is
+                        entered only once their payment has arrived and
+                        been confirmed, so the money in a cycle is
+                        always its capital — two tiles for one figure
+                        invited exactly the confusion of reading one
+                        screen against another. Capital is slots ×
+                        slot value, full stop.
+
+                        When the money does NOT match, that is a fault
+                        in the records rather than a statistic, so it
+                        appears below as a warning instead.
+                      */}
+                      <div className="grid grid-cols-3 gap-2">
                         {[
                           { label: "Investors", value: currentCycle.total_investors.toString() },
                           { label: "Slots Sold", value: currentCycle.total_slots.toString() },
                           {
                             label: "Capital",
                             value: formatCurrency(currentCycle.total_capital),
-                          },
-                          {
-                            label: "Collected",
-                            value: formatCurrency(currentCycle.amount_received),
                           },
                         ].map(({ label, value }) => (
                           <div
@@ -571,6 +593,35 @@ export default async function SeriesPage() {
                           </div>
                         ))}
                       </div>
+
+                      {Math.abs(
+                        currentCycle.total_capital - currentCycle.amount_received
+                      ) > 0.005 && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-[11px] leading-snug text-amber-800">
+                            {currentCycle.total_capital > currentCycle.amount_received ? (
+                              <>
+                                {formatCurrency(
+                                  currentCycle.total_capital - currentCycle.amount_received
+                                )}{" "}
+                                of slots here have no confirmed payment behind
+                                them. Open the Mudarabah ledger for this cycle
+                                to see which investors.
+                              </>
+                            ) : (
+                              <>
+                                {formatCurrency(
+                                  currentCycle.amount_received - currentCycle.total_capital
+                                )}{" "}
+                                more has been received than the slots account
+                                for. Open the Mudarabah ledger for this cycle
+                                to see which investors.
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Profit Status */}
                       {pl && (
