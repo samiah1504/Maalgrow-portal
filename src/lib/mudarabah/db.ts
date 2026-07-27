@@ -269,6 +269,18 @@ export type MudarabahDatabase = {
         };
         Returns: undefined;
       };
+      // Migration 025 — separate from set_cycle_terms because the
+      // withholding rate is statutory, not a term investors agreed to,
+      // and stays correctable until settlement rather than until
+      // subscriptions close.
+      mudarabah_set_wht_rate: {
+        Args: {
+          p_cycle_id: string;
+          p_rate: number;
+          p_reason?: string | null;
+        };
+        Returns: unknown;
+      };
       mudarabah_settle_cycle: {
         Args: {
           p_cycle_id: string;

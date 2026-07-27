@@ -215,6 +215,18 @@ export function CycleEditor({
   const [unsettling, setUnsettling] = useState(false);
   const [reason, setReason] = useState("");
 
+  // Percent in the box, fraction in the database — 10 here is 0.10
+  // there, which is what mudarabah_effective_wht_rate returns and what
+  // the engine multiplies by.
+  const [whtPercent, setWhtPercent] = useState(
+    String(Math.round(terms.whtRate * 10000) / 100)
+  );
+  const [savingWht, setSavingWht] = useState(false);
+  const whtNum = Number(whtPercent);
+  const whtValid = Number.isFinite(whtNum) && whtNum >= 0 && whtNum < 100;
+  const whtDirty =
+    whtValid && Math.abs(whtNum / 100 - terms.whtRate) > 1e-9;
+
   const readOnly = isReadOnly(draft);
   const symbol = "₦";
 
@@ -237,6 +249,11 @@ export function CycleEditor({
 
   // A settled cycle shows its FROZEN figures, never a fresh calculation
   const frozen = settlement?.computed ?? null;
+
+  // Settlement, not subscription close, is what fixes the withholding
+  // rate: from then on it is in the snapshot and may be quoted on a
+  // credit note already in an investor's hands.
+  const settlementFrozen = frozen !== null;
   const headline = frozen
     ? {
         capital: frozen.capital,
@@ -333,6 +350,35 @@ export function CycleEditor({
       toast.error(err instanceof Error ? err.message : "Could not save the cycle");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveWhtRate() {
+    if (!whtValid) {
+      toast.error("The withholding rate must be between 0 and 100 per cent.");
+      return;
+    }
+    setSavingWht(true);
+    try {
+      const res = await fetch(`/api/admin/mudarabah/${draft.cycleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_wht_rate",
+          // Percent on screen, fraction on the wire
+          whtRate: whtNum / 100,
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Could not set the withholding rate");
+      toast.success(`Withholding tax set to ${whtNum}%`);
+      router.refresh();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not set the withholding rate"
+      );
+    } finally {
+      setSavingWht(false);
     }
   }
 
@@ -533,19 +579,58 @@ export function CycleEditor({
                 A category. This is the only product wording investors ever see.
               </p>
             </div>
+            {/*
+              The withholding rate is editable until SETTLEMENT, not
+              until subscriptions close. It is set by the tax
+              authority rather than agreed with investors, so a rate
+              that was never entered — or one the law changed
+              mid-cycle — has to be correctable. Settling is what
+              freezes it, because from then on it is in the snapshot
+              and may be quoted on an issued credit note.
+
+              It was previously disabled outright and explained away
+              as a closed subscription, which left a cycle sitting at
+              0.00% with no way to say otherwise.
+            */}
             <div>
               <label htmlFor="mud-wht">Withholding tax</label>
-              <input
-                id="mud-wht"
-                type="text"
-                value={percent(terms.whtRate * 100)}
-                disabled
-              />
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  id="mud-wht"
+                  type="number"
+                  min="0"
+                  max="99.99"
+                  step="0.01"
+                  value={whtPercent}
+                  disabled={settlementFrozen || savingWht}
+                  onChange={(e) => setWhtPercent(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <span className="muted">%</span>
+                {!settlementFrozen && whtDirty && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: "6px 12px", fontSize: ".78rem" }}
+                    onClick={saveWhtRate}
+                    disabled={savingWht || !whtValid}
+                  >
+                    {savingWht ? "Saving…" : "Save"}
+                  </button>
+                )}
+              </div>
               <p className="muted tiny" style={{ marginTop: 4 }}>
-                {terms.termsLocked
-                  ? "Fixed — subscriptions have closed."
-                  : "Set on the cycle before subscriptions close."}
+                {settlementFrozen
+                  ? "Fixed — this cycle is settled and the rate is part of its snapshot."
+                  : "A statutory rate, not a term investors agreed to, so it stays correctable until this cycle is settled."}
               </p>
+              {!settlementFrozen && Number(terms.whtRate) === 0 && (
+                <p className="tiny" style={{ marginTop: 4, color: "var(--warn)" }}>
+                  Nothing will be withheld at 0%, and no credit note can be
+                  issued for a cycle that withheld nothing. Set the rate before
+                  settling if tax is due.
+                </p>
+              )}
             </div>
           </div>
 

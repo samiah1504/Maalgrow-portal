@@ -75,7 +75,7 @@ export type Assertion = {
 };
 
 export type Warning = {
-  kind: "no-tin" | "no-decision" | "ledger" | "cash";
+  kind: "no-tin" | "no-decision" | "ledger" | "cash" | "no-wht";
   message: string;
   investors: string[];
 };
@@ -239,6 +239,24 @@ export function settlementPreview(
         undecided.length === 1 ? " has" : "s have"
       } no capital instruction on record. Their capital will be PAID OUT unless you change it below.`,
       investors: names(undecided),
+    });
+  }
+
+  /*
+   * A cycle that withholds nothing.
+   *
+   * series.default_wht_rate is zero until somebody sets it, and a rate
+   * nobody entered looks exactly like a rate deliberately set to zero.
+   * Settling freezes it, so the moment before settling is the last one
+   * at which anybody will look. Zero can be right — but it should be
+   * chosen, not arrived at.
+   */
+  if (holders.length > 0 && cycle.holderPot > 0 && totals.wht === 0) {
+    warnings.push({
+      kind: "no-wht",
+      message:
+        "No withholding tax will be deducted — the rate on this cycle is 0%. Settling freezes that, and no credit note can be issued for a cycle that withheld nothing. Set the rate on the cycle first if tax is due.",
+      investors: [],
     });
   }
 

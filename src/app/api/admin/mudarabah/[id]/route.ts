@@ -79,8 +79,35 @@ export async function PATCH(
       return NextResponse.json({ ok: true });
     }
 
+    // The withholding rate has its own action because it has its own
+    // lifetime. The ratio and the slot value are terms an investor
+    // agreed to and freeze when subscriptions close; the withholding
+    // rate is statutory and stays correctable until settlement, which
+    // is where it genuinely freezes. See migration 025.
+    if (body.action === "set_wht_rate") {
+      const rate = Number(body.whtRate);
+      if (!Number.isFinite(rate) || rate < 0 || rate >= 1) {
+        return NextResponse.json(
+          {
+            error:
+              "The withholding rate must be a fraction of one — 0.10 for ten per cent.",
+          },
+          { status: 400 }
+        );
+      }
+      const { error } = await mudarabahDb(supabase).rpc("mudarabah_set_wht_rate", {
+        p_cycle_id: id,
+        p_rate: rate,
+        p_reason: body.reason?.trim() || null,
+      });
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     return NextResponse.json(
-      { error: "action must be unsettle or set_terms" },
+      { error: "action must be unsettle, set_terms or set_wht_rate" },
       { status: 400 }
     );
   } catch (err) {
