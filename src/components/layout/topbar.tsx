@@ -55,8 +55,12 @@ export function Topbar({
           className="relative rounded-lg p-2 text-muted hover:bg-primary-50 hover:text-primary-700 transition-colors"
         >
           <Bell className="h-5 w-5" />
+          {/* Red, not gold. Gold is this portal's decorative colour —
+              it is on the logo, the badges and the maturity banner —
+              so an unread count in gold read as ornament rather than
+              as something waiting to be looked at. */}
           {unreadNotifications > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold-500 px-0.5 text-[9px] font-bold text-primary-900">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white ring-2 ring-surface">
               {unreadNotifications > 9 ? "9+" : unreadNotifications}
             </span>
           )}

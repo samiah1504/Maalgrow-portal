@@ -1118,6 +1118,10 @@ export type Database = {
           title: string;
           content: string;
           target_audience: "all" | "investors" | "admins";
+          // Migration 028 — how many notifications the send actually
+          // wrote, counted at the moment of sending.
+          recipient_count: number;
+          action_url: string | null;
           is_published: boolean;
           published_at: string | null;
           expires_at: string | null;
@@ -1130,6 +1134,8 @@ export type Database = {
           title: string;
           content: string;
           target_audience?: "all" | "investors" | "admins";
+          recipient_count?: number;
+          action_url?: string | null;
           is_published?: boolean;
           published_at?: string | null;
           expires_at?: string | null;
@@ -1278,6 +1284,21 @@ export type Database = {
       };
       reverse_investor_payment: {
         Args: { p_payment_id: string; p_reason: string };
+        Returns: Json;
+      };
+      // Migration 028 — an announcement writes one record and one
+      // notification per recipient, in a single transaction.
+      broadcast_announcement: {
+        Args: {
+          p_title: string;
+          p_body: string;
+          p_audience?: string;
+          p_action_url?: string | null;
+        };
+        Returns: Json;
+      };
+      delete_announcement: {
+        Args: { p_id: string };
         Returns: Json;
       };
       // Migration 024 — the sole write path for an enrolment's slots.

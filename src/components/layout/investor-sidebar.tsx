@@ -124,8 +124,10 @@ export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: In
                 {item.icon}
               </span>
               <span>{item.label}</span>
+              {/* Red here too — gold is decorative throughout this
+                  sidebar, including the active-item icon just above. */}
               {item.label === "Notifications" && unreadNotifications > 0 && (
-                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-500 px-1 text-[10px] font-bold text-primary-900">
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
                   {unreadNotifications > 99 ? "99+" : unreadNotifications}
                 </span>
               )}
