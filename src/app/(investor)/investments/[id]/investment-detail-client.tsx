@@ -60,8 +60,17 @@ export function MaturityInstructions({
   investorBank,
 }: MaturityInstructionsProps) {
   const router = useRouter();
+  /*
+   * Locked when the CAPITAL has been dealt with, not when the profit
+   * was declared. Settling a cycle matures every investment in it, so
+   * testing for "active" alone locked every investor out the moment
+   * their profit was published — while the portal was still asking
+   * them to decide. Maturing is the profit event; rolling over is the
+   * capital event. See migration 034.
+   */
   const isLocked =
-    investment.status !== "active" || (savedInstruction?.locked ?? false);
+    !["active", "matured"].includes(investment.status) ||
+    (savedInstruction?.locked ?? false);
 
   const [editing, setEditing] = useState(!savedInstruction && !isLocked);
   const [decision, setDecision] = useState<Decision | null>(
@@ -170,10 +179,11 @@ export function MaturityInstructions({
   if (isLocked) {
     const label = savedInstruction
       ? OPTION_LABEL[savedInstruction.decision] ?? savedInstruction.decision
-      : // Settlement pays out the capital of anyone who left no
-        // instruction. Telling them the opposite here would be worse
-        // than telling them nothing.
-        "No instruction submitted — your profit is paid to your bank account, and your capital is returned to you as well unless you tell us otherwise";
+      : // Silence means the capital CONTINUES — it stopped meaning
+        // "paid out" in migration 030, and this line still said the
+        // old thing. Telling an investor their money is on its way
+        // back when it is not is the worst version of this mistake.
+        "No instruction was submitted — your profit has been paid to your bank account, and your capital continues into the next cycle";
     return (
       <Card className="border-primary-200">
         <CardHeader className="pb-3">
@@ -194,8 +204,9 @@ export function MaturityInstructions({
               </p>
             )}
           <p className="text-xs text-muted">
-            This investment has reached maturity, so instructions can no longer be
-            changed. Contact support if you need an exception.
+            The capital for this investment has already been processed, so this
+            instruction can no longer be changed. Message your Investment
+            Manager if something is wrong.
           </p>
         </CardContent>
       </Card>
