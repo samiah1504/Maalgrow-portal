@@ -340,3 +340,53 @@ DO $$ BEGIN
     REVOKE EXECUTE ON FUNCTION investment_confirmed_paid(UUID) FROM anon, authenticated;
   END IF;
 END $$;
+
+-- ------------------------------------------------------------
+-- 6. Resync the stored counters with the memberships.
+--
+--    cycles.total_slots / total_investors / total_capital are
+--    accumulators: a trigger applies deltas and nothing ever
+--    recalculates them. Once one has been set by hand, or a delta has
+--    been missed, it stays wrong indefinitely and every screen that
+--    reads it disagrees with the screens that count the memberships.
+--
+--    This recounts them from the rows that produced them. It is a
+--    correction, not a schema change, and it is safe to run whenever
+--    the two have come apart — the result depends only on the current
+--    memberships, so running it twice changes nothing the second time.
+--
+--    SETTLED CYCLES ARE LEFT ALONE. A settled cycle's figures are
+--    frozen in its snapshot and the counters are part of the record
+--    of what was settled; recomputing them would rewrite history to
+--    match a present that has moved on.
+--
+--    Capital is slots × the effective slot value, not the sum of the
+--    stored capital column, for the same reason the Series page
+--    computes it that way: one slot count, one price, one answer.
+-- ------------------------------------------------------------
+WITH held AS (
+  SELECT
+    c.id                                AS cycle_id,
+    COALESCE(SUM(i.units), 0)           AS slots,
+    COUNT(i.id)                         AS investors,
+    COALESCE(c.unit_value, s.price_per_unit, 0) AS unit_value
+  FROM cycles c
+  JOIN series s ON s.id = c.series_id
+  LEFT JOIN investments i
+    ON i.cycle_id = c.id AND i.status::text = 'active'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM mudarabah_settlements ms
+    WHERE ms.cycle_id = c.id AND ms.is_current
+  )
+  GROUP BY c.id, c.unit_value, s.price_per_unit
+)
+UPDATE cycles c SET
+  total_slots     = h.slots,
+  total_investors = h.investors,
+  total_capital   = h.slots * h.unit_value,
+  updated_at      = NOW()
+FROM held h
+WHERE c.id = h.cycle_id
+  AND (c.total_slots     IS DISTINCT FROM h.slots
+    OR c.total_investors IS DISTINCT FROM h.investors
+    OR c.total_capital   IS DISTINCT FROM h.slots * h.unit_value);
