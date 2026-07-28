@@ -17,6 +17,14 @@ import { buildSettlement, buildSettlementProducts } from "@/lib/mudarabah/figure
 import { compute, ENGINE_VERSION } from "@/lib/mudarabah/compute";
 import { generateStatements } from "@/lib/mudarabah/statements";
 
+/**
+ * Settling commits the money and then builds a few documents. The
+ * default timeout is measured in seconds and a browser launch alone
+ * can exceed it — a killed request here reads as a failed settlement
+ * even though the money was already written.
+ */
+export const maxDuration = 120;
+
 const ADMIN_ROLES = ["super_admin", "administrator"];
 
 async function guard() {
@@ -192,8 +200,18 @@ export async function POST(
         p_settlement_id: settlementId as unknown as string,
       });
       const admin = await createAdminClient();
-      const gen = await generateStatements(admin, id);
-      documents = { queued: gen.total, generated: gen.generated, failed: gen.failed };
+      // A FEW, NOT ALL. Every document is a full Chrome page render;
+      // thirty-eight of them here would run for minutes and the
+      // platform would kill this request — leaving the administrator
+      // staring at a failed call for a settlement that had already
+      // committed. The statements panel finishes the rest, in
+      // batches, at a moment nobody is waiting on.
+      const gen = await generateStatements(admin, id, { limit: 3 });
+      documents = {
+        queued: gen.outstanding ?? gen.total,
+        generated: gen.generated,
+        failed: gen.failed,
+      };
     } catch (e) {
       documentError = e instanceof Error ? e.message : String(e);
     }
