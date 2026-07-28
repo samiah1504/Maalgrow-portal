@@ -59,6 +59,12 @@ END $$;
 -- 2. Then remove the column itself, so nothing can write one again.
 ALTER TABLE investors DROP COLUMN IF EXISTS bvn;
 
--- 3. Reclaim the space the overwritten values occupied, rather than
---    waiting on autovacuum to do it eventually.
-VACUUM investors;
+-- 3. Reclaiming the space is a SEPARATE step, run on its own:
+--
+--      VACUUM investors;
+--
+--    VACUUM cannot run inside a transaction block, and the Supabase
+--    SQL editor wraps a script in one — leaving it here would fail
+--    the whole migration and roll back the deletion above with it.
+--    Autovacuum will get there on its own; running it by hand simply
+--    makes it immediate.
