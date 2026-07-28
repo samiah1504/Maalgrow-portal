@@ -24,10 +24,13 @@ import type { SettlementComputed } from "./figures";
 export const STATEMENT_BUCKET = "mudarabah-statements";
 
 export type GenerationResult = {
+  /** Attempted in THIS run */
   total: number;
   generated: number;
   failed: number;
   errors: { investorName: string; message: string }[];
+  /** Still not built when this run started — how much is left to do */
+  outstanding?: number;
 };
 
 type PendingRow = {
@@ -47,7 +50,8 @@ type PendingRow = {
  */
 export async function generateStatements(
   adminClient: unknown,
-  cycleId: string
+  cycleId: string,
+  options: { limit?: number } = {}
 ): Promise<GenerationResult> {
   const db = mudarabahDb(adminClient);
   const storage = (adminClient as {
@@ -121,7 +125,13 @@ export async function generateStatements(
     .eq("kind", "statement")
     .neq("state", "ready");
 
-  const rows = (pending ?? []) as unknown as PendingRow[];
+  // A BATCH, NOT THE LOT. Every document is a full Chrome page render;
+  // thirty-eight of them in one request runs for minutes and a
+  // serverless platform kills it long before the end — with no error
+  // anyone can see, because the process simply stops. The caller loops
+  // until `remaining` reaches zero instead.
+  const all = (pending ?? []) as unknown as PendingRow[];
+  const rows = options.limit ? all.slice(0, options.limit) : all;
   const byInvestment = new Map((holders ?? []).map((h) => [h.investment_id, h]));
 
   const { data: investors } = await db
@@ -135,6 +145,7 @@ export async function generateStatements(
     generated: 0,
     failed: 0,
     errors: [],
+    outstanding: all.length,
   };
 
   for (const row of rows) {

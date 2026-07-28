@@ -90,6 +90,7 @@ export function Statements({ cycleId }: { cycleId: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"email" | "email-retry" | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/mudarabah/${cycleId}/statements`);
@@ -102,18 +103,97 @@ export function Statements({ cycleId }: { cycleId: string }) {
     load();
   }, [load]);
 
+  const post = async (body: Record<string, unknown>) => {
+    const res = await fetch(`/api/admin/mudarabah/${cycleId}/statements`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    // A killed serverless function does not return JSON. Parsing
+    // blindly threw an unhandled error and showed nothing at all,
+    // which is worse than any message.
+    const text = await res.text();
+    let json: Record<string, unknown> = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      json = { error: text.slice(0, 300) || `Request failed (${res.status})` };
+    }
+    return { ok: res.ok, json };
+  };
+
+  /**
+   * Build the documents, a batch at a time.
+   *
+   * WHY A LOOP. Each document is a full Chrome page render. Asking for
+   * all thirty-eight in one request runs for minutes and the platform
+   * kills it partway — which is precisely the failure that reported
+   * "success" and built nothing.
+   */
+  const build = async () => {
+    setBusy("generate");
+    setProgress(null);
+    let built = 0;
+    let failed = 0;
+    let total: number | null = null;
+    let firstError: string | null = null;
+
+    try {
+      for (let round = 0; round < 40; round++) {
+        const { ok, json } = await post({ action: "generate", limit: 5 });
+        if (!ok) {
+          toast.error(String(json.error ?? "Could not build the documents"));
+          return;
+        }
+
+        const attempted = Number(json.total ?? 0);
+        const madeNow = Number(json.generated ?? 0);
+        // Fixed on the first batch, so the count on screen does not
+        // move under the reader.
+        if (total === null) total = Number(json.outstanding ?? attempted);
+
+        built += madeNow;
+        failed += Number(json.failed ?? 0);
+        const errs = (json.errors ?? []) as { message?: string }[];
+        if (!firstError && errs.length) firstError = errs[0]?.message ?? null;
+
+        setProgress(`${built + failed} of ${total}…`);
+
+        // Nothing was waiting; or this batch achieved nothing, in
+        // which case the next forty will not either.
+        if (attempted === 0 || madeNow === 0) break;
+        if (built + failed >= total) break;
+      }
+
+      // THE TRUTH, not a fixed message. This used to report
+      // "Documents built" whatever came back, so a run that built
+      // nothing at all still said success — the exact fault that sent
+      // someone looking for documents that were never there.
+      if (built === 0 && failed === 0) {
+        toast.warning(
+          "Nothing was built. No document was waiting, or the request was cut short."
+        );
+      } else if (failed > 0) {
+        toast.warning(
+          `${built} built · ${failed} failed${firstError ? ` — ${firstError}` : ""}`
+        );
+      } else {
+        toast.success(`${built} document${built === 1 ? "" : "s"} built`);
+      }
+    } finally {
+      setBusy(null);
+      setProgress(null);
+      await load();
+    }
+  };
+
   const run = async (action: string, label: string) => {
     setBusy(action);
     setConfirm(null);
     try {
-      const res = await fetch(`/api/admin/mudarabah/${cycleId}/statements`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error ?? "That did not work");
+      const { ok, json } = await post({ action });
+      if (!ok) {
+        toast.error(String(json.error ?? "That did not work"));
         return;
       }
       if (action.startsWith("email")) {
@@ -204,10 +284,12 @@ export function Statements({ cycleId }: { cycleId: string }) {
                 size="sm"
                 variant="outline"
                 loading={busy === "generate"}
-                onClick={() => run("generate", "Documents built")}
+                onClick={build}
               >
                 <RefreshCw className="h-4 w-4" />
-                Build {notBuilt.length} document{notBuilt.length === 1 ? "" : "s"}
+                {progress
+                  ? `Building… ${progress}`
+                  : `Build ${notBuilt.length} document${notBuilt.length === 1 ? "" : "s"}`}
               </Button>
             )}
             {failed.length > 0 && (
@@ -295,7 +377,17 @@ export function Statements({ cycleId }: { cycleId: string }) {
                 </p>
                 {r.state !== "ready" && (
                   <p className="mt-0.5 text-xs text-danger">
-                    Document not built{r.last_error ? `: ${r.last_error}` : ""}
+                    {/* "Queued" and "failed" are different problems.
+                        Queued means the build never reached this row —
+                        the run was cut short. Failed means it tried
+                        and could not, and last_error says why. Calling
+                        both "not built" hid which one you had. */}
+                    {r.state === "failed"
+                      ? `Build failed${r.last_error ? `: ${r.last_error}` : " — no reason recorded"}`
+                      : "Queued — the build has not reached this one yet"}
+                    {r.attempts > 0
+                      ? ` · ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}`
+                      : ""}
                   </p>
                 )}
                 {r.email_error && (
@@ -304,7 +396,9 @@ export function Statements({ cycleId }: { cycleId: string }) {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {r.state !== "ready" ? (
-                  <Badge variant="danger">Not built</Badge>
+                  <Badge variant={r.state === "failed" ? "danger" : "pending"}>
+                    {r.state === "failed" ? "Failed" : "Queued"}
+                  </Badge>
                 ) : (
                   <Badge variant={EMAIL_VARIANT[r.email_state] ?? "pending"}>
                     {EMAIL_LABEL[r.email_state] ?? r.email_state}

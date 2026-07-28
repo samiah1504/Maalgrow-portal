@@ -6,6 +6,15 @@ import { emailStatements } from "@/lib/mudarabah/statement-email";
 
 const ADMIN_ROLES = ["super_admin", "administrator"];
 
+/**
+ * Rendering a PDF launches a headless browser. The platform default of
+ * a few seconds is nowhere near enough, and when it is exceeded the
+ * function is killed with no error recorded anywhere — which is
+ * exactly the "it said success and nothing happened" failure this
+ * route produced. Ask for the longest run the plan allows.
+ */
+export const maxDuration = 300;
+
 async function guard() {
   const supabase = await createClient();
   const {
@@ -62,7 +71,10 @@ export async function POST(
     if (g.error) return g.error;
 
     const { id } = await params;
-    const body = (await request.json().catch(() => ({}))) as { action?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      action?: string;
+      limit?: number;
+    };
     const db = mudarabahDb(g.supabase);
 
     /* ── Sending ─────────────────────────────────────────────
@@ -104,7 +116,12 @@ export async function POST(
     }
 
     const admin = await createAdminClient();
-    const result = await generateStatements(admin, id);
+    // A few at a time. Rendering every document in one request runs
+    // for minutes and the platform kills it partway with nothing to
+    // show for it; the page calls this repeatedly until `outstanding`
+    // reaches zero.
+    const limit = Math.max(1, Math.min(Number(body.limit) || 5, 25));
+    const result = await generateStatements(admin, id, { limit });
 
     return NextResponse.json({
       ok: result.failed === 0,
