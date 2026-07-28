@@ -613,3 +613,198 @@ export async function sendStaffInviteEmail(
     return { success: false, error: message };
   }
 }
+
+// ============================================================
+// Cycle-end statement
+//
+// THE ONE EMAIL THAT ASKS FOR A DECISION. Settling pays the profit and
+// leaves the capital question open, and since migration 036 an
+// instruction is final the moment it is given. So this is not merely a
+// notification with a document attached — for most investors it is the
+// thing that prompts the only irreversible choice they make all cycle.
+//
+// It therefore has to do three jobs in an order the reader can follow:
+//
+//   1. tell them their profit is paid, and how much
+//   2. tell them the capital question is open and by when
+//   3. say plainly that the answer cannot be changed afterwards
+//
+// The figure quoted is the NET — what reaches their account. Quoting
+// the gross would be a larger, friendlier number that does not match
+// the transfer, and would generate a phone call from every reader.
+// ============================================================
+
+export type StatementEmailParams = {
+  to: string;
+  fullName: string;
+  investorCode: string;
+  seriesName: string;
+  cycleLabel: string;
+  slots: number;
+  /** Net of withholding tax — the amount that reaches their bank */
+  netProfit: number;
+  capital: number;
+  /** Last day an instruction can be given, already formatted */
+  instructionDeadline: string | null;
+  /** True once they have answered — the email then confirms rather than asks */
+  decisionMade: boolean;
+  decisionLabel: string | null;
+  portalLink: string;
+};
+
+/**
+ * Exported so the copy can be tested. It is the one email that asks
+ * for an irreversible decision, and the words are the risky part —
+ * far more than the plumbing around them.
+ */
+export function buildStatementHtml(p: StatementEmailParams): string {
+  const slotText = `${p.slots} slot${p.slots === 1 ? "" : "s"}`;
+
+  // Answered or not answered are genuinely different emails. Sending
+  // the same "please decide" paragraph to somebody who decided last
+  // week reads as though the portal lost their instruction.
+  const capitalBlock = p.decisionMade
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+        <tr><td style="padding:16px 18px;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:#15803d;margin-bottom:4px;">Your instruction</div>
+          <div style="font-size:15px;font-weight:600;color:#14532d;">${p.decisionLabel ?? "Recorded"}</div>
+          <div style="font-size:13px;color:#166534;line-height:1.6;margin-top:6px;">
+            This is on record and does not need anything further from you.
+          </div>
+        </td></tr>
+      </table>`
+    : `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+        <tr><td style="padding:16px 18px;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:#a16207;margin-bottom:4px;">One decision to make</div>
+          <div style="font-size:15px;font-weight:600;color:#78350f;">
+            Would you like your capital returned, or to continue into the next cycle?
+          </div>
+          <div style="font-size:13px;color:#854d0e;line-height:1.65;margin-top:8px;">
+            Your profit is paid either way — this is only about your
+            ${fmtNGN(p.capital)} capital.${
+              p.instructionDeadline
+                ? ` Please answer by <strong>${p.instructionDeadline}</strong>.`
+                : ""
+            }
+            <br /><br />
+            <strong>Your answer is final once submitted</strong>, so please be sure
+            before you send it. If you do not answer, your capital continues into
+            the next cycle.
+          </div>
+        </td></tr>
+      </table>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Your ${p.cycleLabel} statement</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;">
+<tr><td align="center" style="padding:32px 16px;">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+  <tr>
+    <td style="background:#1e3a5f;padding:32px;text-align:center;">
+      <img src="${SITE_URL}/logo-192.png" width="64" height="64" alt="MaalGrow"
+           style="border-radius:14px;margin-bottom:10px;display:inline-block;" />
+      <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;">MaalGrow Portal</div>
+      <div style="font-size:13px;color:#8fb0d8;margin-top:4px;">Series ${p.seriesName} · ${p.cycleLabel}</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:32px;">
+      <div style="font-size:18px;font-weight:600;color:#111827;margin-bottom:12px;">
+        As-salāmu ʿalaykum, ${p.fullName}
+      </div>
+      <p style="font-size:15px;color:#4b5563;line-height:1.6;margin:0 0 22px;">
+        Your ${p.cycleLabel} cycle has completed and the profit has been declared.
+        Your full statement is attached to this email.
+      </p>
+
+      <!-- The number they are looking for, before anything else. -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+        <tr><td style="padding:18px;text-align:center;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.7px;color:#9ca3af;">Your profit for this cycle</div>
+          <div style="font-size:30px;font-weight:700;color:#1e3a5f;line-height:1.2;margin:4px 0 2px;">${fmtNGN(p.netProfit)}</div>
+          <div style="font-size:12px;color:#6b7280;">
+            after withholding tax · on ${slotText} · ${fmtNGN(p.capital)} capital
+          </div>
+        </td></tr>
+      </table>
+
+      ${capitalBlock}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
+        <tr><td align="center">
+          <a href="${p.portalLink}/investments"
+             style="display:inline-block;background:#1e3a5f;color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.3px;">
+            ${p.decisionMade ? "View Your Investment →" : "Choose What Happens to Your Capital →"}
+          </a>
+        </td></tr>
+      </table>
+
+      <p style="font-size:13px;color:#6b7280;line-height:1.65;margin:0;">
+        The attached statement shows how the whole Series traded over the three
+        months, and your own share of it. Your investor code is
+        <strong style="color:#374151;">${p.investorCode}</strong>.
+        <br /><br />
+        If anything here does not look right, reply to your Investment Manager
+        in the portal or contact us at
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:#3b82f6;">${SUPPORT_EMAIL}</a>.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f9fafb;padding:24px 32px;border-top:1px solid #e5e7eb;text-align:center;">
+      <p style="font-size:12px;color:#9ca3af;margin:4px 0;">MaalGrow · Shariah-Compliant Mudārabah Investments</p>
+      <p style="font-size:12px;margin:4px 0;">
+        <a href="${p.portalLink}" style="color:#3b82f6;text-decoration:none;">Investor Portal</a>
+      </p>
+      <p style="font-size:11px;color:#d1d5db;margin:4px 0;">Do not reply to this email.</p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+export async function sendStatementEmail(
+  params: StatementEmailParams,
+  attachment: { filename: string; content: Buffer }
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[email] RESEND_API_KEY not set — skipping statement email");
+    return { success: false, error: "RESEND_API_KEY not configured" };
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: params.to,
+      subject: `Your ${params.cycleLabel} statement — profit of ${fmtNGN(params.netProfit)}`,
+      html: buildStatementHtml(params),
+      attachments: [
+        {
+          filename: attachment.filename,
+          content: attachment.content.toString("base64"),
+        },
+      ],
+    });
+
+    if (error) {
+      console.error("[email] Resend statement error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, messageId: data?.id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown email error";
+    console.error("[email] sendStatementEmail error:", message);
+    return { success: false, error: message };
+  }
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { mudarabahDb } from "@/lib/mudarabah/db";
 import { generateStatements } from "@/lib/mudarabah/statements";
+import { emailStatements } from "@/lib/mudarabah/statement-email";
 
 const ADMIN_ROLES = ["super_admin", "administrator"];
 
@@ -44,6 +45,9 @@ export async function GET(
 //
 //   action: "generate"   — build whatever is outstanding (pending or failed)
 //   action: "regenerate" — rebuild EVERY document for the cycle
+//   action: "email"      — send the outstanding statement emails
+//   action: "email-retry"— and the ones that failed before
+//   action: "release"    — free rows stuck mid-send after a crash
 //
 // Regeneration is for when a rendering fault is found after the fact.
 // It rebuilds documents from the settlement they were always rendered
@@ -61,6 +65,29 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as { action?: string };
     const db = mudarabahDb(g.supabase);
 
+    /* ── Sending ─────────────────────────────────────────────
+       Deliberately its own action, never a side effect of settling.
+       Thirty-eight emails firing the instant Settle is pressed would
+       remove any chance to read the covering note first — and
+       settlement carries a standing rule that it must not acquire new
+       ways to fail. */
+    if (body.action === "email" || body.action === "email-retry") {
+      const admin = await createAdminClient();
+      const result = await emailStatements(admin, id, {
+        retry: body.action === "email-retry",
+      });
+      return NextResponse.json({ ok: result.failed === 0, ...result });
+    }
+
+    if (body.action === "release") {
+      const { data, error } = await db.rpc(
+        "mudarabah_release_stuck_statement_emails",
+        { p_cycle_id: id }
+      );
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ ok: true, released: data ?? 0 });
+    }
+
     if (body.action === "regenerate") {
       const { error } = await db.rpc("mudarabah_requeue_statements", {
         p_cycle_id: id,
@@ -68,7 +95,10 @@ export async function POST(
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     } else if (body.action !== "generate") {
       return NextResponse.json(
-        { error: "action must be generate or regenerate" },
+        {
+          error:
+            "action must be generate, regenerate, email, email-retry or release",
+        },
         { status: 400 }
       );
     }

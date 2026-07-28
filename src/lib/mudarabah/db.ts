@@ -39,6 +39,12 @@ export type CycleRow = {
   total_capital: number;
   total_investors: number;
   amount_received: number;
+  // The instruction window — migration 027. Read by the cycle-end
+  // email so the deadline it quotes is the one the database enforces,
+  // not a second guess at it.
+  instruction_opens_at: string | null;
+  instruction_closes_at: string | null;
+  rollover_deadline: string | null;
 };
 
 export type SeriesRow = {
@@ -415,6 +421,32 @@ export type MudarabahDatabase = {
           p_note: string;
         };
         Returns: undefined;
+      };
+      // Migration 039 — the cycle-end statement email.
+      mudarabah_statements_to_email: {
+        Args: { p_cycle_id: string; p_retry?: boolean };
+        Returns: unknown;
+      };
+      mudarabah_claim_statement_email: {
+        Args: { p_id: string; p_email_to: string };
+        Returns: boolean;
+      };
+      mudarabah_mark_statement_email: {
+        Args: {
+          p_id: string;
+          p_state: string;
+          p_message_id?: string | null;
+          p_error?: string | null;
+        };
+        Returns: undefined;
+      };
+      mudarabah_release_stuck_statement_emails: {
+        Args: { p_cycle_id: string; p_older_than?: string };
+        Returns: number;
+      };
+      mudarabah_statement_email_counts: {
+        Args: { p_cycle_id: string };
+        Returns: unknown;
       };
     };
     Enums: Record<string, never>;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Statements } from "./_statements";
 import {
   AlertTriangle,
   Check,
@@ -156,18 +157,25 @@ export function Settle({
 
   if (alreadySettled) {
     return (
-      <Card>
-        <CardContent className="p-6 flex items-start gap-3">
-          <Lock className="h-5 w-5 text-primary-600 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold text-foreground">This cycle is already settled.</p>
-            <p className="text-sm text-muted mt-1">
-              Its figures are frozen. Reopen it from the ledger if something has to
-              change — the earlier snapshot is kept either way.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="p-6 flex items-start gap-3">
+            <Lock className="h-5 w-5 text-primary-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-foreground">This cycle is already settled.</p>
+              <p className="text-sm text-muted mt-1">
+                Its figures are frozen. Reopen it from the ledger if something has to
+                change — the earlier snapshot is kept either way.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* After settling, this page becomes the statements page —
+            which is where an administrator already is when the
+            question "did everyone get theirs?" first occurs to them. */}
+        <Statements cycleId={cycleId} />
+      </div>
     );
   }
 
