@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Statements } from "./_statements";
+import { Statements } from "@/components/mudarabah/statements-panel";
 import {
   AlertTriangle,
   Check,

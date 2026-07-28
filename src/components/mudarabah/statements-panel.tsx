@@ -150,7 +150,45 @@ export function Statements({ cycleId }: { cycleId: string }) {
     );
   }
 
-  if (rows.length === 0) return null;
+  // A settled cycle with no statement rows at all. Silence here would
+  // read as "nothing to do" when the truth is "nothing was queued".
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-sm text-muted">
+          <FileText className="mx-auto mb-2 h-8 w-8 text-border" />
+          No statements have been queued for this cycle yet. They are created
+          when the cycle is settled.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // MIGRATION NOT APPLIED. Without 039 there is no email_state column,
+  // so every row reads as un-sendable and the Email button silently
+  // never appears — a missing button with no explanation, which is the
+  // worst way for this to fail. Say so instead.
+  if (rows[0].email_state === undefined) {
+    return (
+      <Card className="border-amber-300 bg-amber-50/60">
+        <CardContent className="flex items-start gap-3 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-900">
+              Emailing statements is not available yet.
+            </p>
+            <p className="mt-1 text-amber-800/90">
+              Migration <strong>039_statement_email.sql</strong> has not been
+              applied to this database. The {rows.length} statement
+              {rows.length === 1 ? "" : "s"} for this cycle already exist and
+              investors can download them in the portal — only sending them by
+              email is waiting on that migration.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

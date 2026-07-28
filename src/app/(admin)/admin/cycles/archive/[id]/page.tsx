@@ -12,6 +12,7 @@ import {
   type ArchiveHolder,
 } from "@/lib/mudarabah/cycle-archive";
 import { mudarabahDb } from "@/lib/mudarabah/db";
+import { Statements } from "@/components/mudarabah/statements-panel";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Cycle Record | Admin" };
@@ -123,6 +124,10 @@ export default async function CycleRecordPage({
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Whether everyone got their report belongs on the page that
+          documents the cycle, not only on the one used to settle it. */}
+      <Statements cycleId={id} />
 
       <Card>
         <CardHeader className="pb-2">

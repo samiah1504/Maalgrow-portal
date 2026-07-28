@@ -8,6 +8,7 @@ import {
 } from "@/lib/mudarabah/editor";
 import type { SettlementComputed, SettlementProduct } from "@/lib/mudarabah/figures";
 import { mudarabahDb } from "@/lib/mudarabah/db";
+import { Statements } from "@/components/mudarabah/statements-panel";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Mudarabah Ledger | Admin" };
@@ -87,12 +88,26 @@ export default async function MudarabahLedgerPage({
   }
 
   return (
-    <CycleEditor
-      initialDraft={draft}
-      terms={terms}
-      hasLedger={payload.hasLedger}
-      settlement={settlement}
-      settledProducts={settledProducts}
-    />
+    <>
+      <CycleEditor
+        initialDraft={draft}
+        terms={terms}
+        hasLedger={payload.hasLedger}
+        settlement={settlement}
+        settledProducts={settledProducts}
+      />
+
+      {/* THE PANEL BELONGS HERE, not only behind the Settle page.
+          The Settle link is hidden once a cycle is settled — by
+          design, you cannot settle it twice — so putting the
+          statements panel there and nowhere else made it
+          unreachable the moment it became useful. This is the page
+          an administrator is already on. */}
+      {draft.status === "settled" && (
+        <div className="mt-6">
+          <Statements cycleId={draft.cycleId} />
+        </div>
+      )}
+    </>
   );
 }
