@@ -19,10 +19,6 @@ const schema = z.object({
   bank_name: z.string().optional(),
   account_name: z.string().optional(),
   account_number: z.string().optional(),
-  bvn: z
-    .string()
-    .optional()
-    .refine((v) => !v || v.length === 11, "BVN must be 11 digits"),
   nin: z
     .string()
     .optional()
@@ -44,7 +40,6 @@ interface Investor {
   bank_name: string | null;
   account_name: string | null;
   account_number: string | null;
-  bvn: string | null;
   nin: string | null;
   tin: string | null;
   kyc_status: string;
@@ -69,7 +64,6 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
       bank_name: investor.bank_name ?? "",
       account_name: investor.account_name ?? "",
       account_number: investor.account_number ?? "",
-      bvn: investor.bvn ?? "",
       nin: investor.nin ?? "",
       tin: investor.tin ?? "",
       kyc_status: investor.kyc_status as "pending" | "approved" | "rejected",
@@ -162,12 +156,6 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              {...register("bvn")}
-              label="BVN"
-              maxLength={11}
-              error={errors.bvn?.message}
-            />
             <Input
               {...register("nin")}
               label="NIN"

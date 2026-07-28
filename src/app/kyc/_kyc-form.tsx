@@ -22,7 +22,6 @@ const schema = z.object({
     .min(10, "Enter a valid phone number")
     .regex(phoneRegex, "Enter a valid phone number"),
   address: z.string().min(10, "Enter your full residential address"),
-  bvn: z.string().regex(/^\d{11}$/, "BVN must be exactly 11 digits"),
   nin: z
     .string()
     .regex(/^\d{11}$/, "NIN must be exactly 11 digits")
@@ -66,7 +65,6 @@ type FormData = z.infer<typeof schema>;
 type Investor = {
   phone: string | null;
   address: string | null;
-  bvn: string | null;
   nin: string | null;
   bank_name: string | null;
   account_name: string | null;
@@ -118,7 +116,6 @@ export function KycForm({
     defaultValues: {
       phone: investor.phone ?? "",
       address: investor.address ?? "",
-      bvn: investor.bvn ?? "",
       nin: investor.nin ?? "",
       bank_name: investor.bank_name ?? "",
       account_name: investor.account_name ?? investor.full_name,
@@ -280,15 +277,6 @@ export function KycForm({
           Identity Verification
         </h2>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Input
-            {...register("bvn")}
-            label="BVN (Bank Verification Number)"
-            placeholder="11 digits"
-            maxLength={11}
-            inputMode="numeric"
-            error={errors.bvn?.message}
-            required
-          />
           <Input
             {...register("nin")}
             label="NIN (optional)"

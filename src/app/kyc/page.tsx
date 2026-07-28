@@ -19,7 +19,7 @@ export default async function KycPage() {
   const { data: investor } = await db
     .from("investors")
     .select(
-      "id, full_name, investor_code, email, phone, address, bvn, nin, bank_name, account_name, account_number, gender, nationality, occupation, kyc_status, kyc_notes, kyc_submitted_at"
+      "id, full_name, investor_code, email, phone, address, nin, bank_name, account_name, account_number, gender, nationality, occupation, kyc_status, kyc_notes, kyc_submitted_at"
     )
     .eq("profile_id", user.id)
     .maybeSingle();

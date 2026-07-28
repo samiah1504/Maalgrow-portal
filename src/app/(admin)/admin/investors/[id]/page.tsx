@@ -77,7 +77,6 @@ type InvestorFull = {
   bank_name: string | null;
   account_name: string | null;
   account_number: string | null;
-  bvn: string | null;
   nin: string | null;
   gender: string | null;
   nationality: string | null;
@@ -812,7 +811,7 @@ export default async function AdminInvestorDetailPage({
           )}
 
           {/* Identity */}
-          {(investor.bvn || investor.nin) && (
+          {investor.nin && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -820,14 +819,6 @@ export default async function AdminInvestorDetailPage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                {investor.bvn && (
-                  <div>
-                    <p className="text-xs text-muted">BVN</p>
-                    <p className="font-mono font-medium text-foreground">
-                      ••••••••{investor.bvn.slice(-3)}
-                    </p>
-                  </div>
-                )}
                 {investor.nin && (
                   <div>
                     <p className="text-xs text-muted">NIN</p>

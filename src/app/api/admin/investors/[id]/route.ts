@@ -77,7 +77,6 @@ export async function PATCH(
         bank_name,
         account_name,
         account_number,
-        bvn,
         nin,
         tin,
         kyc_status,
@@ -92,7 +91,6 @@ export async function PATCH(
       if (bank_name !== undefined) investorUpdate.bank_name = bank_name?.trim() || null;
       if (account_name !== undefined) investorUpdate.account_name = account_name?.trim() || null;
       if (account_number !== undefined) investorUpdate.account_number = account_number?.trim() || null;
-      if (bvn !== undefined) investorUpdate.bvn = bvn?.trim() || null;
       if (nin !== undefined) investorUpdate.nin = nin?.trim() || null;
       // The tax number an administrator may fill in on an investor's behalf
       if (tin !== undefined) investorUpdate.tin = tin?.trim() || null;

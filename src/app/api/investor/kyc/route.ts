@@ -38,7 +38,6 @@ export async function POST(request: Request) {
 
     const phone = s("phone");
     const address = s("address");
-    const bvn = s("bvn");
     const nin = s("nin") || null;
     const bankName = s("bank_name");
     const accountName = s("account_name");
@@ -60,7 +59,6 @@ export async function POST(request: Request) {
 
     if (phone.replace(/\D/g, "").length < 10) return bad("Enter a valid phone number");
     if (address.length < 10) return bad("Enter your full residential address");
-    if (!/^\d{11}$/.test(bvn)) return bad("BVN must be exactly 11 digits");
     if (nin !== null && !/^\d{11}$/.test(nin)) return bad("NIN must be exactly 11 digits");
     if (bankName.length < 2) return bad("Enter your bank name");
     if (accountName.length < 3) return bad("Enter the account name");
@@ -112,7 +110,6 @@ export async function POST(request: Request) {
       .update({
         phone,
         address,
-        bvn,
         nin,
         bank_name: bankName,
         account_name: accountName,
