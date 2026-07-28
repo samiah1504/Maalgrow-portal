@@ -129,6 +129,14 @@ export function Statements({ cycleId }: { cycleId: string }) {
    * all thirty-eight in one request runs for minutes and the platform
    * kills it partway — which is precisely the failure that reported
    * "success" and built nothing.
+   *
+   * WHY IT WATCHES `outstanding`. Counting what the server says it
+   * built is not enough. When the database refused to record the
+   * results, every round honestly reported eight documents built and
+   * every round left the same eight waiting — so the loop ground
+   * through the whole list eight times over, rendering the same files
+   * repeatedly and saving none of them. The only number that proves
+   * progress is how much is LEFT. If that does not fall, stop.
    */
   const build = async () => {
     setBusy("generate");
@@ -137,10 +145,17 @@ export function Statements({ cycleId }: { cycleId: string }) {
     let failed = 0;
     let total: number | null = null;
     let firstError: string | null = null;
+    let stalled = false;
+    let lastOutstanding = Number.POSITIVE_INFINITY;
 
     try {
       for (let round = 0; round < 40; round++) {
-        const { ok, json } = await post({ action: "generate", limit: 5 });
+        // Six, not one and not thirty-eight. The browser is now started
+        // once per request rather than once per document, so a batch of
+        // six costs one start and six page renders — comfortably inside
+        // the shortest function timeout any plan gives us, with room
+        // for a cold start on the first round.
+        const { ok, json } = await post({ action: "generate", limit: 6 });
         if (!ok) {
           toast.error(String(json.error ?? "Could not build the documents"));
           return;
@@ -148,9 +163,11 @@ export function Statements({ cycleId }: { cycleId: string }) {
 
         const attempted = Number(json.total ?? 0);
         const madeNow = Number(json.generated ?? 0);
+        // How much was still waiting when THIS round started.
+        const outstanding = Number(json.outstanding ?? attempted);
         // Fixed on the first batch, so the count on screen does not
         // move under the reader.
-        if (total === null) total = Number(json.outstanding ?? attempted);
+        if (total === null) total = outstanding;
 
         built += madeNow;
         failed += Number(json.failed ?? 0);
@@ -162,6 +179,16 @@ export function Statements({ cycleId }: { cycleId: string }) {
         // Nothing was waiting; or this batch achieved nothing, in
         // which case the next forty will not either.
         if (attempted === 0 || madeNow === 0) break;
+
+        // It says it built some, and the queue is no shorter than it
+        // was last round. Whatever it claimed did not stick, and going
+        // round again would only render the same files a third time.
+        if (round > 0 && outstanding >= lastOutstanding) {
+          stalled = true;
+          break;
+        }
+        lastOutstanding = outstanding;
+
         if (built + failed >= total) break;
       }
 
@@ -169,7 +196,13 @@ export function Statements({ cycleId }: { cycleId: string }) {
       // "Documents built" whatever came back, so a run that built
       // nothing at all still said success — the exact fault that sent
       // someone looking for documents that were never there.
-      if (built === 0 && failed === 0) {
+      if (stalled) {
+        toast.error(
+          `Stopped: the documents are being built but not saved${
+            firstError ? ` — ${firstError}` : ""
+          }`
+        );
+      } else if (built === 0 && failed === 0) {
         toast.warning(
           "Nothing was built. No document was waiting, or the request was cut short."
         );

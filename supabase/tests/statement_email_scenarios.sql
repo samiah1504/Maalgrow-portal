@@ -316,4 +316,118 @@ DO $$ DECLARE v_msg TEXT; BEGIN
   RAISE NOTICE 'PASS E11 — %', v_msg;
 END $$;
 
+-- ============================================================
+-- Migration 041 — the server can record what it has done
+--
+-- THE FAULT THIS FIXES. Building a cycle's statements ran for
+-- minutes and saved nothing: thirty-eight documents rendered,
+-- thirty-eight files uploaded, and thirty-eight rows still reading
+-- "Queued", attempt count zero. The renderer runs under the
+-- SERVICE-ROLE key because it has to write to a private bucket, and
+-- a service-role connection is not a logged-in person — auth.uid()
+-- is NULL and there is no profiles row for it. The admin gate looked
+-- that row up, found nothing, and refused every call.
+--
+-- The gate never protected anything against that caller: row-level
+-- security does not apply to the service role, so it could already
+-- write these tables directly. What it must still refuse is
+-- everybody else, and E13–E15 are the ones that matter.
+--
+--   E12 the server marks a document ready — the regression
+--   E13 an investor still cannot
+--   E14 nor can finance, which is admin for READING but not this
+--   E15 an administrator still can, exactly as before
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- E12 — the server, holding the service-role key
+-- ------------------------------------------------------------
+SELECT set_config('test.uid','',false);
+SELECT set_config('test.role','service_role',false);
+
+DO $$ DECLARE v_state TEXT; v_attempts INT; BEGIN
+  PERFORM mudarabah_mark_statement(
+    '70000000-0000-0000-0000-000000000e02', 'ready', 'p/e2.pdf', 4096, NULL);
+
+  SELECT state, attempts INTO v_state, v_attempts
+  FROM mudarabah_statements WHERE id = '70000000-0000-0000-0000-000000000e02';
+
+  IF v_state <> 'ready' THEN
+    RAISE EXCEPTION 'TEST FAIL E12: the document was built but the row still reads % — this is the bug', v_state;
+  END IF;
+  IF v_attempts < 1 THEN
+    RAISE EXCEPTION 'TEST FAIL E12: the attempt was not counted';
+  END IF;
+  RAISE NOTICE 'PASS E12 — the server recorded the document (%, % attempt(s))', v_state, v_attempts;
+END $$;
+
+-- ------------------------------------------------------------
+-- E13 — an investor cannot, service role or no service role
+-- ------------------------------------------------------------
+SELECT set_config('test.role','authenticated',false);
+SELECT set_config('test.uid','10000000-0000-0000-0000-000000000e01',false);
+
+DO $$ DECLARE v_msg TEXT; BEGIN
+  BEGIN
+    PERFORM mudarabah_mark_statement(
+      '70000000-0000-0000-0000-000000000e01', 'failed', NULL, NULL, 'tampered');
+    RAISE EXCEPTION 'TEST FAIL E13: an investor rewrote a statement record';
+  EXCEPTION WHEN OTHERS THEN
+    v_msg := SQLERRM;
+    IF v_msg LIKE 'TEST FAIL%' THEN RAISE; END IF;
+  END;
+  IF v_msg NOT LIKE '%administrator%' THEN
+    RAISE EXCEPTION 'TEST FAIL E13: refused for the wrong reason — %', v_msg;
+  END IF;
+  RAISE NOTICE 'PASS E13 — %', v_msg;
+END $$;
+
+-- ------------------------------------------------------------
+-- E14 — nor can finance
+--
+--     is_admin() includes finance; mudarabah_assert_admin() never
+--     did, and widening for the server must not have widened it for
+--     a person.
+-- ------------------------------------------------------------
+INSERT INTO auth.users (id,email) VALUES
+ ('a0000000-0000-0000-0000-000000000e02','ef@t.com') ON CONFLICT DO NOTHING;
+INSERT INTO profiles (id,email,full_name,role) VALUES
+ ('a0000000-0000-0000-0000-000000000e02','ef@t.com','E Finance','finance')
+ON CONFLICT (id) DO UPDATE SET role=EXCLUDED.role;
+
+SELECT set_config('test.uid','a0000000-0000-0000-0000-000000000e02',false);
+
+DO $$ DECLARE v_msg TEXT; BEGIN
+  BEGIN
+    PERFORM mudarabah_mark_statement(
+      '70000000-0000-0000-0000-000000000e01', 'failed', NULL, NULL, 'tampered');
+    RAISE EXCEPTION 'TEST FAIL E14: finance rewrote a statement record';
+  EXCEPTION WHEN OTHERS THEN
+    v_msg := SQLERRM;
+    IF v_msg LIKE 'TEST FAIL%' THEN RAISE; END IF;
+  END;
+  IF v_msg NOT LIKE '%administrator%' THEN
+    RAISE EXCEPTION 'TEST FAIL E14: refused for the wrong reason — %', v_msg;
+  END IF;
+  RAISE NOTICE 'PASS E14 — %', v_msg;
+END $$;
+
+-- ------------------------------------------------------------
+-- E15 — and an administrator is unaffected
+-- ------------------------------------------------------------
+SELECT set_config('test.uid','a0000000-0000-0000-0000-000000000e01',false);
+
+DO $$ DECLARE v_state TEXT; BEGIN
+  PERFORM mudarabah_mark_statement(
+    '70000000-0000-0000-0000-000000000e03', 'failed', NULL, NULL, 'render timed out');
+  SELECT state INTO v_state FROM mudarabah_statements
+   WHERE id = '70000000-0000-0000-0000-000000000e03';
+  IF v_state <> 'failed' THEN
+    RAISE EXCEPTION 'TEST FAIL E15: an administrator could no longer record an outcome (%)', v_state;
+  END IF;
+  RAISE NOTICE 'PASS E15 — an administrator still records outcomes';
+END $$;
+
+SELECT set_config('test.role','authenticated',false);
+
 ROLLBACK;

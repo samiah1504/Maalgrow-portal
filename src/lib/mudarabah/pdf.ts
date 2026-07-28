@@ -72,6 +72,38 @@ export type PdfOptions = {
 };
 
 /**
+ * A browser held open across several documents.
+ *
+ * WHY THIS EXISTS. Starting Chrome is by far the most expensive part of
+ * rendering a statement — on a serverless box it unpacks a compressed
+ * binary and cold-starts an entire browser, and that cost has nothing
+ * to do with how long the page takes to draw. Paying it once per
+ * document meant a batch of five spent most of its time starting and
+ * stopping the same program five times. A fresh PAGE per document is
+ * kept, because that is cheap and it is what stops one document's
+ * state reaching the next; the browser is what gets reused.
+ *
+ * Always closed in a `finally`. A browser left running holds the
+ * function open and the platform kills it with no error recorded.
+ */
+export type PdfRenderer = {
+  render(html: string, opts?: PdfOptions): Promise<Buffer>;
+  close(): Promise<void>;
+};
+
+export async function openPdfRenderer(): Promise<PdfRenderer> {
+  const browser = await launch();
+  return {
+    async render(html: string, opts: PdfOptions = {}) {
+      return renderOn(browser, html, opts);
+    },
+    async close() {
+      await browser.close().catch(() => {});
+    },
+  };
+}
+
+/**
  * Render a complete HTML document to an A4 PDF.
  *
  * Two settings here are not preferences:
@@ -84,7 +116,8 @@ export type PdfOptions = {
  *   the faces load, and the whole document reflows against a fallback.
  *   Every line break moves.
  */
-export async function htmlToPdf(
+async function renderOn(
+  browser: Browser,
   html: string,
   opts: PdfOptions = {}
 ): Promise<Buffer> {
@@ -94,10 +127,8 @@ export async function htmlToPdf(
   // renders identically on a laptop and on a cold Lambda.
   const source = inlineFonts ? inlineReportFonts(html).html : html;
 
-  let browser: Browser | null = null;
+  const page = await browser.newPage();
   try {
-    browser = await launch();
-    const page = await browser.newPage();
     await page.setContent(source, {
       waitUntil: "load",
       timeout: timeoutMs,
@@ -115,7 +146,23 @@ export async function htmlToPdf(
     });
     return Buffer.from(bytes);
   } finally {
-    await browser?.close().catch(() => {});
+    // Not closing the page leaks a renderer process per document, and
+    // a batch of thirty-eight exhausts the box's memory long before it
+    // exhausts the list.
+    await page.close().catch(() => {});
+  }
+}
+
+/** One document, one browser. For callers rendering a single file. */
+export async function htmlToPdf(
+  html: string,
+  opts: PdfOptions = {}
+): Promise<Buffer> {
+  const renderer = await openPdfRenderer();
+  try {
+    return await renderer.render(html, opts);
+  } finally {
+    await renderer.close();
   }
 }
 
