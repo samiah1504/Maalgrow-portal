@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { instructionDeadline } from "@/lib/maturity-deadline";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -192,7 +193,13 @@ export default async function CycleRolloverPage({
     (i) => i.status === "matured" && !i.next_investment_id
   ).length;
 
-  const deadline = cycle.rollover_deadline ?? cycle.end_date;
+  // The date the portal will actually stop accepting an instruction.
+  // Read from rollover_decision_deadline() rather than rebuilt here:
+  // COALESCE(rollover_deadline, end_date) misses the five-day window
+  // from migration 027 entirely, and an administrator chasing people
+  // was being told the window shut five days before it does.
+  const deadline =
+    (await instructionDeadline(db, id)) ?? cycle.rollover_deadline ?? cycle.end_date;
 
   return (
     <div className="space-y-6 animate-fade-in">

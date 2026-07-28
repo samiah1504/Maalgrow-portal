@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MaturityInstructions } from "./investment-detail-client";
+import { instructionDeadline } from "@/lib/maturity-deadline";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investment Details" };
@@ -45,10 +46,6 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
       cycle_label: string;
       start_date: string;
       end_date: string;
-      rollover_deadline?: string | null;
-      // 027's window. The instruction is accepted until whichever of
-      // these is later, so the date shown must be that one too.
-      instruction_closes_at?: string | null;
     } | null;
   };
   type LinkedInvestment = { investment_code: string; status: string; cycle: { cycle_label: string } | null };
@@ -132,6 +129,13 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
   // Visibility rule: completely hidden during the cycle; appears only in
   // the final 5 days before maturity, and stays visible (locked) once the
   // investment has matured until it is settled.
+  // THE ONE DEFINITION, ASKED FOR RATHER THAN REBUILT. See
+  // src/lib/maturity-deadline.ts — working this out from the cycle's
+  // columns is what showed investors a date five days early.
+  const instructionDeadlineIso = investment.cycle
+    ? await instructionDeadline(supabase, investment.cycle.id)
+    : null;
+
   const showMaturityInstructions =
     (investment.status === "active" && daysLeft <= 5) || isMatured;
   const totalDays = Math.ceil(
@@ -195,6 +199,7 @@ export default async function InvestmentDetailPage({ params }: { params: Promise
             series: investment.series ?? undefined,
             cycle: investment.cycle ?? undefined,
           }}
+          deadline={instructionDeadlineIso}
           savedInstruction={savedInstruction}
           investorBank={{
             bank_name: investor.bank_name,

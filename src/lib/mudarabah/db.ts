@@ -448,6 +448,13 @@ export type MudarabahDatabase = {
         Args: { p_cycle_id: string };
         Returns: unknown;
       };
+      // Migration 027 — the ONE definition of when instructions close.
+      // Every screen and every email that quotes a date must ask this,
+      // not rebuild the rule out of the cycle's columns.
+      rollover_decision_deadline: {
+        Args: { p_cycle_id: string };
+        Returns: string | null;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

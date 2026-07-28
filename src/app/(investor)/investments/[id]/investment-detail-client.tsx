@@ -43,10 +43,15 @@ export interface MaturityInstructionsProps {
     cycle?: {
       cycle_label: string;
       end_date?: string;
-      rollover_deadline?: string | null;
-      instruction_closes_at?: string | null;
     };
   };
+  /**
+   * The last day an instruction will be accepted, as YYYY-MM-DD,
+   * answered by the database rather than worked out here. See
+   * src/lib/maturity-deadline.ts for why this is a prop and not a
+   * calculation.
+   */
+  deadline: string | null;
   savedInstruction: {
     decision: string;
     slots_to_withdraw: number | null;
@@ -63,6 +68,7 @@ export function MaturityInstructions({
   investment,
   savedInstruction,
   investorBank,
+  deadline: deadlineProp,
 }: MaturityInstructionsProps) {
   const router = useRouter();
   /*
@@ -98,23 +104,22 @@ export function MaturityInstructions({
   /*
    * The date the portal will actually stop accepting an answer.
    *
-   * This read rollover_deadline and fell back to the cycle's end
-   * date, so it showed 30 July while the window — and the function —
-   * accepted instructions until 4 August. It told investors they had
-   * five days less than they had.
+   * ASKED, NOT WORKED OUT. This took the greatest of the cycle's
+   * stored date columns, which drops the five-day default sitting
+   * behind instruction_closes_at — so it showed 30 July while
+   * submit_rollover_decision went on accepting until 4 August. It
+   * told investors they had five days less than they had.
    *
-   * rollover_decision_deadline() takes the LATER of the two, so the
-   * same rule applies here.
+   * It now comes from rollover_decision_deadline(), the same function
+   * that decides whether the instruction is accepted, so the two
+   * cannot disagree again.
+   *
+   * The fallback is only reached when that function cannot be called
+   * at all — a database without migration 027 — and such a database
+   * measures the deadline the old way, which is what maturity_date
+   * gives. Wrong together beats wrong apart.
    */
-  const deadlineCandidates = [
-    investment.cycle?.instruction_closes_at,
-    investment.cycle?.rollover_deadline,
-    investment.cycle?.end_date,
-    investment.maturity_date,
-  ].filter((d): d is string => Boolean(d));
-  const deadline = deadlineCandidates.length
-    ? deadlineCandidates.reduce((a, b) => (a > b ? a : b))
-    : investment.maturity_date;
+  const deadline = deadlineProp ?? investment.maturity_date;
 
   const totalSlots = Number(investment.units);
 

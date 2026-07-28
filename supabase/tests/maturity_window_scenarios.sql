@@ -157,4 +157,99 @@ DO $$ DECLARE v JSONB; BEGIN
   RAISE NOTICE 'PASS M4: a closed window goes quiet, even for those who never answered';
 END $$;
 
+-- ------------------------------------------------------------
+-- M8 — the deadline is the FUNCTION's, not the columns'
+--
+--     THE REPORTED FAULT. The statement email, the investor's
+--     investment page and the admin rollover page each rebuilt the
+--     deadline in TypeScript as the greatest of the cycle's stored
+--     date columns:
+--
+--         GREATEST(instruction_closes_at, rollover_deadline, end_date)
+--
+--     Nothing in the portal ever SETS instruction_closes_at — it is
+--     the override, and it is NULL on every real cycle. So that
+--     expression collapses to end_date, the five-day default is never
+--     applied, and an investor was told the window shut on 30 July
+--     while submit_rollover_decision went on accepting until the 4th.
+--
+--     This is the assertion those three screens now depend on: with
+--     no override set, the deadline is FIVE DAYS AFTER the cycle
+--     ends, and it is strictly later than the greatest stored column.
+-- ------------------------------------------------------------
+DO $$
+DECLARE
+  v_end      DATE;
+  v_deadline DATE;
+  v_columns  DATE;
+BEGIN
+  -- Put the fixture back to a cycle with no override of any kind.
+  UPDATE cycles SET instruction_closes_at = NULL, rollover_deadline = NULL
+  WHERE id = '40000000-0000-0000-0000-0000000000d1';
+
+  SELECT end_date INTO v_end FROM cycles
+   WHERE id = '40000000-0000-0000-0000-0000000000d1';
+
+  v_deadline := rollover_decision_deadline('40000000-0000-0000-0000-0000000000d1');
+
+  -- Exactly what the three screens used to compute.
+  SELECT GREATEST(
+           COALESCE(c.instruction_closes_at, '-infinity'::DATE),
+           COALESCE(c.rollover_deadline,     '-infinity'::DATE),
+           c.end_date)
+    INTO v_columns
+    FROM cycles c WHERE c.id = '40000000-0000-0000-0000-0000000000d1';
+
+  IF v_deadline <> v_end + 5 THEN
+    RAISE EXCEPTION 'TEST FAIL M8: the deadline is %, expected % (end date + 5 days)',
+      v_deadline, v_end + 5;
+  END IF;
+
+  -- The part that makes this a regression test rather than a
+  -- restatement: the old expression is genuinely EARLIER. If these
+  -- two ever agree, the screens could go back to guessing and nothing
+  -- here would notice.
+  IF v_columns >= v_deadline THEN
+    RAISE EXCEPTION
+      'TEST FAIL M8: the columns give % and the function %, so this no longer reproduces the fault',
+      v_columns, v_deadline;
+  END IF;
+
+  RAISE NOTICE 'PASS M8: columns say %, the function says % — the five days are real', v_columns, v_deadline;
+END $$;
+
+-- ------------------------------------------------------------
+-- M9 — and an explicit override still wins
+--
+--     Setting instruction_closes_at is how an administrator holds
+--     people to a different date. The function must follow it, in
+--     BOTH directions — later than the default and earlier than it.
+-- ------------------------------------------------------------
+DO $$
+DECLARE v_end DATE; v_deadline DATE; BEGIN
+  SELECT end_date INTO v_end FROM cycles
+   WHERE id = '40000000-0000-0000-0000-0000000000d1';
+
+  UPDATE cycles SET instruction_closes_at = v_end + 30
+  WHERE id = '40000000-0000-0000-0000-0000000000d1';
+  v_deadline := rollover_decision_deadline('40000000-0000-0000-0000-0000000000d1');
+  IF v_deadline <> v_end + 30 THEN
+    RAISE EXCEPTION 'TEST FAIL M9: a later override was ignored — got %', v_deadline;
+  END IF;
+
+  -- Earlier than the default. GREATEST() is taken against
+  -- rollover_deadline, so with that NULL it falls back to end_date —
+  -- an override cannot pull the deadline in front of the day the
+  -- cycle ends, and that is the honest answer to report.
+  UPDATE cycles SET instruction_closes_at = v_end - 1
+  WHERE id = '40000000-0000-0000-0000-0000000000d1';
+  v_deadline := rollover_decision_deadline('40000000-0000-0000-0000-0000000000d1');
+  IF v_deadline <> v_end THEN
+    RAISE EXCEPTION 'TEST FAIL M9: an early override gave %, expected the end date %',
+      v_deadline, v_end;
+  END IF;
+
+  RAISE NOTICE 'PASS M9: an override moves the deadline, but never before the cycle ends';
+END $$;
+
 ROLLBACK;

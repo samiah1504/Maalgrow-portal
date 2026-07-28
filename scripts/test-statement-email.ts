@@ -18,6 +18,7 @@
  *   npx tsx scripts/test-statement-email.ts
  */
 import { buildStatementHtml, type StatementEmailParams } from "../src/lib/email";
+import { instructionDeadline, longDate } from "../src/lib/maturity-deadline";
 
 let failures = 0;
 function check(name: string, ok: boolean, extra?: unknown) {
@@ -141,7 +142,91 @@ check(
   readable.match(/.{0,60}(total sales|cost of the goods|gross profit).{0,60}/i)?.[0]
 );
 
-console.log(
-  failures === 0 ? "\nALL STATEMENT EMAIL TESTS PASSED" : `\n${failures} FAILED`
-);
-process.exit(failures === 0 ? 0 : 1);
+async function main() {
+  /* ── The deadline is ASKED FOR, never worked out ──────────────── */
+
+  /*
+   * THE REPORTED FAULT. The email printed "Please answer by 30 July
+   * 2026" for a cycle whose instructions the database accepted until 4
+   * August. It built the date itself, as the greatest of the cycle's
+   * stored columns, which silently drops the five-day default behind
+   * instruction_closes_at — a column nothing in the portal ever sets.
+   *
+   * The fix was to stop computing it. These check that the asking is
+   * done properly and, above all, that a database which cannot answer
+   * produces NO deadline rather than a plausible wrong one.
+   */
+
+  const fakeClient = (result: { data?: unknown; error?: unknown }) => ({
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      check(
+        "it asks rollover_decision_deadline, the same function submission uses",
+        fn === "rollover_decision_deadline" && args.p_cycle_id === "cycle-1"
+      );
+      return result;
+    },
+  });
+
+  const asked = await instructionDeadline(fakeClient({ data: "2026-08-04" }), "cycle-1");
+  check("the database's answer is what comes back", asked === "2026-08-04", asked);
+
+  // PostgREST can hand a DATE back wrapped, or with a time on it.
+  check(
+    "a single-row array is unwrapped",
+    (await instructionDeadline(fakeClient({ data: ["2026-08-04"] }), "cycle-1")) ===
+      "2026-08-04"
+  );
+  check(
+    "a timestamp is reduced to its date",
+    (await instructionDeadline(
+      fakeClient({ data: "2026-08-04T00:00:00+00:00" }),
+      "cycle-1"
+    )) === "2026-08-04"
+  );
+
+  // THE ONES THAT MATTER. Anything other than a date it trusts must
+  // produce null, so the email leaves the sentence out entirely.
+  check(
+    "an error gives no date at all — not a guess",
+    (await instructionDeadline(
+      fakeClient({ data: null, error: { message: "function does not exist" } }),
+      "cycle-1"
+    )) === null
+  );
+  check(
+    "and neither does nonsense",
+    (await instructionDeadline(fakeClient({ data: "soon" }), "cycle-1")) === null
+  );
+  check(
+    "a client that throws is not allowed to break the send",
+    (await instructionDeadline(
+      { rpc: () => { throw new Error("network"); } },
+      "cycle-1"
+    )) === null
+  );
+
+  check("it reads as a date a person would write", longDate("2026-08-04") === "4 August 2026");
+  check("and nothing at all when there is nothing", longDate(null) === null);
+
+  // The whole point of returning null: SILENCE, not a wrong date.
+  const noDeadline = buildStatementHtml({ ...base, instructionDeadline: null });
+  check(
+    "with no deadline the email simply does not name one",
+    !/please answer by/i.test(noDeadline),
+    noDeadline.match(/.{0,60}answer by.{0,60}/i)?.[0]
+  );
+  check(
+    "but it still asks the question, and still says the answer is final",
+    /capital returned/i.test(noDeadline) && /final once submitted/i.test(noDeadline)
+  );
+
+  console.log(
+    failures === 0 ? "\nALL STATEMENT EMAIL TESTS PASSED" : `\n${failures} FAILED`
+  );
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

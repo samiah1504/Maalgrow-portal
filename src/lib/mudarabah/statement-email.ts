@@ -26,6 +26,7 @@ import { mudarabahDb } from "./db";
 import { STATEMENT_BUCKET } from "./statements";
 import { sendStatementEmail } from "@/lib/email";
 import { SITE_URL } from "@/lib/site-url";
+import { instructionDeadline, longDate } from "@/lib/maturity-deadline";
 import { figuresFromSettlement, holderReportFigures } from "./report-figures";
 import type { SettlementComputed } from "./figures";
 
@@ -52,17 +53,6 @@ type Row = {
   storage_path: string;
 };
 
-/** What the instruction deadline reads as in an email. */
-function longDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
 
 const DECISION_LABEL: Record<string, string> = {
   continue: "Profit paid · capital continues into the next cycle",
@@ -124,7 +114,7 @@ export async function emailStatements(
 
   const { data: cycleRow } = await db
     .from("cycles")
-    .select("cycle_label, series_id, instruction_closes_at, rollover_deadline, end_date")
+    .select("cycle_label, series_id")
     .eq("id", cycleId)
     .maybeSingle();
   const { data: seriesRow } = await db
@@ -160,17 +150,12 @@ export async function emailStatements(
     (decisions ?? []).map((d) => [d.investment_id as string, String(d.decision)])
   );
 
-  // The latest of the dates that could close the window, matching
-  // rollover_decision_deadline in the database rather than guessing.
-  const deadline = longDate(
-    [
-      cycleRow?.instruction_closes_at,
-      cycleRow?.rollover_deadline,
-      cycleRow?.end_date,
-    ]
-      .filter((d): d is string => Boolean(d))
-      .reduce<string | null>((a, b) => (a && a > b ? a : b), null)
-  );
+  // ASKED, NOT REBUILT. This used to take the greatest of the cycle's
+  // three date columns, which quietly dropped the five-day default
+  // behind instruction_closes_at and printed the cycle's END DATE as
+  // the deadline — five days early, in the one email that tells
+  // somebody their answer is final.
+  const deadline = longDate(await instructionDeadline(adminClient, cycleId));
 
   const seriesName = String(seriesRow?.name ?? "");
   const cycleLabel = String(cycleRow?.cycle_label ?? "");
