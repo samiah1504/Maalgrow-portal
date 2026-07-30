@@ -46,6 +46,20 @@ INSERT INTO investors (id, profile_id, investor_code, full_name, email, tin, add
   ('20000000-0000-0000-0000-0000000000b3', '10000000-0000-0000-0000-0000000000b3', 'MGT0003', 'Second Cycle', 'second@test.com', 'TIN-CCC', '3 Road')
 ON CONFLICT (id) DO NOTHING;
 
+-- 042: a withholding tax credit note cannot be issued without a
+-- STRUCTURED residential address. That gate is what these suites now
+-- run into, so the fixture gives the investors the address a real one
+-- would have.
+UPDATE investors SET
+  residential_street_address = '12 Awolowo Road, Ikeja GRA, opposite the secretariat',
+  residential_state_code     = 'LA',
+  residential_state_name     = 'Lagos',
+  residential_lga_code       = 'LA-IKEJA',
+  residential_lga_name       = 'Ikeja',
+  residential_city           = 'Ikeja'
+WHERE investor_code IN ('MGT0001', 'MGT0002', 'MGT0003');
+
+
 INSERT INTO series (id, name, description, start_month_offset, price_per_unit, mudarabah_investor_ratio, default_wht_rate)
 VALUES ('30000000-0000-0000-0000-0000000000b1', 'B', 'Series B', 0, 100000, 0.70, 0.10)
 ON CONFLICT (name) DO UPDATE SET default_wht_rate = EXCLUDED.default_wht_rate;

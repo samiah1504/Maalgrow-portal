@@ -1218,7 +1218,13 @@ export type CreditNoteData = {
     signatoryTitle: string | null;
   };
   investorName: string;
+  /** The one-line form, kept for notes issued before migration 042 */
   investorAddress: string | null;
+  /** The parts, 042. Printed on their own lines when present. */
+  investorStreetAddress?: string | null;
+  investorCity?: string | null;
+  investorLgaName?: string | null;
+  investorStateName?: string | null;
   /** Shown as "not provided" rather than breaking when absent */
   investorTin: string | null;
   seriesName: string;
@@ -1274,7 +1280,23 @@ export function renderCreditNoteBody(n: CreditNoteData): string {
     <div class="cn-party">
       <div class="k">On behalf of</div>
       <div class="n">${esc(n.investorName)}</div>
-      <div class="l">${esc(n.investorAddress ?? "")}</div>
+      ${
+        // Each part on its own line: a tax officer reading this has to
+        // be able to pick out the local government area and the state
+        // without parsing a sentence. Notes issued before 042 have
+        // only the single line, and still print it.
+        n.investorStreetAddress
+          ? [
+              esc(n.investorStreetAddress),
+              esc(n.investorCity ?? ""),
+              n.investorLgaName ? `${esc(n.investorLgaName)} LGA` : "",
+              esc(n.investorStateName ?? ""),
+            ]
+              .filter(Boolean)
+              .map((line) => `<div class="l">${line}</div>`)
+              .join("")
+          : `<div class="l">${esc(n.investorAddress ?? "")}</div>`
+      }
       ${tin}
     </div>
   </div>

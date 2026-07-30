@@ -8,11 +8,20 @@
  * rejected or losing data.
  */
 
+import { storedAddressMissing } from "./residential-address";
+
 export type KycInvestorFields = {
   full_name: string | null;
   email: string | null;
   phone: string | null;
+  /** The pre-042 single field. Read for display only — never for completeness. */
   address: string | null;
+  residential_street_address?: string | null;
+  residential_state_code?: string | null;
+  residential_state_name?: string | null;
+  residential_lga_code?: string | null;
+  residential_lga_name?: string | null;
+  residential_city?: string | null;
   bank_name: string | null;
   account_name: string | null;
   account_number: string | null;
@@ -51,7 +60,10 @@ export function kycMissingFields(
   if (!filled(inv.full_name)) missing.push("Full name");
   if (!filled(inv.email)) missing.push("Email");
   if (!filled(inv.phone)) missing.push("Phone number");
-  if (!filled(inv.address)) missing.push("Address");
+  // 042. Four parts, each named, in the order the form asks for them.
+  // "Address" told nobody which box to go back to, and it passed on
+  // the strength of somebody having typed "Lagos".
+  missing.push(...storedAddressMissing(inv));
   if (
     !filled(inv.bank_name) ||
     !filled(inv.account_name) ||

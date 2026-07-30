@@ -10,12 +10,19 @@ import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ResidentialAddressFields } from "@/components/investor/residential-address-fields";
+import {
+  addressFromRow,
+  addressToColumns,
+  validateResidentialAddress,
+  type AddressFieldErrors,
+  type ResidentialAddressValue,
+} from "@/lib/residential-address";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const schema = z.object({
   full_name: z.string().min(2, "Full name must be at least 2 characters"),
   phone: z.string().optional(),
-  address: z.string().optional(),
   bank_name: z.string().optional(),
   account_name: z.string().optional(),
   account_number: z.string().optional(),
@@ -37,6 +44,11 @@ interface Investor {
   full_name: string;
   phone: string | null;
   address: string | null;
+  previous_address_record?: string | null;
+  residential_street_address?: string | null;
+  residential_state_code?: string | null;
+  residential_lga_code?: string | null;
+  residential_city?: string | null;
   bank_name: string | null;
   account_name: string | null;
   account_number: string | null;
@@ -60,7 +72,6 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
     defaultValues: {
       full_name: investor.full_name,
       phone: investor.phone ?? "",
-      address: investor.address ?? "",
       bank_name: investor.bank_name ?? "",
       account_name: investor.account_name ?? "",
       account_number: investor.account_number ?? "",
@@ -72,13 +83,43 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
     },
   });
 
+  const [address, setAddress] = useState<ResidentialAddressValue>(() =>
+    addressFromRow(investor)
+  );
+  const [addressErrors, setAddressErrors] = useState<AddressFieldErrors>({});
+
   const onSubmit = async (data: FormData) => {
     setServerError(null);
+
+    /*
+     * An administrator MAY leave the structured address empty — most
+     * investors on the books have never supplied one, and refusing to
+     * save a phone number correction until somebody tracks down a
+     * landmark would make this screen unusable. What is refused is a
+     * HALF-FILLED one: a state with no LGA is worse than nothing,
+     * because it looks answered.
+     */
+    const touched =
+      address.street.trim() || address.stateCode || address.lgaCode || address.city.trim();
+    if (touched) {
+      const problems = validateResidentialAddress(address);
+      setAddressErrors(problems);
+      if (Object.keys(problems).length > 0) {
+        setServerError(
+          "The residential address is incomplete. Fill in all four fields, or clear them all."
+        );
+        return;
+      }
+    }
 
     const res = await fetch(`/api/admin/investors/${investor.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update", ...data }),
+      body: JSON.stringify({
+        action: "update",
+        ...data,
+        ...(touched ? addressToColumns(address) : {}),
+      }),
     });
 
     const json = await res.json();
@@ -114,11 +155,28 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
             placeholder="+2348012345678"
             error={errors.phone?.message}
           />
-          <Input
-            {...register("address")}
-            label="Address"
-            placeholder="123 Main Street, Lagos"
-            error={errors.address?.message}
+        </CardContent>
+      </Card>
+
+      {/* Residential address — the four parts, same component and same
+          rules as the investor's own KYC form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Residential Address</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResidentialAddressFields
+            value={address}
+            onChange={(next) => {
+              setAddress(next);
+              setAddressErrors({});
+            }}
+            errors={addressErrors}
+            previousAddress={
+              investor.residential_street_address
+                ? null
+                : investor.previous_address_record ?? investor.address
+            }
           />
         </CardContent>
       </Card>

@@ -42,6 +42,20 @@ INSERT INTO next_of_kin (investor_id, full_name, relationship, phone, address, c
 VALUES ('20000000-0000-0000-0000-000000000002', 'Sister Two', 'Sibling', '08099999999',
         '2 Family Road', 'Abuja', 'FCT', 'Nigeria');
 
+-- 042: these investors must have a STRUCTURED residential address.
+-- Without one a withholding tax credit note cannot be issued, which
+-- is the whole point of the gate — so the fixture supplies what a
+-- real investor would have supplied.
+UPDATE investors SET
+  residential_street_address = '12 Awolowo Road, Ikeja GRA, opposite the secretariat',
+  residential_state_code     = 'LA',
+  residential_state_name     = 'Lagos',
+  residential_lga_code       = 'LA-IKEJA',
+  residential_lga_name       = 'Ikeja',
+  residential_city           = 'Ikeja'
+WHERE id IN ('20000000-0000-0000-0000-000000000002');
+
+
 SET test.uid = 'a0000000-0000-0000-0000-000000000001';
 
 -- Scenario 1: legacy approved investor is detected as Update Required
@@ -121,6 +135,23 @@ BEGIN
   INSERT INTO next_of_kin (investor_id, full_name, relationship, phone, address, city, state, country)
   VALUES ('20000000-0000-0000-0000-000000000003', 'Brother Three', 'Sibling', '08088888888',
           '3 Family Road', 'Ibadan', 'Oyo', 'Nigeria');
+
+  -- 042. Occupation and next of kin are no longer the whole of it:
+  -- KYC is not complete until the residential address has its four
+  -- parts. Asserted BEFORE supplying them, so this is a test of the
+  -- new requirement and not merely a fixture that satisfies it.
+  m := kyc_missing_fields('20000000-0000-0000-0000-000000000003');
+  IF NOT ('State of residence' = ANY(m) AND 'Local government area' = ANY(m)
+          AND 'City or town' = ANY(m)) THEN
+    RAISE EXCEPTION 'TEST FAIL S4: KYC passed without a structured address — %', m;
+  END IF;
+
+  UPDATE investors SET
+    residential_street_address = '3 Halfway House, Bodija, near the market',
+    residential_state_code = 'OY', residential_state_name = 'Oyo',
+    residential_lga_code = 'OY-IBADAN-NORTH', residential_lga_name = 'Ibadan North',
+    residential_city = 'Ibadan'
+  WHERE id = '20000000-0000-0000-0000-000000000003';
 
   m := kyc_missing_fields('20000000-0000-0000-0000-000000000003');
   IF array_length(m, 1) IS NOT NULL THEN

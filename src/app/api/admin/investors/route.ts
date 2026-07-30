@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  ADDRESS_INCOMPLETE_MESSAGE,
+  validateResidentialAddress,
+} from "@/lib/residential-address";
+import { findLga, findState } from "@/lib/nigeria-geo";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { generateUniqueInvestorCode } from "@/lib/investor-code";
 import { SITE_URL } from "@/lib/site-url";
@@ -79,9 +84,37 @@ export async function POST(request: Request) {
       email?: string;
       phone?: string;
       address?: string;
+      residential_street_address?: string;
+      residential_state_code?: string;
+      residential_lga_code?: string;
+      residential_city?: string;
     };
 
     const { full_name, email, phone, address } = body;
+
+    /*
+     * The structured address is OPTIONAL at creation. An investor is
+     * added the moment their payment is confirmed, and holding that
+     * up while somebody hunts for a landmark would be the wrong
+     * trade. But a HALF-filled one is refused: a state with no local
+     * government area looks answered when it is not.
+     *
+     * Names come from the list on this side, never from the request.
+     */
+    const addressValue = {
+      street: (body.residential_street_address ?? "").trim(),
+      stateCode: (body.residential_state_code ?? "").trim(),
+      lgaCode: (body.residential_lga_code ?? "").trim(),
+      city: (body.residential_city ?? "").trim(),
+    };
+    const addressGiven = Boolean(
+      addressValue.street || addressValue.stateCode || addressValue.lgaCode || addressValue.city
+    );
+    if (addressGiven && Object.keys(validateResidentialAddress(addressValue)).length > 0) {
+      return NextResponse.json({ error: ADDRESS_INCOMPLETE_MESSAGE }, { status: 400 });
+    }
+    const addressState = findState(addressValue.stateCode);
+    const addressLga = findLga(addressValue.lgaCode);
 
     if (!full_name?.trim() || !email?.trim()) {
       return NextResponse.json(
@@ -171,6 +204,12 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         phone: phone?.trim() || null,
         address: address?.trim() || null,
+        residential_street_address: addressGiven ? addressValue.street : null,
+        residential_state_code: addressGiven ? addressState?.code ?? null : null,
+        residential_state_name: addressGiven ? addressState?.name ?? null : null,
+        residential_lga_code: addressGiven ? addressLga?.code ?? null : null,
+        residential_lga_name: addressGiven ? addressLga?.name ?? null : null,
+        residential_city: addressGiven ? addressValue.city : null,
         invitation_status: "not_sent",
         invitation_expires_at: new Date(
           Date.now() + 24 * 60 * 60 * 1000

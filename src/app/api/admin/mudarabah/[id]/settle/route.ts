@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { storedAddressMissing } from "@/lib/residential-address";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { mudarabahDb } from "@/lib/mudarabah/db";
 import {
@@ -73,12 +74,49 @@ async function build(cycleId: string, overrides: CapitalOverride[]) {
     tin: h.investorTin,
   }));
 
-  return {
-    payload,
-    input,
-    draft,
-    preview: settlementPreview(input, participants, overrides),
-  };
+  const preview = settlementPreview(input, participants, overrides);
+
+  /*
+   * WARNED, NOT REFUSED — migration 042.
+   *
+   * Settling is the money event, and every investor on the books has
+   * only the old single-field address. Refusing to settle until all
+   * of them have updated would hold a quarter's payouts for a
+   * data-entry exercise, which is the wrong trade by a distance.
+   *
+   * But it cannot be silent either: an incomplete address is what
+   * will stop that investor's withholding tax credit note later, and
+   * the moment to find that out is now, not at filing time. So it
+   * warns and requires the same acknowledgement any other warning
+   * does — impossible to miss, impossible to be blocked by.
+   */
+  const holderIds = [...new Set(terms.holders.map((h) => h.investorId))];
+  if (holderIds.length > 0) {
+    const { data: addressRows } = await (await createAdminClient())
+      .from("investors")
+      .select(
+        "id, full_name, residential_street_address, residential_state_code, residential_state_name, residential_lga_code, residential_lga_name, residential_city"
+      )
+      .in("id", holderIds);
+
+    const incomplete = (addressRows ?? [])
+      .filter((r) => storedAddressMissing(r).length > 0)
+      .map((r) => String(r.full_name));
+
+    if (incomplete.length > 0) {
+      preview.warnings = [
+        ...preview.warnings,
+        {
+          kind: "address",
+          message: `${incomplete.length} investor(s) have no complete residential address. Settlement is not affected, but a withholding tax credit note cannot be issued for them until it is filled in.`,
+          investors: incomplete,
+        },
+      ];
+      preview.needsAcknowledgement = true;
+    }
+  }
+
+  return { payload, input, draft, preview };
 }
 
 // POST /api/admin/mudarabah/[id]/settle

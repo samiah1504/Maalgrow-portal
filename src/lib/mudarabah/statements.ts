@@ -276,7 +276,7 @@ export async function generateCreditNotes(
   const { data: notes } = await db
     .from("wht_credit_notes")
     .select(
-      "id, reference, cycle_id, settlement_id, investment_id, investor_id, investor_name, investor_address, investor_tin, period_start, period_end, gross_profit, wht_rate, wht_amount, net_paid, deducted_on, remittance_reference, filed_on"
+      "id, reference, cycle_id, settlement_id, investment_id, investor_id, investor_name, investor_address, investor_street_address, investor_city, investor_lga_name, investor_state_name, investor_tin, period_start, period_end, gross_profit, wht_rate, wht_amount, net_paid, deducted_on, remittance_reference, filed_on"
     )
     .eq("cycle_id", cycleId);
 
@@ -317,6 +317,10 @@ export async function generateCreditNotes(
           },
           investorName: n.investor_name,
           investorAddress: n.investor_address,
+        investorStreetAddress: n.investor_street_address,
+        investorCity: n.investor_city,
+        investorLgaName: n.investor_lga_name,
+        investorStateName: n.investor_state_name,
           investorTin: n.investor_tin,
           seriesName: String(seriesRow?.name ?? ""),
           cycleLabel: cycleRow?.cycle_label ?? "",

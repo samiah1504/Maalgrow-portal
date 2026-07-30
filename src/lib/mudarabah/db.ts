@@ -165,6 +165,11 @@ export type WhtCreditNoteRow = {
   investor_id: string;
   investor_name: string;
   investor_address: string | null;
+  // Migration 042 — the address in parts, frozen at issuance.
+  investor_street_address: string | null;
+  investor_city: string | null;
+  investor_lga_name: string | null;
+  investor_state_name: string | null;
   investor_tin: string | null;
   period_start: string;
   period_end: string;

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import {
+  ADDRESS_INCOMPLETE_MESSAGE,
+  validateResidentialAddress,
+} from "@/lib/residential-address";
+import { findLga, findState } from "@/lib/nigeria-geo";
 
 const PHONE_RE = /^[+\d][\d\s-]{8,}$/;
 const GENDERS = ["female", "male", "prefer_not_to_say"];
@@ -37,7 +42,6 @@ export async function POST(request: Request) {
       typeof body[key] === "string" ? (body[key] as string).trim() : "";
 
     const phone = s("phone");
-    const address = s("address");
     const nin = s("nin") || null;
     const bankName = s("bank_name");
     const accountName = s("account_name");
@@ -58,7 +62,28 @@ export async function POST(request: Request) {
     const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 });
 
     if (phone.replace(/\D/g, "").length < 10) return bad("Enter a valid phone number");
-    if (address.length < 10) return bad("Enter your full residential address");
+
+    /*
+     * The residential address, checked here and not only in the form.
+     *
+     * The form sends CODES; the names are looked up on this side from
+     * the same list rather than trusted from the request, so a caller
+     * cannot post "LA" with the name "Kano" and have it stored. Every
+     * one of the four is required — this is the gate the whole change
+     * exists for.
+     */
+    const addressValue = {
+      street: s("residential_street_address"),
+      stateCode: s("residential_state_code"),
+      lgaCode: s("residential_lga_code"),
+      city: s("residential_city"),
+    };
+    const addressProblems = validateResidentialAddress(addressValue);
+    if (Object.keys(addressProblems).length > 0) {
+      return bad(ADDRESS_INCOMPLETE_MESSAGE);
+    }
+    const stateRow = findState(addressValue.stateCode);
+    const lgaRow = findLga(addressValue.lgaCode);
     if (nin !== null && !/^\d{11}$/.test(nin)) return bad("NIN must be exactly 11 digits");
     if (bankName.length < 2) return bad("Enter your bank name");
     if (accountName.length < 3) return bad("Enter the account name");
@@ -109,7 +134,15 @@ export async function POST(request: Request) {
       .from("investors")
       .update({
         phone,
-        address,
+        // investors.address is LEFT ALONE. It is the record of what
+        // they told us before the address had parts, and 042 keeps it
+        // on purpose.
+        residential_street_address: addressValue.street,
+        residential_state_code: stateRow?.code ?? null,
+        residential_state_name: stateRow?.name ?? null,
+        residential_lga_code: lgaRow?.code ?? null,
+        residential_lga_name: lgaRow?.name ?? null,
+        residential_city: addressValue.city,
         nin,
         bank_name: bankName,
         account_name: accountName,

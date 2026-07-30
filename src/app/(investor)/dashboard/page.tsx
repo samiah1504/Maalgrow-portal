@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
 import { kycMissingFields, type KycInvestorFields } from "@/lib/kyc";
+import { storedAddressMissing } from "@/lib/residential-address";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,12 +93,22 @@ export default async function DashboardPage() {
     .select("full_name, relationship, phone, address, city, state, country")
     .eq("investor_id", investor.id)
     .maybeSingle();
+  const kycMissing = nokErr
+    ? []
+    : kycMissingFields(investor as unknown as KycInvestorFields, nokRow ?? null);
   const kycUpdateNeeded =
-    !nokErr &&
     Boolean(investor.kyc_submitted_at) &&
     investor.kyc_status !== "rejected" &&
-    kycMissingFields(investor as unknown as KycInvestorFields, nokRow ?? null)
-      .length > 0;
+    kycMissing.length > 0;
+
+  // Whether the ONLY thing outstanding is the residential address.
+  // Every investor on the books is in exactly this position after
+  // migration 042, and telling them to "add your gender, nationality
+  // and occupation" — which they supplied months ago — is how a
+  // notice gets ignored.
+  const addressOutstanding = storedAddressMissing(
+    investor as unknown as KycInvestorFields
+  ).length > 0;
 
   // Chat unread count (tolerates migration 016 not applied yet)
   const { data: chatConv } = await supabase
@@ -178,12 +189,19 @@ export default async function DashboardPage() {
           <Bell className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-amber-900">
-              Your KYC record requires an update
+              {addressOutstanding
+                ? "Residential Address Update Required"
+                : "Your KYC record requires an update"}
             </p>
             <p className="text-xs text-amber-800 mt-0.5">
-              Please add your gender, nationality, occupation and next-of-kin
-              details. Your existing information is unchanged — tap here to
-              complete the missing sections.
+              {addressOutstanding
+                ? "We now record your address as separate fields — street, state, local government area and city. Your existing address is kept on file. Tap here to enter it."
+                : "Your existing information is unchanged — tap here to complete the missing sections."}
+            </p>
+            {/* Named, so nobody has to open the form to find out what
+                is wanted. */}
+            <p className="text-[11px] text-amber-800/80 mt-1">
+              Outstanding: {kycMissing.join(", ")}
             </p>
           </div>
           <ChevronRight className="h-4 w-4 text-amber-600 ml-auto mt-1" />

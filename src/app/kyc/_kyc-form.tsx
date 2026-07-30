@@ -13,6 +13,16 @@ import {
   RELATIONSHIP_OPTIONS,
   NATIONALITY_OPTIONS,
 } from "@/lib/kyc";
+import { ResidentialAddressFields } from "@/components/investor/residential-address-fields";
+import {
+  ADDRESS_INCOMPLETE_MESSAGE,
+  addressFromRow,
+  addressToColumns,
+  validateResidentialAddress,
+  type AddressFieldErrors,
+  type ResidentialAddressValue,
+} from "@/lib/residential-address";
+import { useState } from "react";
 
 const phoneRegex = /^[+\d][\d\s-]{8,}$/;
 
@@ -21,7 +31,12 @@ const schema = z.object({
     .string()
     .min(10, "Enter a valid phone number")
     .regex(phoneRegex, "Enter a valid phone number"),
-  address: z.string().min(10, "Enter your full residential address"),
+  // The residential address is NOT in this schema. It is four fields
+  // with a dependency between two of them — the LGA is only valid
+  // against the state — and it is captured by a component shared with
+  // the two admin forms. Validating it here would be a second copy of
+  // a rule that already exists in residential-address.ts and again in
+  // SQL. It is checked on submit, below.
   nin: z
     .string()
     .regex(/^\d{11}$/, "NIN must be exactly 11 digits")
@@ -65,6 +80,11 @@ type FormData = z.infer<typeof schema>;
 type Investor = {
   phone: string | null;
   address: string | null;
+  previous_address_record?: string | null;
+  residential_street_address?: string | null;
+  residential_state_code?: string | null;
+  residential_lga_code?: string | null;
+  residential_city?: string | null;
   nin: string | null;
   bank_name: string | null;
   account_name: string | null;
@@ -115,7 +135,6 @@ export function KycForm({
     resolver: zodResolver(schema),
     defaultValues: {
       phone: investor.phone ?? "",
-      address: investor.address ?? "",
       nin: investor.nin ?? "",
       bank_name: investor.bank_name ?? "",
       account_name: investor.account_name ?? investor.full_name,
@@ -143,9 +162,26 @@ export function KycForm({
 
   const occupationChoice = watch("occupation");
 
+  // Held outside react-hook-form: the LGA list depends on the state,
+  // so this is genuinely stateful in a way a registered field is not.
+  const [address, setAddress] = useState<ResidentialAddressValue>(() =>
+    addressFromRow(investor)
+  );
+  const [addressErrors, setAddressErrors] = useState<AddressFieldErrors>({});
+
   const onSubmit = async (data: FormData) => {
     if (data.occupation === "Other" && !data.occupation_other?.trim()) {
       toast.error("Please type your occupation");
+      return;
+    }
+
+    // All four parts, or nothing is submitted. The server checks the
+    // same thing — this is so the investor is told which box, rather
+    // than being bounced by an API message.
+    const addressProblems = validateResidentialAddress(address);
+    setAddressErrors(addressProblems);
+    if (Object.keys(addressProblems).length > 0) {
+      toast.error(ADDRESS_INCOMPLETE_MESSAGE);
       return;
     }
     const res = await fetch("/api/investor/kyc", {
@@ -153,6 +189,7 @@ export function KycForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...data,
+        ...addressToColumns(address),
         nin: data.nin || null,
         occupation:
           data.occupation === "Other"
@@ -262,12 +299,27 @@ export function KycForm({
           error={errors.phone?.message}
           required
         />
-        <Input
-          {...register("address")}
-          label="Residential Address"
-          placeholder="House number, street, city, state"
-          error={errors.address?.message}
-          required
+      </div>
+
+      {/* Residential address — four parts, in this order */}
+      <div className="space-y-3">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted border-b border-border pb-2">
+          Residential Address
+        </h2>
+        <ResidentialAddressFields
+          value={address}
+          onChange={(next) => {
+            setAddress(next);
+            // Clear a field's error the moment it is touched, rather
+            // than leaving red text under a box somebody has fixed.
+            setAddressErrors({});
+          }}
+          errors={addressErrors}
+          previousAddress={
+            investor.residential_street_address
+              ? null
+              : investor.previous_address_record ?? investor.address
+          }
         />
       </div>
 

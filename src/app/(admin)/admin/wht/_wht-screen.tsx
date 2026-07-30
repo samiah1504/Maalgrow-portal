@@ -48,6 +48,10 @@ type PreviewRow = {
   wht_amount: number;
   net_paid: number;
   has_tin: boolean;
+  /** 042 — a note cannot be issued without a structured address */
+  has_address: boolean;
+  address_missing: string[] | null;
+  full_address: string | null;
   already_issued: boolean;
   reference: string | null;
 };
@@ -212,10 +216,17 @@ function CycleCard({
         toast.error(json.error ?? "Could not issue");
         return;
       }
-      toast.success(
-        `${json.issued} note${json.issued === 1 ? "" : "s"} issued` +
-          (json.skipped_no_tin > 0 ? ` · ${json.skipped_no_tin} waiting on a tax number` : "")
-      );
+      // Every outcome, not only the happy one. A run that issued two
+      // and skipped six is not a success, and saying "2 notes issued"
+      // is how six people quietly never get theirs.
+      const bits = [`${json.issued} note${json.issued === 1 ? "" : "s"} issued`];
+      if (json.skipped_no_tin > 0)
+        bits.push(`${json.skipped_no_tin} waiting on a tax number`);
+      if (json.skipped_no_address > 0)
+        bits.push(`${json.skipped_no_address} waiting on a residential address`);
+      (json.skipped_no_tin > 0 || json.skipped_no_address > 0
+        ? toast.warning
+        : toast.success)(bits.join(" · "));
       onDone();
       setOpen(false);
     } finally {
@@ -331,10 +342,23 @@ function CycleCard({
                       {!r.has_tin && " · no TIN"}
                       {r.already_issued && ` · ${r.reference}`}
                     </p>
+                    {/* The address that will be PRINTED on the note,
+                        or the reason there will not be one. Shown
+                        before issuing, because afterwards it is
+                        frozen and cannot be corrected. */}
+                    {r.has_address ? (
+                      <p className="text-[10px] text-muted truncate">{r.full_address}</p>
+                    ) : (
+                      <p className="text-[10px] text-amber-700">
+                        No residential address —{" "}
+                        {(r.address_missing ?? []).join(", ").toLowerCase() ||
+                          "incomplete"}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-mono">{naira(r.wht_amount)}</p>
-                    {!r.already_issued && r.has_tin && (
+                    {!r.already_issued && r.has_tin && r.has_address && (
                       <button
                         type="button"
                         onClick={() => issue(r.investment_id)}
@@ -348,6 +372,24 @@ function CycleCard({
                 </div>
               ))}
             </div>
+
+            {preview.rows.some((r) => !r.already_issued && !r.has_address) && (
+              <div className="mx-3 mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[11px] text-amber-900">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-medium">
+                    {preview.rows.filter((r) => !r.already_issued && !r.has_address).length}{" "}
+                    investor(s) have no complete residential address, and will be
+                    skipped.
+                  </p>
+                  <p className="mt-0.5 text-amber-800/90">
+                    A credit note carries the address it was issued with, for good.
+                    Complete theirs on the investor record first — the rest of the
+                    batch still issues.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="p-3 border-t border-border">
               <button

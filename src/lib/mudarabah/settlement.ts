@@ -81,7 +81,10 @@ export type Assertion = {
 };
 
 export type Warning = {
-  kind: "no-tin" | "no-decision" | "ledger" | "cash" | "no-wht";
+  // "address" is raised outside the engine — see the settle route.
+  // It is a fact about the investor's record, not about the money,
+  // and the engine deliberately knows nothing about either.
+  kind: "no-tin" | "no-decision" | "ledger" | "cash" | "no-wht" | "address";
   message: string;
   investors: string[];
 };

@@ -53,6 +53,17 @@ export type Database = {
           email: string;
           phone: string | null;
           address: string | null;
+          /** Migration 042 — the residential address, in four parts. */
+          residential_street_address: string | null;
+          residential_state_code: string | null;
+          residential_state_name: string | null;
+          residential_lga_code: string | null;
+          residential_lga_name: string | null;
+          residential_city: string | null;
+          residential_address_verified: boolean;
+          residential_address_updated_at: string | null;
+          /** The single free-text address held before 042. Never overwritten. */
+          previous_address_record: string | null;
           nin: string | null;
           /** Tax identification number. Optional; used only for withholding tax credit notes. */
           tin: string | null;
@@ -85,6 +96,15 @@ export type Database = {
           email: string;
           phone?: string | null;
           address?: string | null;
+          residential_street_address?: string | null;
+          residential_state_code?: string | null;
+          residential_state_name?: string | null;
+          residential_lga_code?: string | null;
+          residential_lga_name?: string | null;
+          residential_city?: string | null;
+          residential_address_verified?: boolean;
+          residential_address_updated_at?: string | null;
+          previous_address_record?: string | null;
           nin?: string | null;
           tin?: string | null;
           bank_name?: string | null;
@@ -106,6 +126,15 @@ export type Database = {
           full_name?: string;
           phone?: string | null;
           address?: string | null;
+          residential_street_address?: string | null;
+          residential_state_code?: string | null;
+          residential_state_name?: string | null;
+          residential_lga_code?: string | null;
+          residential_lga_name?: string | null;
+          residential_city?: string | null;
+          residential_address_verified?: boolean;
+          residential_address_updated_at?: string | null;
+          previous_address_record?: string | null;
           nin?: string | null;
           tin?: string | null;
           bank_name?: string | null;

@@ -44,7 +44,7 @@ export default async function AdminKycPage() {
       db
         .from("investors")
         .select(
-          "id, investor_code, full_name, email, phone, address, bank_name, account_name, account_number, gender, nationality, occupation, kyc_status, kyc_notes, kyc_submitted_at, kyc_approved_at, updated_at"
+          "id, investor_code, full_name, email, phone, address, residential_street_address, residential_state_code, residential_state_name, residential_lga_code, residential_lga_name, residential_city, residential_address_verified, residential_address_updated_at, previous_address_record, bank_name, account_name, account_number, gender, nationality, occupation, kyc_status, kyc_notes, kyc_submitted_at, kyc_approved_at, updated_at"
         )
         .order("full_name"),
       db.from("next_of_kin").select("*"),

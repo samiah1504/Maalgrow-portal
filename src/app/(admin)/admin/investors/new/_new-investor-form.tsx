@@ -16,6 +16,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ResidentialAddressFields } from "@/components/investor/residential-address-fields";
+import {
+  EMPTY_ADDRESS,
+  addressToColumns,
+  validateResidentialAddress,
+  type AddressFieldErrors,
+  type ResidentialAddressValue,
+} from "@/lib/residential-address";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -61,7 +69,6 @@ const newInvestorSchema = z.object({
   full_name: z.string().min(2, "Full name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
   phone: z.string().optional(),
-  address: z.string().optional(),
 });
 
 const investmentSchema = z.object({
@@ -336,6 +343,8 @@ export function NewInvestorForm({ series, cycles }: Props) {
   const [mode, setMode] = useState<"search" | "new">("search");
 
   const [serverError, setServerError] = useState<string | null>(null);
+  const [address, setAddress] = useState<ResidentialAddressValue>(EMPTY_ADDRESS);
+  const [addressErrors, setAddressErrors] = useState<AddressFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<SuccessData | null>(null);
   const [createdInvestor, setCreatedInvestor] = useState<SuccessData["investor"] | null>(null);
@@ -398,12 +407,30 @@ export function NewInvestorForm({ series, cycles }: Props) {
       if (!investorValid) return;
 
       const investorData = investorForm.getValues();
+
+      const addressTouched = Boolean(
+        address.street.trim() || address.stateCode || address.lgaCode || address.city.trim()
+      );
+      if (addressTouched) {
+        const problems = validateResidentialAddress(address);
+        setAddressErrors(problems);
+        if (Object.keys(problems).length > 0) {
+          setServerError(
+            "The residential address is incomplete. Fill in all four fields, or leave them all empty for the investor to complete."
+          );
+          return;
+        }
+      }
+
       setIsSubmitting(true);
 
       const res = await fetch("/api/admin/investors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(investorData),
+        body: JSON.stringify({
+          ...investorData,
+          ...(addressTouched ? addressToColumns(address) : {}),
+        }),
       });
 
       const json = await res.json();
@@ -690,10 +717,25 @@ export function NewInvestorForm({ series, cycles }: Props) {
                     label="Phone Number"
                     placeholder="+2348012345678"
                   />
-                  <Input
-                    {...investorForm.register("address")}
-                    label="Address"
-                    placeholder="123 Main Street, Lagos"
+                </div>
+              )}
+              {mode === "new" && (
+                <div className="mt-4 space-y-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Residential Address
+                  </p>
+                  {/* Optional at creation — an investor is added the
+                      moment their payment is confirmed, and holding
+                      that up for a landmark would be the wrong trade.
+                      Half of one is refused, because a state with no
+                      LGA looks answered when it is not. */}
+                  <ResidentialAddressFields
+                    value={address}
+                    onChange={(next) => {
+                      setAddress(next);
+                      setAddressErrors({});
+                    }}
+                    errors={addressErrors}
                   />
                 </div>
               )}

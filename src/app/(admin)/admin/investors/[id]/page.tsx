@@ -17,6 +17,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { SLOT_VALUE_NGN, slotLabel } from "@/lib/investment-utils";
 import { genderLabel } from "@/lib/kyc";
+import { storedAddressMissing } from "@/lib/residential-address";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
@@ -74,6 +75,15 @@ type InvestorFull = {
   email: string;
   phone: string | null;
   address: string | null;
+  previous_address_record: string | null;
+  residential_street_address: string | null;
+  residential_state_code: string | null;
+  residential_state_name: string | null;
+  residential_lga_code: string | null;
+  residential_lga_name: string | null;
+  residential_city: string | null;
+  residential_address_verified: boolean | null;
+  residential_address_updated_at: string | null;
   bank_name: string | null;
   account_name: string | null;
   account_number: string | null;
@@ -218,6 +228,12 @@ export default async function AdminInvestorDetailPage({
     }));
 
   const isActive = investor.profile?.is_active !== false;
+
+  // Which parts of the residential address are still missing. The
+  // same rule the database applies, so this screen and the WHT screen
+  // never disagree about who is holding up a credit note.
+  const addressMissing = storedAddressMissing(investor);
+  const previousAddress = investor.previous_address_record ?? investor.address;
 
   const kycVariant: Record<string, "approved" | "pending" | "rejected"> = {
     approved: "approved",
@@ -625,14 +641,46 @@ export default async function AdminInvestorDetailPage({
                   <p className="font-medium text-foreground">{investor.phone}</p>
                 </div>
               )}
-              {investor.address && (
-                <div>
-                  <p className="text-xs text-muted">Address</p>
-                  <p className="font-medium text-foreground">
-                    {investor.address}
-                  </p>
-                </div>
-              )}
+              {/* The residential address, in the four parts it is now
+                  kept in. An incomplete one is called out rather than
+                  quietly shown short, because it is what stops this
+                  investor's tax credit note being issued. */}
+              <div>
+                <p className="text-xs text-muted">Residential Address</p>
+                {addressMissing.length === 0 ? (
+                  <>
+                    <p className="font-medium text-foreground">
+                      {investor.residential_street_address}
+                    </p>
+                    <p className="text-foreground">
+                      {investor.residential_city} · {investor.residential_lga_name} LGA
+                    </p>
+                    <p className="text-foreground">{investor.residential_state_name}</p>
+                    {investor.residential_address_verified && (
+                      <Badge variant="approved" className="mt-1">Verified</Badge>
+                    )}
+                  </>
+                ) : (
+                  <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                    <p className="text-xs font-semibold text-amber-900">
+                      Residential Address Update Required
+                    </p>
+                    <p className="mt-0.5 text-xs text-amber-800/90">
+                      Missing: {addressMissing.join(", ")}
+                    </p>
+                    {previousAddress && (
+                      <p className="mt-1.5 text-xs text-amber-800">
+                        <span className="font-medium">Previous address record:</span>{" "}
+                        {previousAddress}
+                      </p>
+                    )}
+                    <p className="mt-1.5 text-xs text-amber-800/90">
+                      A withholding tax credit note cannot be issued until this is
+                      complete.
+                    </p>
+                  </div>
+                )}
+              </div>
               {investor.gender && (
                 <div>
                   <p className="text-xs text-muted">Gender</p>

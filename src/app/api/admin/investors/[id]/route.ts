@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  ADDRESS_INCOMPLETE_MESSAGE,
+  validateResidentialAddress,
+} from "@/lib/residential-address";
+import { findLga, findState } from "@/lib/nigeria-geo";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database.types";
 import { SITE_URL } from "@/lib/site-url";
@@ -73,7 +78,6 @@ export async function PATCH(
       const {
         full_name,
         phone,
-        address,
         bank_name,
         account_name,
         account_number,
@@ -87,7 +91,39 @@ export async function PATCH(
       const investorUpdate: InvestorUpdate = {};
       if (full_name !== undefined) investorUpdate.full_name = full_name.trim();
       if (phone !== undefined) investorUpdate.phone = phone?.trim() || null;
-      if (address !== undefined) investorUpdate.address = address?.trim() || null;
+      /*
+       * The structured address, 042.
+       *
+       * investors.address is deliberately NOT writable from here any
+       * more. It is the record of what the investor told us before
+       * the address had parts, and overwriting it would destroy the
+       * one thing the migration went out of its way to preserve.
+       *
+       * The names are resolved from the codes on this side rather
+       * than trusted from the request, so a mismatched pair cannot be
+       * stored however the call was made.
+       */
+      const streetRaw = (body as Record<string, unknown>).residential_street_address;
+      if (typeof streetRaw === "string") {
+        const value = {
+          street: streetRaw.trim(),
+          stateCode: String((body as Record<string, unknown>).residential_state_code ?? "").trim(),
+          lgaCode: String((body as Record<string, unknown>).residential_lga_code ?? "").trim(),
+          city: String((body as Record<string, unknown>).residential_city ?? "").trim(),
+        };
+        const problems = validateResidentialAddress(value);
+        if (Object.keys(problems).length > 0) {
+          return NextResponse.json({ error: ADDRESS_INCOMPLETE_MESSAGE }, { status: 400 });
+        }
+        const state = findState(value.stateCode);
+        const lga = findLga(value.lgaCode);
+        investorUpdate.residential_street_address = value.street;
+        investorUpdate.residential_state_code = state?.code ?? null;
+        investorUpdate.residential_state_name = state?.name ?? null;
+        investorUpdate.residential_lga_code = lga?.code ?? null;
+        investorUpdate.residential_lga_name = lga?.name ?? null;
+        investorUpdate.residential_city = value.city;
+      }
       if (bank_name !== undefined) investorUpdate.bank_name = bank_name?.trim() || null;
       if (account_name !== undefined) investorUpdate.account_name = account_name?.trim() || null;
       if (account_number !== undefined) investorUpdate.account_number = account_number?.trim() || null;
