@@ -1449,6 +1449,13 @@ export type Database = {
         Args: { p_investor_ids: string[]; p_manager_id: string | null };
         Returns: Json;
       };
+      // Migration 043 — moves investors.email and profiles.email
+      // together, and returns the previous address so the caller can
+      // put it back if the Auth change then fails.
+      admin_set_investor_email: {
+        Args: { p_investor_id: string; p_email: string };
+        Returns: Json;
+      };
     };
     Enums: {
       user_role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "payment_officer" | "investor";

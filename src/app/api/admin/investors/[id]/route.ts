@@ -77,6 +77,7 @@ export async function PATCH(
     if (action === "update") {
       const {
         full_name,
+        email,
         phone,
         bank_name,
         account_name,
@@ -150,6 +151,79 @@ export async function PATCH(
           .from("profiles")
           .update({ full_name: full_name.trim() })
           .eq("id", profileId);
+      }
+
+      /*
+       * The email address — THREE COPIES, moved together.
+       *
+       *   auth.users.email   the login
+       *   profiles.email     the signed-in person
+       *   investors.email    where the statement is sent
+       *
+       * Nothing kept these in step: handle_new_user() copies the
+       * address in when the account is created and never again. So a
+       * change that reaches one and not the others leaves an investor
+       * whose statement goes to the new address while the login still
+       * wants the old one, and they cannot fix it themselves.
+       *
+       * admin_set_investor_email does the two database copies in one
+       * transaction and hands back the previous address. Auth is
+       * changed after; if THAT fails, the database change is put back
+       * so the three still agree. An error message here is always
+       * better than a login somebody has lost.
+       */
+      const emailRaw = typeof email === "string" ? email.trim() : "";
+      if (emailRaw) {
+        // Changing a login is not the same kind of act as correcting
+        // a phone number, and this screen is open to support and
+        // finance as well.
+        if (!["super_admin", "administrator"].includes(auth.profile?.role ?? "")) {
+          return NextResponse.json(
+            { error: "Only an administrator can change an investor's email address" },
+            { status: 403 }
+          );
+        }
+
+        const { data: result, error: emailError } = await adminClient.rpc(
+          "admin_set_investor_email",
+          { p_investor_id: id, p_email: emailRaw }
+        );
+        if (emailError) {
+          return NextResponse.json({ error: emailError.message }, { status: 400 });
+        }
+
+        const outcome = result as unknown as {
+          changed: boolean;
+          old: string | null;
+          new: string;
+        };
+
+        if (outcome?.changed && profileId) {
+          const { error: authError } = await adminClient.auth.admin.updateUserById(
+            profileId,
+            // Confirmed outright. Leaving it unconfirmed would lock
+            // the investor out until they clicked a link nobody told
+            // them to expect — an administrator correcting a typo is
+            // the confirmation.
+            { email: outcome.new, email_confirm: true }
+          );
+
+          if (authError) {
+            // Put the database back, so the three copies still agree.
+            await adminClient.rpc("admin_set_investor_email", {
+              p_investor_id: id,
+              p_email: outcome.old ?? "",
+            });
+            return NextResponse.json(
+              {
+                error:
+                  "The email was not changed: the login could not be updated — " +
+                  authError.message,
+              },
+              { status: 400 }
+            );
+          }
+        }
       }
 
       return NextResponse.json({ success: true });

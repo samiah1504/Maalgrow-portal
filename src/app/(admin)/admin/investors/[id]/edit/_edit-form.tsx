@@ -22,6 +22,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const schema = z.object({
   full_name: z.string().min(2, "Full name must be at least 2 characters"),
+  // Loose on purpose. The only real test of an address is sending to
+  // it; this catches what is obviously not one. The database checks
+  // the same shape and, unlike this, cannot be skipped.
+  email: z
+    .string()
+    .trim()
+    .min(1, "An email address is required")
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid email address"),
   phone: z.string().optional(),
   bank_name: z.string().optional(),
   account_name: z.string().optional(),
@@ -42,6 +50,7 @@ type FormData = z.infer<typeof schema>;
 interface Investor {
   id: string;
   full_name: string;
+  email: string;
   phone: string | null;
   address: string | null;
   previous_address_record?: string | null;
@@ -71,6 +80,7 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
     resolver: zodResolver(schema),
     defaultValues: {
       full_name: investor.full_name,
+      email: investor.email,
       phone: investor.phone ?? "",
       bank_name: investor.bank_name ?? "",
       account_name: investor.account_name ?? "",
@@ -146,6 +156,21 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
             {...register("full_name")}
             label="Full Name"
             error={errors.full_name?.message}
+            required
+          />
+          {/* THE LOGIN, not just a contact detail. Three copies move
+              together when this changes — auth, the profile and the
+              investor record — and the note says so, because an
+              administrator who thinks they are only correcting a
+              mailing address would not expect the investor's sign-in
+              to change with it. */}
+          <Input
+            {...register("email")}
+            type="email"
+            label="Email Address"
+            placeholder="investor@example.com"
+            error={errors.email?.message}
+            hint="This is what they sign in with, and where their statements are sent. Changing it changes both."
             required
           />
           <Input
