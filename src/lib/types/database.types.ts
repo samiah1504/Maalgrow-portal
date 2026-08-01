@@ -1456,6 +1456,30 @@ export type Database = {
         Args: { p_investor_id: string; p_email: string };
         Returns: Json;
       };
+      // Migration 044 — the investors whose money is settled and who
+      // have no payment request, with the reason for each.
+      investors_awaiting_payment_request: {
+        Args: { p_cycle_id?: string | null };
+        Returns: Json;
+      };
+      payment_request_gap_counts: {
+        Args: { p_cycle_id?: string | null };
+        Returns: Json;
+      };
+      payment_reminder_history: {
+        Args: { p_investment_id: string };
+        Returns: Json;
+      };
+      record_payment_reminder: {
+        Args: {
+          p_investment_id: string;
+          p_to_address: string;
+          p_state: string;
+          p_message_id?: string | null;
+          p_error?: string | null;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       user_role: "super_admin" | "administrator" | "finance" | "operations" | "customer_support" | "payment_officer" | "investor";

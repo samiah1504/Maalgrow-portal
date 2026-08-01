@@ -19,6 +19,10 @@
  */
 import { buildStatementHtml, type StatementEmailParams } from "../src/lib/email";
 import { instructionDeadline, longDate } from "../src/lib/maturity-deadline";
+import {
+  buildPaymentReminderHtml,
+  type PaymentReminderParams,
+} from "../src/lib/email";
 
 let failures = 0;
 function check(name: string, ok: boolean, extra?: unknown) {
@@ -218,6 +222,78 @@ async function main() {
   check(
     "but it still asks the question, and still says the answer is final",
     /capital returned/i.test(noDeadline) && /final once submitted/i.test(noDeadline)
+  );
+
+  /* ── Chasing an investor whose money is waiting ─────────────── */
+
+  /*
+   * THE TRAP. The obvious wording — "you have not submitted a payment
+   * request, please log in and submit one" — describes a button that
+   * does not exist. Investors here never raise their own requests:
+   * sync_maturity_payment_requests raises one the moment a maturity
+   * instruction is submitted. Sending that sentence would have
+   * thirty-eight people hunting a screen that was never built.
+   *
+   * So each reason must ask for the thing that actually unblocks it.
+   */
+
+  const reminderBase: PaymentReminderParams = {
+    to: "aisha@example.com",
+    fullName: "Aisha Bello",
+    investorCode: "MG0041",
+    seriesName: "B",
+    cycleLabel: "Apr 2026 – July 2026",
+    profitAvailable: 757_248,
+    capital: 3_000_000,
+    reason: "no_instruction",
+    deadline: "4 August 2026",
+    portalLink: "https://maalgrow.maalvest.com",
+  };
+
+  const silent = buildPaymentReminderHtml(reminderBase);
+
+  check("the profit waiting is stated", silent.includes("757,248"));
+  check(
+    "and the ask is the maturity answer, which is what unblocks it",
+    /what you would like done with|capital/i.test(silent) &&
+      /Choose What Happens to Your Capital/i.test(silent)
+  );
+  check("with the deadline", silent.includes("4 August 2026"));
+  // THE ONE THAT MATTERS MOST.
+  check(
+    "it does NOT tell them to submit a payment request",
+    !/submit (a |your )?payment request|payment request/i.test(silent),
+    silent.match(/.{0,80}payment request.{0,80}/i)?.[0]
+  );
+  check(
+    "and it offers a way through for somebody who cannot sign in",
+    /phone or WhatsApp|record it for you/i.test(silent)
+  );
+
+  const noBank = buildPaymentReminderHtml({
+    ...reminderBase,
+    reason: "no_bank_details",
+  });
+  check(
+    "somebody with no bank account is asked for their bank account",
+    /bank account details/i.test(noBank) && /Add Your Bank Details/i.test(noBank)
+  );
+  check(
+    "and is NOT asked to choose what happens to their capital — they already did",
+    !/Choose What Happens to Your Capital/i.test(noBank)
+  );
+
+  const inHand = buildPaymentReminderHtml({ ...reminderBase, reason: "not_raised" });
+  check(
+    "and somebody we are already dealing with is asked for nothing",
+    /nothing you need to do/i.test(inHand)
+  );
+
+  /* Confidentiality, same rule as the statement */
+  const reminderText = silent.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+  check(
+    "no whole-Series trading figure reaches the reminder",
+    !/total sales|cost of the goods|gross profit/i.test(reminderText)
   );
 
   console.log(

@@ -46,6 +46,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { AwaitingPaymentRequest } from "@/components/admin/awaiting-payment-request";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +94,7 @@ type Permissions = {
 
 type Counts = Record<string, number>;
 
-type Tab = "pending" | "approved" | "paid" | "rejected" | "all";
+type Tab = "pending" | "approved" | "paid" | "rejected" | "all" | "awaiting";
 
 const PRIMARY_TABS: { label: string; value: Tab }[] = [
   { label: "Pending", value: "pending" },
@@ -130,16 +131,44 @@ export default function PaymentRequestsAdminPage() {
   // Nothing is hidden that the officer can actually do, so the preview
   // is exact: her view IS this page with approving withheld.
   const [preview, setPreview] = useState(false);
+  // Recording somebody else's instruction about their own capital is
+  // narrower than working the queue — see the payment-gap route.
+  const [role, setRole] = useState<string>("");
 
   const searchRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
 
   const loadCounts = useCallback(async () => {
-    const { data } = await supabase.rpc("payment_request_counts");
-    if (data && typeof data === "object") setCounts(data as Counts);
+    const [queue, gap] = await Promise.all([
+      supabase.rpc("payment_request_counts"),
+      // Fails harmlessly for a Payment Officer — is_admin() excludes
+      // her, so the badge simply does not appear.
+      supabase.rpc("payment_request_gap_counts", { p_cycle_id: null }),
+    ]);
+    const next: Counts = {};
+    if (queue.data && typeof queue.data === "object") {
+      Object.assign(next, queue.data as Counts);
+    }
+    const g = gap.data as { awaiting?: number } | null;
+    if (g && typeof g.awaiting === "number") next.awaiting = g.awaiting;
+    setCounts(next);
   }, [supabase]);
 
   const load = useCallback(async () => {
+    // The awaiting tab reads a different function entirely — it starts
+    // from investments, not from payment_requests, because its whole
+    // subject is the rows that do not exist.
+    if (tab === "awaiting") {
+      // Cleared, not left stale. Anything below that keys off `rows`
+      // — the batch bar, the keyboard shortcuts — would otherwise be
+      // acting on the previous tab's requests while another table is
+      // on screen.
+      setRows([]);
+      setSelected(new Set());
+      setLoading(false);
+      loadCounts();
+      return;
+    }
     setLoading(true);
     const { data, error } = await supabase.rpc("payment_request_queue", {
       p_status: tab === "all" ? null : tab,
@@ -156,6 +185,15 @@ export default function PaymentRequestsAdminPage() {
   useEffect(() => {
     supabase.rpc("my_payment_permissions").then(({ data }) => {
       if (data) setPerms(data as Permissions);
+    });
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      setRole(String(data?.role ?? ""));
     });
   }, [supabase]);
 
@@ -311,6 +349,7 @@ export default function PaymentRequestsAdminPage() {
   }, [visible, cursor, perms, runOne, toggle]);
 
   const isOfficer = perms?.isPaymentOfficer ?? false;
+  const gapCount = counts.awaiting;
   const previewing = preview && !isOfficer;
   // In preview the officer's own permission decides, exactly as it
   // would for her — including the Settings switch being on.
@@ -406,6 +445,21 @@ export default function PaymentRequestsAdminPage() {
             onClick={() => setTab(t.value)}
           />
         ))}
+        {/* Not for the Payment Officer. This tab carries investor
+            contact details and the means to record an instruction on
+            somebody's behalf — neither of which is her job. Hidden
+            here AND refused by is_admin() in the function behind it. */}
+        {!isOfficer && !previewing && (
+          <>
+            <div className="mx-1 h-4 w-px bg-border" />
+            <TabButton
+              label="Awaiting request"
+              count={gapCount}
+              active={tab === "awaiting"}
+              onClick={() => setTab("awaiting")}
+            />
+          </>
+        )}
         <div className="mx-1 h-4 w-px bg-border" />
         {OTHER_TABS.map((t) => (
           <TabButton
@@ -430,7 +484,13 @@ export default function PaymentRequestsAdminPage() {
         </div>
       </div>
 
-      {loading ? (
+      {/* A different subject needs a different table. This one starts
+          from investments, so none of the queue's columns apply. */}
+      {tab === "awaiting" ? (
+        <AwaitingPaymentRequest
+          canRecord={["super_admin", "administrator", "finance"].includes(role)}
+        />
+      ) : loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-16 rounded-lg bg-surface-2 animate-pulse" />

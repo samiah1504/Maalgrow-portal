@@ -808,3 +808,177 @@ export async function sendStatementEmail(
     return { success: false, error: message };
   }
 }
+
+/* ── Chasing an investor whose money is waiting ─────────────── */
+
+export type PaymentReminderParams = {
+  to: string;
+  fullName: string;
+  investorCode: string;
+  seriesName: string;
+  cycleLabel: string;
+  /** naira */
+  profitAvailable: number;
+  capital: number;
+  /** Why nothing has been raised. Decides what we actually ask for. */
+  reason: "no_instruction" | "no_bank_details" | "not_raised";
+  /** Already formatted, e.g. "4 August 2026". Null when it has passed. */
+  deadline: string | null;
+  portalLink: string;
+};
+
+/**
+ * Exported so the words can be tested.
+ *
+ * THE TRAP THIS AVOIDS. The obvious wording — "you have not submitted
+ * a payment request, please log in and submit one" — describes a
+ * button that does not exist. Investors here never raise their own
+ * requests; the request appears on its own the moment they answer the
+ * maturity question. Sending that sentence would have thirty-eight
+ * people hunting a screen that was never built, and the ones who
+ * gave up would conclude the portal was broken.
+ *
+ * So each reason asks for the thing that ACTUALLY unblocks it:
+ *
+ *   no_instruction   answer the maturity question
+ *   no_bank_details  add your bank account
+ *   not_raised       nothing for them to do — we are on it
+ */
+export function buildPaymentReminderHtml(p: PaymentReminderParams): string {
+  const ask =
+    p.reason === "no_bank_details"
+      ? {
+          heading: "We need your bank account details",
+          body: `Your profit of <strong>${fmtNGN(p.profitAvailable)}</strong> is ready,
+                 but there is no bank account on your record for us to pay it into.
+                 Add it in the portal and the payment will be raised straight away.`,
+          cta: "Add Your Bank Details →",
+          href: `${p.portalLink}/kyc`,
+        }
+      : p.reason === "no_instruction"
+      ? {
+          heading: "One answer is all we need",
+          body: `Your profit of <strong>${fmtNGN(p.profitAvailable)}</strong> is ready.
+                 Before we can pay it we need to know what you would like done with
+                 your ${fmtNGN(p.capital)} capital — returned to you, or continued
+                 into the next cycle. Your profit is paid either way.${
+                   p.deadline
+                     ? ` Please answer by <strong>${p.deadline}</strong>.`
+                     : ""
+                 }`,
+          cta: "Choose What Happens to Your Capital →",
+          href: `${p.portalLink}/investments`,
+        }
+      : {
+          heading: "Your payment is being prepared",
+          body: `Your profit of <strong>${fmtNGN(p.profitAvailable)}</strong> is ready
+                 and we are arranging the transfer. There is nothing you need to do —
+                 this note is so you know where it has got to.`,
+          cta: "View Your Investment →",
+          href: `${p.portalLink}/investments`,
+        };
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Your ${p.cycleLabel} profit is waiting</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;">
+<tr><td align="center" style="padding:32px 16px;">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+  <tr>
+    <td style="background:#1e3a5f;padding:32px;text-align:center;">
+      <img src="${SITE_URL}/logo-192.png" width="64" height="64" alt="MaalGrow"
+           style="border-radius:14px;margin-bottom:10px;display:inline-block;" />
+      <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.5px;">MaalGrow Portal</div>
+      <div style="font-size:13px;color:#8fb0d8;margin-top:4px;">Series ${p.seriesName} · ${p.cycleLabel}</div>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:32px;">
+      <div style="font-size:18px;font-weight:600;color:#111827;margin-bottom:12px;">
+        As-salāmu ʿalaykum, ${p.fullName}
+      </div>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+        <tr><td style="padding:18px;text-align:center;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.7px;color:#9ca3af;">Profit waiting for you</div>
+          <div style="font-size:30px;font-weight:700;color:#1e3a5f;line-height:1.2;margin:4px 0 2px;">${fmtNGN(p.profitAvailable)}</div>
+          <div style="font-size:12px;color:#6b7280;">after withholding tax</div>
+        </td></tr>
+      </table>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+        <tr><td style="padding:16px 18px;">
+          <div style="font-size:15px;font-weight:600;color:#78350f;">${ask.heading}</div>
+          <div style="font-size:13px;color:#854d0e;line-height:1.65;margin-top:8px;">${ask.body}</div>
+        </td></tr>
+      </table>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
+        <tr><td align="center">
+          <a href="${ask.href}"
+             style="display:inline-block;background:#1e3a5f;color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.3px;">
+            ${ask.cta}
+          </a>
+        </td></tr>
+      </table>
+
+      <p style="font-size:13px;color:#6b7280;line-height:1.65;margin:0;">
+        Your investor code is <strong style="color:#374151;">${p.investorCode}</strong>.
+        <br /><br />
+        If you are having trouble signing in, or you would rather tell us by phone
+        or WhatsApp, reply to your Investment Manager in the portal or contact us at
+        <a href="mailto:${SUPPORT_EMAIL}" style="color:#3b82f6;">${SUPPORT_EMAIL}</a>
+        and we will record it for you.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f9fafb;padding:24px 32px;border-top:1px solid #e5e7eb;text-align:center;">
+      <p style="font-size:12px;color:#9ca3af;margin:4px 0;">MaalGrow · Shariah-Compliant Mudārabah Investments</p>
+      <p style="font-size:12px;margin:4px 0;">
+        <a href="${p.portalLink}" style="color:#3b82f6;text-decoration:none;">Investor Portal</a>
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+export async function sendPaymentReminderEmail(
+  p: PaymentReminderParams
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[email] RESEND_API_KEY not set — skipping payment reminder");
+    return { success: false, error: "RESEND_API_KEY not configured" };
+  }
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: p.to,
+      subject:
+        p.reason === "no_bank_details"
+          ? `Your ${fmtNGN(p.profitAvailable)} profit is ready — we need your bank details`
+          : `Your ${fmtNGN(p.profitAvailable)} profit is waiting — one answer needed`,
+      html: buildPaymentReminderHtml(p),
+    });
+    if (error) {
+      console.error("[email] Resend reminder error:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, messageId: data?.id };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
