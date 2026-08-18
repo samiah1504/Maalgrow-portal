@@ -1,15 +1,16 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Users, Search, ChevronRight, UserPlus } from "lucide-react";
+import { Users, ChevronRight, UserPlus, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   orderDirectory,
   investorSeries,
   type SortOrder,
 } from "@/lib/investor-directory";
+import { DirectoryFilters } from "./_directory-filters";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investors" };
@@ -38,7 +39,7 @@ export default async function InvestorsPage({
     created_at: string;
     profile: { email: string; is_active: boolean } | null;
     investments:
-      | { id: string; status: string; capital: number; series: { name: string } | null }[]
+      | { id: string; status: string; capital: number; series_id: string | null }[]
       | null;
   };
 
@@ -47,11 +48,17 @@ export default async function InvestorsPage({
     .select(`
       *,
       profile:profiles!profile_id(email, is_active),
-      investments:investments(id, status, capital, series:series_id(name))
+      investments:investments(id, status, capital, series_id)
     `);
   // Deliberately NOT ordered here. PostgREST cannot order by
   // lower(full_name), and a case-sensitive sort drops "aisha" below
   // "Zainab" — see src/lib/investor-directory.ts.
+  //
+  // And the series is fetched as an ID, not embedded. There are three
+  // rows in `series`; resolving the name from a lookup is one small
+  // query with one obvious failure mode, whereas a nested embed that
+  // silently returns null for every row would leave every investor in
+  // no series at all — a filter that quietly matches nobody.
 
   if (q) {
     query = query.or(`full_name.ilike.%${q}%,investor_code.ilike.%${q}%,email.ilike.%${q}%`);
@@ -60,17 +67,30 @@ export default async function InvestorsPage({
     query = query.eq("kyc_status", kyc as "pending" | "approved" | "rejected");
   }
 
-  const { data: rawInvestors, error: investorsError } = await query;
-  if (investorsError) {
-    console.error("[Admin] Investors list query failed:", investorsError);
-  }
+  const [{ data: rawInvestors, error: investorsError }, { data: seriesRows }] =
+    await Promise.all([
+      query,
+      adminClient.from("series").select("id, name"),
+    ]);
+
+  const seriesNameById = new Map(
+    ((seriesRows ?? []) as { id: string; name: string }[]).map((r) => [r.id, r.name])
+  );
   // Series filter and A→Z / Z→A, both applied here rather than in the
   // query. One investor is one row whichever series is chosen, and
   // exactly one row under All Series.
-  const investors = orderDirectory((rawInvestors as unknown as InvestorRow[]) ?? [], {
-    series,
-    sort: sortOrder,
-  });
+  const investors = orderDirectory(
+    ((rawInvestors as unknown as InvestorRow[]) ?? []).map((inv) => ({
+      ...inv,
+      investments: (inv.investments ?? []).map((i) => ({
+        ...i,
+        series: i.series_id
+          ? { name: seriesNameById.get(i.series_id) ?? "" }
+          : null,
+      })),
+    })),
+    { series, sort: sortOrder }
+  );
 
   const totalActive = investors.filter((i) =>
     i.investments?.some((inv) => inv.status === "active")
@@ -96,58 +116,26 @@ export default async function InvestorsPage({
         </Link>
       </div>
 
-      {/* Filters */}
-      <form className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Search by name, email, or investor code..."
-            className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm text-foreground placeholder:text-muted/60 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-          />
+      <DirectoryFilters
+        q={q ?? ""}
+        series={series ?? ""}
+        sort={sortOrder}
+        kyc={kyc ?? ""}
+      />
+
+      {/* A FAILED QUERY IS NOT AN EMPTY DIRECTORY. This was logged to
+          the server console and nothing else, so a broken query looked
+          exactly like "no investors match" — and with a series chosen,
+          exactly like a filter that had quietly matched nobody. */}
+      {investorsError && (
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">The investor list could not be loaded.</p>
+            <p className="mt-0.5 text-xs">{investorsError.message}</p>
+          </div>
         </div>
-        {/* Series. Fixed A/B/C rather than whatever happens to exist,
-            so an empty series is still selectable and reads as "nobody
-            here yet" instead of vanishing from the filter. */}
-        <select
-          name="series"
-          defaultValue={series ?? ""}
-          className="h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-        >
-          <option value="">All Series</option>
-          <option value="A">Series A</option>
-          <option value="B">Series B</option>
-          <option value="C">Series C</option>
-        </select>
-        {/* Alphabetical by NAME. Not by code, not by phone number, not
-            by the date they were added — none of those help anybody
-            hunting for Maryam. */}
-        <select
-          name="sort"
-          defaultValue={sortOrder}
-          className="h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-        >
-          <option value="az">Name A → Z</option>
-          <option value="za">Name Z → A</option>
-        </select>
-        <select
-          name="kyc"
-          defaultValue={kyc}
-          className="h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-        >
-          <option value="">All KYC Status</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <button
-          type="submit"
-          className="h-10 rounded-lg bg-primary-700 px-4 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
-        >
-          Search
-        </button>
-      </form>
+      )}
 
       {/* Table */}
       <Card>

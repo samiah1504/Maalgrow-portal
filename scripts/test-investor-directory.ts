@@ -222,6 +222,36 @@ check(
   !isInSeries(person("Cancelled", "MG104", ["B"], { status: "cancelled" }), "B")
 );
 
+// The page resolves series_id through a three-row lookup. If that
+// lookup ever misses, the name arrives empty — and the investor must
+// then match NO series filter rather than all of them.
+check(
+  "an unresolved series name puts them in no series, not every series",
+  investorSeries({
+    id: "x",
+    full_name: "Unresolved",
+    investments: [{ id: "i1", status: "active", capital: 1, series: { name: "" } }],
+  }).length === 0
+);
+check(
+  "and a null series is the same",
+  investorSeries({
+    id: "x",
+    full_name: "Null Series",
+    investments: [{ id: "i1", status: "active", capital: 1, series: null }],
+  }).length === 0
+);
+check(
+  "so they still show under All Series",
+  orderDirectory([
+    {
+      id: "x",
+      full_name: "Unresolved",
+      investments: [{ id: "i1", status: "active", capital: 1, series: null }],
+    },
+  ]).length === 1
+);
+
 check(
   "the series present are listed in order",
   JSON.stringify(seriesPresent(DIRECTORY)) === JSON.stringify(["A", "B", "C"]),
