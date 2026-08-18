@@ -5,12 +5,22 @@ import { Users, Search, ChevronRight, UserPlus } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  orderDirectory,
+  investorSeries,
+  type SortOrder,
+} from "@/lib/investor-directory";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Investors" };
 
-export default async function InvestorsPage({ searchParams }: { searchParams: Promise<{ q?: string; kyc?: string }> }) {
-  const { q, kyc } = await searchParams;
+export default async function InvestorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; kyc?: string; series?: string; sort?: string }>;
+}) {
+  const { q, kyc, series, sort } = await searchParams;
+  const sortOrder: SortOrder = sort === "za" ? "za" : "az";
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -27,7 +37,9 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
     kyc_status: string;
     created_at: string;
     profile: { email: string; is_active: boolean } | null;
-    investments: { id: string; status: string; capital: number }[] | null;
+    investments:
+      | { id: string; status: string; capital: number; series: { name: string } | null }[]
+      | null;
   };
 
   let query = adminClient
@@ -35,9 +47,11 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
     .select(`
       *,
       profile:profiles!profile_id(email, is_active),
-      investments:investments(id, status, capital)
-    `)
-    .order("created_at", { ascending: false });
+      investments:investments(id, status, capital, series:series_id(name))
+    `);
+  // Deliberately NOT ordered here. PostgREST cannot order by
+  // lower(full_name), and a case-sensitive sort drops "aisha" below
+  // "Zainab" — see src/lib/investor-directory.ts.
 
   if (q) {
     query = query.or(`full_name.ilike.%${q}%,investor_code.ilike.%${q}%,email.ilike.%${q}%`);
@@ -50,11 +64,17 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
   if (investorsError) {
     console.error("[Admin] Investors list query failed:", investorsError);
   }
-  const investors = rawInvestors as InvestorRow[] | null;
+  // Series filter and A→Z / Z→A, both applied here rather than in the
+  // query. One investor is one row whichever series is chosen, and
+  // exactly one row under All Series.
+  const investors = orderDirectory((rawInvestors as unknown as InvestorRow[]) ?? [], {
+    series,
+    sort: sortOrder,
+  });
 
-  const totalActive = investors?.filter((i) => {
-    return i.investments?.some((inv) => inv.status === "active");
-  }).length ?? 0;
+  const totalActive = investors.filter((i) =>
+    i.investments?.some((inv) => inv.status === "active")
+  ).length;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -62,7 +82,10 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
         <div>
           <h1 className="text-2xl font-bold text-foreground">Investors</h1>
           <p className="text-sm text-muted mt-1">
-            {investors?.length ?? 0} registered investors · {totalActive} with active investments
+            {investors.length}{" "}
+            {series ? `investor${investors.length === 1 ? "" : "s"} in Series ${series}` : "registered investors"}
+            {" · "}
+            {totalActive} with active investments
           </p>
         </div>
         <Link href="/admin/investors/new">
@@ -84,6 +107,30 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
             className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm text-foreground placeholder:text-muted/60 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
           />
         </div>
+        {/* Series. Fixed A/B/C rather than whatever happens to exist,
+            so an empty series is still selectable and reads as "nobody
+            here yet" instead of vanishing from the filter. */}
+        <select
+          name="series"
+          defaultValue={series ?? ""}
+          className="h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+        >
+          <option value="">All Series</option>
+          <option value="A">Series A</option>
+          <option value="B">Series B</option>
+          <option value="C">Series C</option>
+        </select>
+        {/* Alphabetical by NAME. Not by code, not by phone number, not
+            by the date they were added — none of those help anybody
+            hunting for Maryam. */}
+        <select
+          name="sort"
+          defaultValue={sortOrder}
+          className="h-10 rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+        >
+          <option value="az">Name A → Z</option>
+          <option value="za">Name Z → A</option>
+        </select>
         <select
           name="kyc"
           defaultValue={kyc}
@@ -105,12 +152,16 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {!investors || investors.length === 0 ? (
+          {investors.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Users className="h-12 w-12 text-border mb-4" />
               <p className="font-semibold text-foreground">No investors found</p>
               <p className="text-sm text-muted mt-1">
-                {q || kyc ? "Try adjusting your search filters" : "Add your first investor to get started"}
+                {series
+                  ? `Nobody holds a place in Series ${series}${q || kyc ? " matching those filters" : ""}.`
+                  : q || kyc
+                  ? "Try adjusting your search filters"
+                  : "Add your first investor to get started"}
               </p>
             </div>
           ) : (
@@ -120,6 +171,7 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
                   <tr>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide">Investor</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden sm:table-cell">Code</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden md:table-cell">Series</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden md:table-cell">KYC</th>
                     <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden lg:table-cell">Active Capital</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden xl:table-cell">Joined</th>
@@ -154,6 +206,29 @@ export default async function InvestorsPage({ searchParams }: { searchParams: Pr
                         </td>
                         <td className="py-3 px-4 hidden sm:table-cell">
                           <span className="font-mono text-xs text-muted">{inv.investor_code}</span>
+                        </td>
+                        <td className="py-3 px-4 hidden md:table-cell">
+                          {/* Every series they hold a place in, not just
+                              the one being filtered on — so somebody in
+                              both A and B is visibly in both. */}
+                          <div className="flex flex-wrap gap-1">
+                            {investorSeries(inv).length === 0 ? (
+                              <span className="text-xs text-muted">—</span>
+                            ) : (
+                              investorSeries(inv).map((name) => (
+                                <span
+                                  key={name}
+                                  className={
+                                    name === series
+                                      ? "rounded-md bg-primary-100 px-1.5 py-0.5 text-[11px] font-semibold text-primary-800"
+                                      : "rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted"
+                                  }
+                                >
+                                  {name}
+                                </span>
+                              ))
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 hidden md:table-cell">
                           <Badge variant={kycVariant[inv.kyc_status] ?? "pending"} dot>
