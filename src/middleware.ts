@@ -1,10 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { ADMIN_ROLE_VALUES } from "@/lib/staff-roles";
+import {
+  homeForRole as homeFor,
+  isAdminRole,
+  PAYMENT_OFFICER,
+  PAYMENT_OFFICER_HOME,
+} from "@/lib/home-for-role";
 
 const ADMIN_ROUTES = ["/admin"];
-const PAYMENT_OFFICER = "payment_officer";
-const PAYMENT_OFFICER_HOME = "/admin/payment-requests";
 const PUBLIC_ROUTES = ["/login", "/forgot-password", "/reset-password", "/auth/callback"];
 
 export async function middleware(request: NextRequest) {
@@ -95,21 +98,7 @@ async function getProfile(supabase: ReturnType<typeof createServerClient>, userI
 }
 
 /** Where signing in lands you. An officer has one page; that is it. */
-function homeFor(role?: string | null): string {
-  if (role === PAYMENT_OFFICER) return PAYMENT_OFFICER_HOME;
-  return isAdminRole(role) ? "/admin/dashboard" : "/dashboard";
-}
 
-/**
- * From ONE list, not a fourth hand-written copy. This must mirror
- * is_admin() in the database — if payment_officer ever appeared here
- * it would be waved through every admin route while the database
- * still refused it, which reads as a broken portal rather than a
- * blocked one.
- */
-function isAdminRole(role?: string | null): boolean {
-  return ADMIN_ROLE_VALUES.includes(role as never);
-}
 
 export const config = {
   matcher: [

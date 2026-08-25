@@ -10,6 +10,7 @@ import { z } from "zod";
 import { Eye, EyeOff, Lock, Mail, TrendingUp, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { loginDestination } from "@/lib/home-for-role";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -184,12 +185,14 @@ function LoginForm() {
     }
 
     // Stage 4 — role check and redirect
-    const isAdmin = ["super_admin", "administrator", "finance", "operations", "customer_support"].includes(
-      profile.role ?? ""
-    );
-    const destination = isAdmin ? "/admin/dashboard" : redirectTo;
+    //
+    // From the ONE list. This was a hand-written array that predated
+    // the Payment Officer role, so signing in as one sent her to the
+    // investor portal — where she has no investor record, and which
+    // told her "Investor profile not found. Please contact support."
+    const destination = loginDestination(profile.role, redirectTo);
 
-    console.log("[Login] REDIRECT", { role: profile.role, isAdmin, destination });
+    console.log("[Login] REDIRECT", { role: profile.role, destination });
 
     toast.success("Welcome back!");
     window.location.href = destination;

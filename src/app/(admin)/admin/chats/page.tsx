@@ -6,7 +6,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Investor Chats | Admin" };
 export const revalidate = 0;
 
-const STAFF_ROLES = ["super_admin", "administrator", "finance", "operations", "customer_support"] as const;
+// The one list, so the Payment Officer stays excluded here for the
+// same reason she is excluded everywhere else.
+import { ADMIN_ROLE_VALUES as STAFF_ROLES } from "@/lib/staff-roles";
 
 export default async function AdminChatsPage() {
   const supabase = await createClient();

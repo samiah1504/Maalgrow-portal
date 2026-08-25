@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { homeForRole } from "@/lib/home-for-role";
 
 export default async function RootPage({
   searchParams,
@@ -29,9 +30,7 @@ export default async function RootPage({
     .eq("id", user.id)
     .single();
 
-  const isAdmin = ["super_admin", "administrator", "finance", "operations", "customer_support"].includes(
-    profile?.role ?? ""
-  );
-
-  redirect(isAdmin ? "/admin/dashboard" : "/dashboard");
+  // The same one list the login page and the middleware use. A
+  // Payment Officer belongs on her queue, not on either dashboard.
+  redirect(homeForRole(profile?.role));
 }

@@ -20,17 +20,20 @@
  * already make several queries. That is the wrong thing to economise
  * on.
  *
- * ONE LIST, NOT A FIFTH COPY. ADMIN_ROLE_VALUES is the same list the
- * middleware uses and mirrors is_admin() in the database. The Payment
- * Officer is deliberately not in it.
+ * ONE LIST, NOT A FIFTH COPY. isAdminRole() is shared with the login
+ * page, the root page and the middleware, and mirrors is_admin() in
+ * the database. The Payment Officer is deliberately not in it — and
+ * the login page having its own copy is precisely how she ended up in
+ * the investor portal.
  */
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ADMIN_ROLE_VALUES } from "@/lib/staff-roles";
-
-const PAYMENT_OFFICER = "payment_officer";
-const PAYMENT_OFFICER_HOME = "/admin/payment-requests";
+import {
+  isAdminRole,
+  PAYMENT_OFFICER,
+  PAYMENT_OFFICER_HOME,
+} from "@/lib/home-for-role";
 
 /**
  * Where this role belongs, given the page it asked for.
@@ -56,7 +59,7 @@ export function adminPageDestination(
   // Includes the case where the profile could not be read at all.
   // An unknown role is not an admin: the failure has to close, and a
   // lookup that returns nothing is exactly when it matters most.
-  if (!ADMIN_ROLE_VALUES.includes(r as never)) return "/dashboard";
+  if (!isAdminRole(r)) return "/dashboard";
 
   // They ARE staff, just not staff for this.
   if (allow && !allow.includes(r)) return "/admin/dashboard";
