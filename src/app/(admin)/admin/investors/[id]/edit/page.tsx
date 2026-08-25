@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-guard";
+import { notFound } from "next/navigation";
 import { EditInvestorForm } from "./_edit-form";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -12,12 +12,9 @@ export default async function EditInvestorPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  const { supabase } = await requireAdminPage();
 
   const { id } = await params;
 

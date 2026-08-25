@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireAdminPage } from "@/lib/admin-guard";
 import Link from "next/link";
 import { TrendingUp, ChevronRight, Search, Filter } from "lucide-react";
 import { formatCurrency, formatDate, getDaysUntilMaturity } from "@/lib/utils";
@@ -30,12 +30,9 @@ export default async function AdminInvestmentsPage({
 }: {
   searchParams: Promise<{ status?: string; series?: string; search?: string }>;
 }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  await requireAdminPage();
 
   const db = await createAdminClient();
   const params = await searchParams;

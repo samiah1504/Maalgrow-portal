@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-guard";
 import { FileText, Download, Eye } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,10 +26,9 @@ const docTypeConfig: Record<string, { label: string; color: string }> = {
 };
 
 export default async function AdminDocumentsPage() {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  const { supabase } = await requireAdminPage();
 
   const { data: rawDocs } = await supabase
     .from("documents")

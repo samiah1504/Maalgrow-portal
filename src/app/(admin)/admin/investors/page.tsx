@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireAdminPage } from "@/lib/admin-guard";
 import Link from "next/link";
 import { Users, ChevronRight, UserPlus, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -22,10 +22,9 @@ export default async function InvestorsPage({
 }) {
   const { q, kyc, series, sort } = await searchParams;
   const sortOrder: SortOrder = sort === "za" ? "za" : "az";
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  await requireAdminPage();
 
   // Use admin client to bypass RLS — this page is already role-gated by middleware/layout
   const adminClient = await createAdminClient();

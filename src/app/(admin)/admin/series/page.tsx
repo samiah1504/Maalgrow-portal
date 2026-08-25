@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-guard";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -226,12 +225,9 @@ function CycleTimeline({ cycle }: { cycle: CycleRow }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SeriesPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  const { supabase } = await requireAdminPage();
 
   const [
     { data: rawSeries },

@@ -1,5 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireAdminPage } from "@/lib/admin-guard";
 import Link from "next/link";
 import {
   Users,
@@ -22,12 +22,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Admin Dashboard" };
 
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  await requireAdminPage();
 
   const db = await createAdminClient();
 

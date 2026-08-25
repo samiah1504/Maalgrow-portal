@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireAdminPage } from "@/lib/admin-guard";
 import { NewInvestorForm } from "./_new-investor-form";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -8,12 +7,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Add Investor | Admin" };
 
 export default async function NewInvestorPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Role checked HERE, not only in the middleware. This page reads
+  // with the service-role client, so there is no RLS behind it.
+  const { supabase } = await requireAdminPage();
 
   // Fetch series and cycles for the investment form
   const [{ data: series }, { data: cycles }] = await Promise.all([
