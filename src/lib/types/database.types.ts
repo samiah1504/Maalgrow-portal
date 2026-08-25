@@ -1470,6 +1470,23 @@ export type Database = {
         Args: { p_investment_id: string };
         Returns: Json;
       };
+      // Migration 045 — a temporary password set by an administrator.
+      admin_flag_temporary_password: {
+        Args: { p_profile_id: string; p_reason: string };
+        Returns: undefined;
+      };
+      clear_my_password_change_flag: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      my_password_change_required: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      profiles_on_temporary_passwords: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
       record_payment_reminder: {
         Args: {
           p_investment_id: string;

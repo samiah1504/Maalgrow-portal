@@ -66,6 +66,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  /*
+   * A TEMPORARY PASSWORD LETS YOU IN ONE STEP, NOT INTO THE PORTAL.
+   *
+   * When an administrator sets somebody's password they know it, and
+   * anything that account does next is indistinguishable from the
+   * person doing it. So the flag holds them on the change screen and
+   * nothing else opens until they have chosen their own.
+   *
+   * Checked here rather than in each layout: this has to cover the
+   * investor portal, the admin area and every API route behind them,
+   * and "everywhere" is what the middleware is for.
+   */
+  {
+    const profile = await getProfile(supabase, user.id);
+    if (profile?.must_change_password && !pathname.startsWith("/reset-password")) {
+      return NextResponse.redirect(new URL("/reset-password", request.url));
+    }
+  }
+
   // Admin routes require admin role
   if (ADMIN_ROUTES.some((route) => pathname.startsWith(route))) {
     const profile = await getProfile(supabase, user.id);
@@ -91,7 +110,7 @@ export async function middleware(request: NextRequest) {
 async function getProfile(supabase: ReturnType<typeof createServerClient>, userId: string) {
   const { data } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, must_change_password")
     .eq("id", userId)
     .single();
   return data;

@@ -10,6 +10,7 @@ import { SITE_URL } from "@/lib/site-url";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { buildPasswordSetupLink } from "@/lib/auth-links";
 import { sendInvestorInvitation } from "@/lib/send-invitation";
+import { generateTemporaryPassword } from "@/lib/temporary-password";
 
 type InvestorUpdate = Database["public"]["Tables"]["investors"]["Update"];
 
@@ -314,6 +315,85 @@ export async function PATCH(
       }
 
       return NextResponse.json({ success: true, message: "Password reset email sent" });
+    }
+
+    /* ─── Set a TEMPORARY password ────────────────────────────────────────
+     *
+     * For the investor whose invitation link keeps expiring, or who
+     * cannot receive our email at all. Reset emails are the normal
+     * route and remain so; this is the one that works when email does
+     * not.
+     *
+     * TEMPORARY BY CONSTRUCTION. must_change_password is raised in the
+     * same action, and the portal allows nothing but the change screen
+     * until the investor clears it themselves. Whoever sets this knows
+     * the password for exactly one sign-in.
+     *
+     * SHOWN ONCE, NEVER EMAILED. It is returned to the screen that
+     * asked for it and stored nowhere. Emailing a password puts it
+     * permanently in two mailboxes and every server in between.
+     */
+    if (action === "set_password") {
+      // Narrower than the rest of this route. Being able to sign in as
+      // an investor is not a support capability.
+      if (!["super_admin", "administrator"].includes(auth.profile?.role ?? "")) {
+        return NextResponse.json(
+          { error: "Only an administrator can set an investor's password" },
+          { status: 403 }
+        );
+      }
+      if (!profileId) {
+        return NextResponse.json({ error: "Auth profile not found" }, { status: 404 });
+      }
+
+      const reason = String((body as Record<string, unknown>).reason ?? "").trim();
+      if (reason.length < 5) {
+        return NextResponse.json(
+          { error: "Say why you are setting this investor's password" },
+          { status: 400 }
+        );
+      }
+
+      // Generated here, not typed by the administrator. A password
+      // somebody chooses is a password they can guess for the next
+      // investor too.
+      const password = generateTemporaryPassword();
+
+      const { error: pwError } = await adminClient.auth.admin.updateUserById(
+        profileId,
+        // Confirmed at the same time: an unconfirmed account refuses
+        // to sign in, which would look exactly like the wrong password
+        // and send everyone back round this same loop.
+        { password, email_confirm: true }
+      );
+      if (pwError) {
+        return NextResponse.json({ error: pwError.message }, { status: 400 });
+      }
+
+      // AFTER Auth accepted it, never before. Flagging a password that
+      // was not actually changed would hold somebody at a door they
+      // could already walk through.
+      const { error: flagError } = await adminClient.rpc(
+        "admin_flag_temporary_password",
+        { p_profile_id: profileId, p_reason: reason }
+      );
+      if (flagError) {
+        return NextResponse.json(
+          {
+            error:
+              "The password was changed, but it could not be marked temporary — " +
+              flagError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        password,
+        message:
+          "Temporary password set. Give it to the investor directly — it is shown once and they must change it when they sign in.",
+      });
     }
 
     // ─── Resend invitation email (branded, via Resend) ─────────────────────

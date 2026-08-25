@@ -10,6 +10,7 @@ import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle, MailQuestion } from "luci
 import { toast } from "sonner";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { homeForRole } from "@/lib/home-for-role";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -156,11 +157,30 @@ function ResetPasswordForm() {
       return;
     }
 
+    // They have now chosen their own password, so an administrator's
+    // temporary one is spent. Only the owner can clear this — see
+    // migration 045.
+    await supabase.rpc("clear_my_password_change_flag");
+
     setSuccess(true);
     toast.success("Password set successfully");
-    // verifyOtp signed them in — take them straight into the portal
+
+    // Their OWN home, not always the investor portal. A member of
+    // staff resetting their password was being dropped into a portal
+    // they have no record in — the same fault the login page had.
+    const { data: { user } } = await supabase.auth.getUser();
+    let home = "/dashboard";
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      home = homeForRole(profile?.role);
+    }
+
     setTimeout(() => {
-      window.location.href = "/dashboard";
+      window.location.href = home;
     }, 2000);
   };
 
