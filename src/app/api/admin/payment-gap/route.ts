@@ -151,8 +151,21 @@ export async function POST(request: Request) {
           investorCode: row.investor_code,
           seriesName: row.series_name,
           cycleLabel: row.cycle_label,
-          profitAvailable: Number(row.profit_available) / 100,
-          capital: Number(row.capital) / 100,
+          // NOT divided by 100. investors_awaiting_payment_request is
+          // on the naira side of the portal: profit_available and
+          // capital come from investments.declared_profit and
+          // investments.capital, which declare_cycle_profit writes as
+          // `gross_kobo / 100.0`. fmtNGN then formats naira.
+          //
+          // Dividing here converted naira to naira-again and put a
+          // figure a hundred times too small into the subject line and
+          // the headline of an email to the investor — a real ₦120,100
+          // profit announced as ₦1,201. The kobo-denominated half of
+          // the portal is the Mudarabah engine (see
+          // lib/mudarabah/format.ts, which divides correctly because
+          // its input really is kobo); this route does not read it.
+          profitAvailable: Number(row.profit_available),
+          capital: Number(row.capital),
           reason: row.reason as "no_instruction" | "no_bank_details" | "not_raised",
           deadline,
           portalLink: SITE_URL,

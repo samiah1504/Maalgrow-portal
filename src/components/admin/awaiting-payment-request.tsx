@@ -54,7 +54,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 type GapRow = {
   investment_id: string;
@@ -95,8 +95,39 @@ type Counts = {
   windowOpen?: number;
 };
 
-const naira = (kobo: number) =>
-  `₦${Math.round((Number(kobo) || 0) / 100).toLocaleString("en-NG")}`;
+/**
+ * WHAT THIS USED TO BE, AND WHY IT WAS WRONG:
+ *
+ *     const naira = (kobo: number) =>
+ *       `₦${Math.round((Number(kobo) || 0) / 100).toLocaleString("en-NG")}`;
+ *
+ * Two currencies live in this portal. The Mudarabah engine works in
+ * INTEGER KOBO, so money is never a float; the investment ledger the
+ * portal was built on stores NAIRA in NUMERIC columns. Both are
+ * correct in their own half, and the join between them is the only
+ * place a mistake is possible.
+ *
+ * investors_awaiting_payment_request is on the naira side. Every
+ * money column it returns — capital, profit_available,
+ * capital_available, and the summed `amount` in the counts — comes
+ * straight from investments.capital and investments.declared_profit,
+ * which declare_cycle_profit writes as `gross_kobo / 100.0`. They are
+ * already naira.
+ *
+ * Dividing them by 100 again took two digits off the back of every
+ * figure on this tab: a real ₦120,100 profit was shown as ₦1,201, and
+ * Math.round threw away the kobo on top of that. Nothing was ever
+ * stored wrong and no payment was ever raised from these numbers —
+ * the tab reports what is owed, it does not compute it — but a figure
+ * a hundred times too small is exactly the sort of thing that gets
+ * believed and acted on.
+ *
+ * So: the same formatCurrency the payment queue itself uses on
+ * payment_requests.amount, which is naira for the same reason. One
+ * formatter for one currency, and the kobo shown rather than rounded
+ * away, because these are amounts somebody types into a bank.
+ */
+const naira = (amountInNaira: number) => formatCurrency(Number(amountInNaira) || 0);
 
 const REASON_LABEL: Record<string, string> = {
   no_instruction: "No instruction yet",
