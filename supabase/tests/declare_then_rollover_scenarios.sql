@@ -217,26 +217,33 @@ DO $$ DECLARE v_new UUID; v_cap NUMERIC; v_paid NUMERIC; v_has_046 BOOLEAN; BEGI
    * Asserting unconditionally would leave a permanently red test on a
    * database that has deliberately not taken 046, which teaches
    * everybody to ignore it.
+   *
+   * 048 supersedes 046: the batch delegates to mudarabah_roll_one,
+   * which records the carry-forward for both paths. Either marker —
+   * the engine present, or 046's text in the batch — means the
+   * payment must be there.
    */
   SELECT investment_confirmed_paid(v_new) INTO v_paid;
 
-  SELECT prosrc LIKE '%Capital carried forward%' INTO v_has_046
-  FROM pg_proc WHERE proname = 'process_cycle_rollover';
+  SELECT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'mudarabah_roll_one')
+      OR EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'process_cycle_rollover'
+                   AND prosrc LIKE '%Capital carried forward%')
+    INTO v_has_046;
 
   IF v_has_046 THEN
     IF v_paid <> v_cap THEN
       RAISE EXCEPTION
-        'TEST FAIL R4: 046 is applied, but the new enrolment holds % capital with only % recorded as paid',
+        'TEST FAIL R4: the batch path should record the carry-forward, but the new enrolment holds % capital with only % recorded as paid',
         v_cap, v_paid;
     END IF;
     RAISE NOTICE 'PASS R3/R4: enrolled into the next cycle, and the batch path recorded the carry-forward';
   ELSE
     IF v_paid <> 0 THEN
       RAISE EXCEPTION
-        'TEST FAIL R4: 046 is NOT applied, so the batch path should have recorded nothing, but % is paid',
+        'TEST FAIL R4: neither 046 nor 048 is applied, so the batch path should have recorded nothing, but % is paid',
         v_paid;
     END IF;
-    RAISE NOTICE 'PASS R3: enrolled into the next cycle. R4 skipped — 046 is not applied, so the batch path records no carry-forward (the submission path still does).';
+    RAISE NOTICE 'PASS R3: enrolled into the next cycle. R4 skipped — neither 046 nor 048 is applied, so the batch path records no carry-forward (the submission path still does).';
   END IF;
 END $$;
 

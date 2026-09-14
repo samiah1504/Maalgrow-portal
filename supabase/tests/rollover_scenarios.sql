@@ -326,10 +326,16 @@ BEGIN
   END IF;
   RAISE NOTICE 'PASS: Option 3 — partial withdrawal, remainder continues';
 
-  -- Legacy rollover_all via admin exception still works
+  -- Legacy rollover_all via admin exception still works.
+  --
+  -- 048: capital is SLOT-BACKED capital only — one slot at 500,000 —
+  -- and the reinvested profit sits in rollover_balance and nowhere
+  -- else. This assertion used to demand capital 600,000 AND balance
+  -- 100,000, i.e. the profit counted in both places, which is the
+  -- double-count 048 removes.
   SELECT * INTO v FROM investments WHERE parent_investment_id = '30000000-0000-0000-0000-000000000004';
-  IF v.capital != 600000 OR v.rollover_balance != 100000 THEN
-    RAISE EXCEPTION 'TEST FAIL: I4 rollover_all amounts wrong';
+  IF v.capital != 500000 OR v.rollover_balance != 100000 THEN
+    RAISE EXCEPTION 'TEST FAIL: I4 rollover_all amounts wrong (capital=% balance=%)', v.capital, v.rollover_balance;
   END IF;
   RAISE NOTICE 'PASS: legacy rollover_all honored via admin exception';
 
@@ -409,7 +415,11 @@ BEGIN
   PERFORM mudarabah_open_next_cycles();
   SELECT * INTO dest FROM cycles WHERE id = dest.id;
   IF dest.status != 'active' THEN RAISE EXCEPTION 'TEST FAIL: destination cycle not activated when due'; END IF;
-  IF dest.total_investors != 7 OR dest.total_slots != 7.5 OR dest.total_capital != 3850000 THEN
+  -- 048: total_capital is slots x unit value — 7.5 x 500,000 — exactly
+  -- as migration 024 defines it (h.slots * h.unit_value). The old
+  -- expectation of 3,850,000 carried I4's 100,000 reinvested profit
+  -- inside capital; that profit now lives in rollover_balance only.
+  IF dest.total_investors != 7 OR dest.total_slots != 7.5 OR dest.total_capital != 3750000 THEN
     RAISE EXCEPTION 'TEST FAIL: destination totals wrong (investors=% slots=% capital=%)',
       dest.total_investors, dest.total_slots, dest.total_capital;
   END IF;

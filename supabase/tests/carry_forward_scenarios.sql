@@ -19,6 +19,14 @@
 --   C6  and fixes only the SHORTFALL, never the whole capital again
 --   C7  it does not invent money for somebody who simply has not paid
 --   C8  running it twice changes nothing
+--
+-- 048 SUPERSEDES 046. 046 was never applied to production and must
+-- not be: it recorded the carry-forward as the whole carried amount,
+-- which for a rollover_all includes the profit. 048's engine records
+-- it correctly for both paths, so C1–C4 hold under 048 on their own.
+-- C5–C8 exercise 046's backfill function, which 048 does not install;
+-- on a database without 046 they are reported as skipped rather than
+-- failing, because the thing they test is deliberately absent.
 -- ============================================================
 \set ON_ERROR_STOP on
 
@@ -160,6 +168,11 @@ DECLARE
   v_n      INTEGER;
   v_pay    NUMERIC;
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'backfill_rollover_carry_forward') THEN
+    RAISE NOTICE 'SKIP C5/C6/C8: 046 is not applied (superseded by 048), so its backfill function is absent';
+    RETURN;
+  END IF;
+
   SELECT id INTO v_new_id FROM investments
    WHERE parent_investment_id = '50000000-0000-0000-0000-00000000cf01';
 
@@ -217,6 +230,11 @@ END $$;
 --     warning on the series page comes from.
 -- ------------------------------------------------------------
 DO $$ DECLARE v_n INTEGER; BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'backfill_rollover_carry_forward') THEN
+    RAISE NOTICE 'SKIP C7: 046 is not applied (superseded by 048), so its backfill function is absent';
+    RETURN;
+  END IF;
+
   INSERT INTO investments (id, investment_code, investor_id, series_id, cycle_id, units,
                            price_per_unit, capital, investment_date, maturity_date, status)
   VALUES ('50000000-0000-0000-0000-00000000cf02', 'MGC9802-2',
