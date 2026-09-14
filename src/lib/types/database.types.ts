@@ -1216,6 +1216,20 @@ export type Database = {
         Args: Record<string, never>;
         Returns: unknown;
       };
+      // Migration 036. The successor of a cycle: the earliest cycle in
+      // the same series starting on or after this one ends. NULL when
+      // there is none. The same resolution the rollover engine uses.
+      mudarabah_next_cycle: {
+        Args: { p_source_cycle_id: string };
+        Returns: string | null;
+      };
+      // Migration 036. Returns the successor, creating it (dated the
+      // day after the source ends) only when none exists. Idempotent.
+      // Revoked from authenticated: call it with the admin client.
+      mudarabah_ensure_next_cycle: {
+        Args: { p_source_cycle_id: string };
+        Returns: string;
+      };
       // Migration 038. The Payment Officer's entire surface area:
       // these functions are the only way the role touches anything.
       payment_request_queue: {

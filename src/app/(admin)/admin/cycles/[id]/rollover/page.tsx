@@ -120,12 +120,21 @@ export default async function CycleRolloverPage({
       )
       .eq("source_cycle_id", id),
     db.from("cycle_profit_declarations").select("*").eq("cycle_id", id).maybeSingle(),
-    db
-      .from("cycles")
-      .select("id, cycle_label, start_date, end_date, status")
-      .eq("series_id", cycle.series_id)
-      .eq("start_date", cycle.end_date)
-      .maybeSingle(),
+    // The successor as the rollover engine resolves it (migration 036):
+    // the earliest cycle in the series starting on or after this one
+    // ends. An exact start_date = end_date match missed every cycle
+    // created since 036, which starts the day after.
+    (async () => {
+      const { data: nextCycleId } = await db.rpc("mudarabah_next_cycle", {
+        p_source_cycle_id: id,
+      });
+      if (!nextCycleId) return { data: null };
+      return db
+        .from("cycles")
+        .select("id, cycle_label, start_date, end_date, status")
+        .eq("id", nextCycleId)
+        .maybeSingle();
+    })(),
   ]);
 
   const investments = (rawInvestments ?? []) as unknown as InvRow[];
