@@ -19,6 +19,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { SLOT_VALUE_NGN, slotLabel } from "@/lib/investment-utils";
 import { genderLabel } from "@/lib/kyc";
 import { storedAddressMissing } from "@/lib/residential-address";
+import { holdingsOf } from "@/lib/investor-holdings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
@@ -181,23 +182,55 @@ export default async function AdminInvestorDetailPage({
   }));
   const cycleOptions: CycleOption[] = (allCycles ?? []) as CycleOption[];
 
-  // Aggregate stats (cancelled = fully reversed, excluded everywhere)
-  const liveInvestments = investor.investments.filter(
-    (i) => i.status !== "cancelled"
-  );
-  const totalCapital = liveInvestments.reduce((s, i) => s + i.capital, 0);
+  /**
+   * WHAT THIS INVESTOR CURRENTLY HAS WITH US — defined ONCE.
+   *
+   * investment_status has four values and only one of them is a
+   * holding: 'active'. 'matured' has reached the end of its cycle,
+   * 'completed' has been paid out or continued into the next cycle,
+   * and 'cancelled' was reversed. None of those is money or a
+   * commitment the investor still has here.
+   *
+   * ── THE TWO THINGS THIS FIXES ────────────────────────────────
+   *
+   * The heading read `investor.investments.length` — the raw array,
+   * every status. An investor holding two live enrolments with one
+   * matured cycle behind her was shown "Investments (3)" directly
+   * beneath a card correctly saying "Active Investments: 2". Two
+   * definitions of the same thing, side by side, disagreeing.
+   *
+   * Total Capital was worse. It excluded only 'cancelled', so a
+   * rollover was counted TWICE: the rollover creates a new enrolment
+   * carrying the capital forward and leaves the old one at
+   * 'completed' with its own capital still on it. One investor with
+   * N1,000,000 continued from Series B Apr-Jul into Jul-Oct read as
+   * N2,000,000 of capital. The money had not doubled; it had been
+   * counted on both sides of the same move.
+   *
+   * ── ONE ARRAY, NOT FOUR FILTERS ──────────────────────────────
+   *
+   * There were already three separate `status === "active"` passes
+   * here plus a fourth rule for capital. That is the shape of fault
+   * that put a Payment Officer in the investor portal (see
+   * lib/home-for-role.ts): a rule written out by hand in several
+   * places, updated in some of them. Derive it once and read it.
+   *
+   * Matured and completed enrolments are still LISTED below — their
+   * payment history, declared profit and acknowledgement live there.
+   * They simply stop being counted as current.
+   */
+  const holdings = holdingsOf(investor.investments);
+  const activeCount = holdings.count;
+  const totalCapital = holdings.capital;
+  const activeCapital = holdings.capital;
+  const activeSlots = holdings.slots;
+  const pastCount = holdings.pastCount;
+
+  // Lifetime, deliberately: profit already paid out does not stop
+  // having been paid when the cycle behind it closes.
   const totalProfitPaid = investor.payment_requests
     .filter((p) => p.type === "roi" && p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
-  const activeCount = investor.investments.filter(
-    (i) => i.status === "active"
-  ).length;
-  const activeCapital = investor.investments
-    .filter((i) => i.status === "active")
-    .reduce((s, i) => s + i.capital, 0);
-  const activeSlots = investor.investments
-    .filter((i) => i.status === "active")
-    .reduce((s, i) => s + i.units, 0);
 
   const investorSummary: InvestorSummary = {
     id: investor.id,
@@ -348,7 +381,23 @@ export default async function AdminInvestorDetailPage({
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">
-              Investments ({investor.investments.length})
+              {/* The same rule as the Active Investments card above,
+                  read from the same array rather than counted again.
+
+                  The past count is shown rather than left implicit.
+                  Counting only the current ones while still listing
+                  all of them would put "Investments (2)" above three
+                  cards, which reads as a miscount — the reader cannot
+                  see that the third is deliberately not in the
+                  number. Saying "· 1 past" makes the list and the
+                  heading agree without putting history back into a
+                  figure that is meant to be current. */}
+              Investments ({activeCount})
+              {pastCount > 0 && (
+                <span className="ml-1.5 font-normal text-muted">
+                  · {pastCount} past
+                </span>
+              )}
             </h2>
             <Link href="/admin/investors/new" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium">
               <PlusCircle className="h-3.5 w-3.5" />
