@@ -7,7 +7,7 @@
 -- the old one ended. An investor who chose to continue was not put
 -- anywhere until an administrator processed the whole cycle in bulk.
 --
---   N1  the successor starts the DAY AFTER, not the same day
+--   N1  the successor exists and runs three months (dates: 049)
 --   N2  ensure_next_cycle is idempotent — no duplicate on a rerun
 --   N3  a cycle created under the OLD same-day rule still resolves
 --   N4  choosing to continue enrols you immediately
@@ -72,18 +72,22 @@ INSERT INTO cycle_profit_declarations (cycle_id,total_revenue,total_expenses,net
 VALUES ('40000000-0000-0000-0000-0000000dd001',1400000,0,1400000,700000,700000,50000,14,0.10,5000,45000,70000);
 
 -- ------------------------------------------------------------
--- N1 — the successor begins the day AFTER the source ends
+-- N1 — the successor begins the day the source ends (049) and runs
+--      three months. The exact day-of-month arithmetic is pinned
+--      with fixed dates in cycle_dates_scenarios; this fixture floats
+--      with CURRENT_DATE, so the end is bounded, not pinned.
 -- ------------------------------------------------------------
 DO $$ DECLARE v_id UUID; v_start DATE; v_end DATE; BEGIN
   v_id := mudarabah_ensure_next_cycle('40000000-0000-0000-0000-0000000dd001');
   SELECT start_date, end_date INTO v_start, v_end FROM cycles WHERE id = v_id;
 
-  IF v_start <> CURRENT_DATE + 1 THEN
-    RAISE EXCEPTION 'TEST FAIL N1: next cycle starts %, expected % (the day after)',
-      v_start, CURRENT_DATE + 1;
+  IF v_start <> CURRENT_DATE THEN
+    RAISE EXCEPTION 'TEST FAIL N1: next cycle starts %, expected % (the same day)',
+      v_start, CURRENT_DATE;
   END IF;
-  IF v_end <> (CURRENT_DATE + 1 + INTERVAL '3 months' - INTERVAL '1 day')::DATE THEN
-    RAISE EXCEPTION 'TEST FAIL N1: next cycle ends %, expected a three-month cycle', v_end;
+  IF v_end < (v_start + INTERVAL '3 months')::DATE
+     OR v_end > (DATE_TRUNC('month', v_start) + INTERVAL '4 months' - INTERVAL '1 day')::DATE THEN
+    RAISE EXCEPTION 'TEST FAIL N1: next cycle ends %, expected three months on from %', v_end, v_start;
   END IF;
   RAISE NOTICE 'PASS N1 — successor runs % to %', v_start, v_end;
 END $$;

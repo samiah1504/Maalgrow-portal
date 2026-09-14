@@ -187,10 +187,10 @@ BEGIN
   END IF;
 
   -- The destination was created by the run itself, starting the day
-  -- after the settled cycle ended.
-  IF (SELECT start_date FROM cycles WHERE id = v_dest) <> CURRENT_DATE + 1 THEN
+  -- the settled cycle ended (049: same-day start).
+  IF (SELECT start_date FROM cycles WHERE id = v_dest) <> CURRENT_DATE THEN
     RAISE EXCEPTION 'TEST FAIL R10: the next cycle starts %, expected %',
-      (SELECT start_date FROM cycles WHERE id = v_dest), CURRENT_DATE + 1;
+      (SELECT start_date FROM cycles WHERE id = v_dest), CURRENT_DATE;
   END IF;
 
   -- R11 — R Two withdrew. Nothing of theirs continues.

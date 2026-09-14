@@ -222,14 +222,16 @@ BEGIN
   SELECT end_date INTO v_src_end FROM cycles WHERE id = 'c0000000-0000-0000-0000-000000000001';
   SELECT create_next_cycle(s.id) INTO v_id FROM series s WHERE s.name = 'A';
   SELECT start_date, end_date INTO v_start, v_end FROM cycles WHERE id = v_id;
-  -- 036: the DAY AFTER the previous cycle ends, and ending the day
-  -- before the three months are up, so two cycles never share a date.
-  IF v_start != v_src_end + 1
-     OR v_end != (v_start + INTERVAL '3 months' - INTERVAL '1 day')::date THEN
+  -- 049: the SAME day the previous cycle ends, three months on. The
+  -- day-of-month arithmetic is pinned with fixed dates in
+  -- cycle_dates_scenarios; this fixture floats with CURRENT_DATE.
+  IF v_start != v_src_end
+     OR v_end < (v_start + INTERVAL '3 months')::date
+     OR v_end > (DATE_TRUNC('month', v_start) + INTERVAL '4 months' - INTERVAL '1 day')::date THEN
     RAISE EXCEPTION 'TEST FAIL: next cycle dates wrong (% → %), expected to start %',
-      v_start, v_end, v_src_end + 1;
+      v_start, v_end, v_src_end;
   END IF;
-  RAISE NOTICE 'PASS: next cycle auto-generated, starting the day after (% → %)', v_start, v_end;
+  RAISE NOTICE 'PASS: next cycle auto-generated, starting the same day (% → %)', v_start, v_end;
 END $$;
 
 -- Still open after the declaration: I5 submits once the profit is out.
@@ -405,16 +407,19 @@ BEGIN
     RAISE EXCEPTION 'TEST FAIL: source cycle not marked historical/processed';
   END IF;
   SELECT * INTO dest FROM cycles WHERE cycle_number = 2 AND series_id = (SELECT id FROM series WHERE name='A');
-  -- 036: it starts TOMORROW, so it is correctly still upcoming — the
-  -- rollover only activates a destination whose day has come.
-  IF dest.status != 'upcoming' THEN
-    RAISE EXCEPTION 'TEST FAIL: a cycle that has not started yet is already %', dest.status;
+  -- 049: it starts TODAY, the day the source ends, so its day has come
+  -- and the rollover activates it. (Under 036 it started tomorrow and
+  -- stayed upcoming until the nightly job.)
+  IF dest.start_date != CURRENT_DATE THEN
+    RAISE EXCEPTION 'TEST FAIL: destination starts %, expected the source''s end date %', dest.start_date, CURRENT_DATE;
   END IF;
-  -- and the nightly job starts it the moment it is due
-  UPDATE cycles SET start_date = CURRENT_DATE WHERE id = dest.id;
+  IF dest.status != 'active' THEN
+    RAISE EXCEPTION 'TEST FAIL: a cycle whose day has come is still %', dest.status;
+  END IF;
+  -- and the nightly job leaves an already-active cycle alone
   PERFORM mudarabah_open_next_cycles();
   SELECT * INTO dest FROM cycles WHERE id = dest.id;
-  IF dest.status != 'active' THEN RAISE EXCEPTION 'TEST FAIL: destination cycle not activated when due'; END IF;
+  IF dest.status != 'active' THEN RAISE EXCEPTION 'TEST FAIL: destination cycle status changed by the nightly job to %', dest.status; END IF;
   -- 048: total_capital is slots x unit value — 7.5 x 500,000 — exactly
   -- as migration 024 defines it (h.slots * h.unit_value). The old
   -- expectation of 3,850,000 carried I4's 100,000 reinvested profit
