@@ -23,6 +23,8 @@ import {
   investorSeries,
   isInSeries,
   seriesPresent,
+  activeHolding,
+  formatSlots,
   type DirectoryInvestor,
 } from "../src/lib/investor-directory";
 
@@ -256,6 +258,59 @@ check(
   "the series present are listed in order",
   JSON.stringify(seriesPresent(DIRECTORY)) === JSON.stringify(["A", "B", "C"]),
   seriesPresent(DIRECTORY)
+);
+
+/* ── Slots held ───────────────────────────────────────────────── */
+
+// Maryam: 3 slots active in A, 2.5 active in B, 4 matured in A.
+const maryam: DirectoryInvestor = {
+  id: "m",
+  full_name: "Maryam Sani",
+  investments: [
+    { id: "a1", status: "active", capital: 1_500_000, units: 3, series: { name: "A" } },
+    { id: "b1", status: "active", capital: 1_250_000, units: 2.5, series: { name: "B" } },
+    { id: "a0", status: "matured", capital: 2_000_000, units: 4, series: { name: "A" } },
+    { id: "c0", status: "cancelled", capital: 500_000, units: 1, series: { name: "C" } },
+  ],
+};
+
+check(
+  "under a series, the slots are the slots in THAT series",
+  activeHolding(maryam, "A").slots === 3 && activeHolding(maryam, "B").slots === 2.5,
+  [activeHolding(maryam, "A"), activeHolding(maryam, "B")]
+);
+check(
+  "and so is the capital",
+  activeHolding(maryam, "A").capital === 1_500_000 && activeHolding(maryam, "A").count === 1,
+  activeHolding(maryam, "A")
+);
+check(
+  "under All Series it is everything active",
+  activeHolding(maryam).slots === 5.5 && activeHolding(maryam).count === 2,
+  activeHolding(maryam)
+);
+check(
+  "a matured holding's slots are not slots they have",
+  activeHolding(maryam, "A").slots !== 7,
+  activeHolding(maryam, "A")
+);
+check(
+  "a series they are not in reads zero, not everything",
+  activeHolding(maryam, "C").slots === 0 && activeHolding(maryam, "C").count === 0
+);
+check(
+  "an empty series value means All Series here too",
+  activeHolding(maryam, "").slots === 5.5
+);
+check(
+  "rows loaded without units read zero rather than NaN",
+  activeHolding(person("Old Row", "MG200", ["A"])).slots === 0 &&
+    !Number.isNaN(activeHolding(person("Old Row", "MG200", ["A"])).slots)
+);
+check(
+  "whole slots have no decimals, half slots one",
+  formatSlots(7) === "7" && formatSlots(7.5) === "7.5" && formatSlots(0) === "0",
+  [formatSlots(7), formatSlots(7.5), formatSlots(0)]
 );
 
 console.log(

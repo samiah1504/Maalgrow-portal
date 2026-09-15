@@ -694,7 +694,9 @@ export default async function SeriesPage() {
                   )}
                   <Button asChild size="sm" variant="outline">
                     <Link
-                      href={`/admin/investors?series=${s.id}`}
+                      // The directory filters by series NAME (A, B, C),
+                      // not id. With the id this landed on an empty list.
+                      href={`/admin/investors?series=${encodeURIComponent(s.name)}`}
                       className="flex items-center gap-1.5"
                     >
                       <Users className="h-3.5 w-3.5" />

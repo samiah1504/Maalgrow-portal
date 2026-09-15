@@ -32,6 +32,8 @@ export type DirectoryInvestment = {
   id: string;
   status: string;
   capital: number;
+  /** Slots held. Optional because older callers never loaded it. */
+  units?: number | null;
   series: { name: string } | null;
 };
 
@@ -111,6 +113,40 @@ export function orderDirectory<T extends DirectoryInvestor>(
   return [...filtered].sort(
     (a, b) => direction * collator.compare(sortKey(a), sortKey(b))
   );
+}
+
+export type Holding = { slots: number; capital: number; count: number };
+
+/**
+ * What an investor holds right now.
+ *
+ * Active investments only — a matured or completed holding is history,
+ * and its slots are not slots they have. And when a series is chosen,
+ * only the holdings IN that series: the figures beside a name under
+ * "Series C" are their Series C figures, not everything they own
+ * across the portfolio. Under All Series it is everything active.
+ */
+export function activeHolding(
+  investor: DirectoryInvestor,
+  series?: string | null
+): Holding {
+  const chosen = series?.trim() || null;
+  let slots = 0;
+  let capital = 0;
+  let count = 0;
+  for (const inv of investor.investments ?? []) {
+    if (inv.status !== "active") continue;
+    if (chosen && inv.series?.name !== chosen) continue;
+    slots += Number(inv.units ?? 0);
+    capital += Number(inv.capital ?? 0);
+    count += 1;
+  }
+  return { slots, capital, count };
+}
+
+/** 7 reads "7", 7.5 reads "7.5" — half slots exist, trailing zeros do not. */
+export function formatSlots(slots: number): string {
+  return Number.isInteger(slots) ? String(slots) : slots.toFixed(1);
 }
 
 /** Which series exist in this set, for the filter's options. */

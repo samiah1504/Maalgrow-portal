@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   orderDirectory,
   investorSeries,
+  activeHolding,
+  formatSlots,
   type SortOrder,
 } from "@/lib/investor-directory";
 import { DirectoryFilters } from "./_directory-filters";
@@ -38,7 +40,7 @@ export default async function InvestorsPage({
     created_at: string;
     profile: { email: string; is_active: boolean } | null;
     investments:
-      | { id: string; status: string; capital: number; series_id: string | null }[]
+      | { id: string; status: string; capital: number; units: number; series_id: string | null }[]
       | null;
   };
 
@@ -47,7 +49,7 @@ export default async function InvestorsPage({
     .select(`
       *,
       profile:profiles!profile_id(email, is_active),
-      investments:investments(id, status, capital, series_id)
+      investments:investments(id, status, capital, units, series_id)
     `);
   // Deliberately NOT ordered here. PostgREST cannot order by
   // lower(full_name), and a case-sensitive sort drops "aisha" below
@@ -94,6 +96,11 @@ export default async function InvestorsPage({
   const totalActive = investors.filter((i) =>
     i.investments?.some((inv) => inv.status === "active")
   ).length;
+  // Slots across the list — in the chosen series when one is chosen.
+  const totalSlots = investors.reduce(
+    (sum, i) => sum + activeHolding(i, series).slots,
+    0
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -105,6 +112,12 @@ export default async function InvestorsPage({
             {series ? `investor${investors.length === 1 ? "" : "s"} in Series ${series}` : "registered investors"}
             {" · "}
             {totalActive} with active investments
+            {series && (
+              <>
+                {" · "}
+                {formatSlots(totalSlots)} slot{totalSlots === 1 ? "" : "s"} held
+              </>
+            )}
           </p>
         </div>
         <Link href="/admin/investors/new">
@@ -157,6 +170,11 @@ export default async function InvestorsPage({
                 <thead className="border-b border-border bg-surface-2">
                   <tr>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide">Investor</th>
+                    {/* Never hidden: on a phone this and the name are
+                        the whole reason the page was opened. */}
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide">
+                      {series ? `Slots in ${series}` : "Slots"}
+                    </th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden sm:table-cell">Code</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden md:table-cell">Series</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-muted uppercase tracking-wide hidden md:table-cell">KYC</th>
@@ -167,10 +185,9 @@ export default async function InvestorsPage({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {investors.map((inv) => {
-                    const activeInvestments = inv.investments?.filter(
-                      (i) => i.status === "active"
-                    ) ?? [];
-                    const activeCapital = activeInvestments.reduce((s, i) => s + (i.capital || 0), 0);
+                    // Scoped to the chosen series when there is one,
+                    // so a row under "Series C" shows Series C figures.
+                    const holding = activeHolding(inv, series);
                     const profile = inv.profile;
                     const kycVariant: Record<string, "pending" | "approved" | "rejected"> = {
                       pending: "pending",
@@ -190,6 +207,16 @@ export default async function InvestorsPage({
                               <p className="text-xs text-muted">{profile?.email}</p>
                             </div>
                           </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <p className="font-semibold text-foreground tabular-nums">
+                            {formatSlots(holding.slots)}
+                          </p>
+                          {holding.count > 1 && (
+                            <p className="text-xs text-muted">
+                              across {holding.count} investments
+                            </p>
+                          )}
                         </td>
                         <td className="py-3 px-4 hidden sm:table-cell">
                           <span className="font-mono text-xs text-muted">{inv.investor_code}</span>
@@ -224,8 +251,8 @@ export default async function InvestorsPage({
                         </td>
                         <td className="py-3 px-4 text-right hidden lg:table-cell">
                           <div>
-                            <p className="font-semibold">{formatCurrency(activeCapital)}</p>
-                            <p className="text-xs text-muted">{activeInvestments.length} active</p>
+                            <p className="font-semibold">{formatCurrency(holding.capital)}</p>
+                            <p className="text-xs text-muted">{holding.count} active</p>
                           </div>
                         </td>
                         <td className="py-3 px-4 hidden xl:table-cell text-muted text-xs">
