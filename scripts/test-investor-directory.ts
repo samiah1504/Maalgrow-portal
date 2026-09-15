@@ -47,7 +47,7 @@ const person = (
   full_name: string,
   code: string,
   series: string[],
-  extra: { created_at?: string; phone?: string; status?: string } = {}
+  extra: { created_at?: string; phone?: string; status?: string; units?: number } = {}
 ): Row => ({
   id: code,
   full_name,
@@ -58,6 +58,7 @@ const person = (
     id: `${code}-${i}`,
     status: extra.status ?? "active",
     capital: 1_000_000,
+    units: extra.units ?? 2,
     series: { name },
   })),
 });
@@ -208,20 +209,32 @@ check(
   investorSeries(person("None", "MG101", [])).length === 0
 );
 
-// A matured or completed holding still puts you in that series — you
-// are somebody who is looked for under Series B either way.
+// A series is its CURRENT holders. Capital that left at rollover does
+// not carry the name into the next cycle's list.
 check(
-  "a matured holding still counts",
-  isInSeries(person("Matured", "MG102", ["B"], { status: "matured" }), "B")
+  "a matured holding does not put you in the series",
+  !isInSeries(person("Matured", "MG102", ["B"], { status: "matured" }), "B")
 );
 check(
-  "and so does a completed one",
-  isInSeries(person("Completed", "MG103", ["B"], { status: "completed" }), "B")
+  "nor does a completed one",
+  !isInSeries(person("Completed", "MG103", ["B"], { status: "completed" }), "B")
 );
-// A cancelled one does not. It never happened.
 check(
-  "a cancelled holding does not",
+  "nor a cancelled one",
   !isInSeries(person("Cancelled", "MG104", ["B"], { status: "cancelled" }), "B")
+);
+check(
+  "nor an active row holding no slots",
+  !isInSeries(person("Empty", "MG105", ["B"], { units: 0 }), "B")
+);
+check(
+  "an active holding with slots does",
+  isInSeries(person("Holder", "MG106", ["B"], { units: 0.5 }), "B")
+);
+// Someone who left is still a registered investor: All Series lists them.
+check(
+  "someone who left a series still appears under All Series",
+  orderDirectory([person("Left", "MG107", ["B"], { status: "completed" })]).length === 1
 );
 
 // The page resolves series_id through a three-row lookup. If that
@@ -232,7 +245,7 @@ check(
   investorSeries({
     id: "x",
     full_name: "Unresolved",
-    investments: [{ id: "i1", status: "active", capital: 1, series: { name: "" } }],
+    investments: [{ id: "i1", status: "active", capital: 1, units: 1, series: { name: "" } }],
   }).length === 0
 );
 check(
@@ -240,7 +253,7 @@ check(
   investorSeries({
     id: "x",
     full_name: "Null Series",
-    investments: [{ id: "i1", status: "active", capital: 1, series: null }],
+    investments: [{ id: "i1", status: "active", capital: 1, units: 1, series: null }],
   }).length === 0
 );
 check(
@@ -249,7 +262,7 @@ check(
     {
       id: "x",
       full_name: "Unresolved",
-      investments: [{ id: "i1", status: "active", capital: 1, series: null }],
+      investments: [{ id: "i1", status: "active", capital: 1, units: 1, series: null }],
     },
   ]).length === 1
 );
@@ -302,10 +315,14 @@ check(
   "an empty series value means All Series here too",
   activeHolding(maryam, "").slots === 5.5
 );
+const nullUnits: DirectoryInvestor = {
+  id: "n",
+  full_name: "Null Units",
+  investments: [{ id: "n1", status: "active", capital: 1, units: null, series: { name: "A" } }],
+};
 check(
-  "rows loaded without units read zero rather than NaN",
-  activeHolding(person("Old Row", "MG200", ["A"])).slots === 0 &&
-    !Number.isNaN(activeHolding(person("Old Row", "MG200", ["A"])).slots)
+  "a null units value reads zero rather than NaN",
+  activeHolding(nullUnits).slots === 0 && !Number.isNaN(activeHolding(nullUnits).slots)
 );
 check(
   "whole slots have no decimals, half slots one",

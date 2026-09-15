@@ -26,14 +26,20 @@
  * selecting investments and joining the investor on — which is the
  * shape that would duplicate them, and the reason this is written
  * down.
+ *
+ * ── A SERIES IS ITS CURRENT HOLDERS ──────────────────────────
+ *
+ * Under a series, only investors with active slots in it. Someone
+ * whose capital left at rollover is not carried into the next list.
+ * See investorSeries.
  */
 
 export type DirectoryInvestment = {
   id: string;
   status: string;
   capital: number;
-  /** Slots held. Optional because older callers never loaded it. */
-  units?: number | null;
+  /** Slots held. Membership of a series is decided by this. */
+  units: number | null;
   series: { name: string } | null;
 };
 
@@ -70,17 +76,26 @@ function sortKey(investor: { full_name: string }): string {
 }
 
 /**
- * A cancelled holding is not a holding.
+ * An investor is IN a series while they hold slots in it. Nothing else.
  *
- * Everything else counts — active, matured and completed alike. An
- * investor who finished Series B last quarter is still someone you go
- * looking for under Series B, and a directory that hid them would
- * send you to All Series to find somebody you already knew was there.
+ * Active holdings with slots, and only those. A matured or completed
+ * holding is history: once the capital has been paid out at rollover
+ * the name must not roll on into the next cycle's list, or the series
+ * fills with people who left and every document drawn from it needs
+ * cleaning by hand. An active row with no slots (fully reversed, or
+ * emptied) is the same case. Somebody who has left a series is still
+ * found under All Series, which lists everyone registered.
+ *
+ * This reverses the earlier rule, which kept matured and completed
+ * holders listed so they could be found under the series they had
+ * been in. The administrators asked for the list to be the current
+ * membership, and the current membership is who holds slots.
  */
 export function investorSeries(investor: DirectoryInvestor): string[] {
   const names = new Set<string>();
   for (const inv of investor.investments ?? []) {
-    if (inv.status === "cancelled") continue;
+    if (inv.status !== "active") continue;
+    if (Number(inv.units ?? 0) <= 0) continue;
     const name = inv.series?.name;
     if (name) names.add(name);
   }
