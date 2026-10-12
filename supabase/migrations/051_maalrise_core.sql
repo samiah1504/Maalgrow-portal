@@ -36,6 +36,9 @@
 -- WHERE, inside functions too; every one here has a WHERE.
 -- ============================================================
 
+-- All or nothing: if any statement fails, nothing is kept.
+BEGIN;
+
 -- ------------------------------------------------------------
 -- 0. Who may do what (Implementation Plan v2, D8)
 -- ------------------------------------------------------------
@@ -1098,3 +1101,5 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 REVOKE ALL ON FUNCTION maalrise_terms_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION maalrise_schedule_guard() FROM PUBLIC;
 REVOKE ALL ON FUNCTION maalrise_investor_not_staff() FROM PUBLIC;
+
+COMMIT;
