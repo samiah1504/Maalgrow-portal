@@ -19,6 +19,8 @@
 --       the Payment Officer sees nothing
 --   R10 no direct writes for anyone — functions only
 --   R11 every action is in the existing audit log
+--   R12 the markup rate is the total for the whole Cycle: never
+--       annualised, never multiplied by the months (confirmed rule)
 -- ============================================================
 \set ON_ERROR_STOP on
 
@@ -496,6 +498,61 @@ BEGIN
     END IF;
   END LOOP;
   RAISE NOTICE 'PASS R11: every MaalRise action is in the existing audit log, attributed';
+END $$;
+
+-- ------------------------------------------------------------
+-- R12 — markup rate is the total for the Cycle, whatever its length
+-- ------------------------------------------------------------
+DO $$
+DECLARE v_ok BOOLEAN; v_c UUID; v_m INTEGER; v_terms JSONB; v_sched JSONB; v_net BIGINT;
+BEGIN
+  PERFORM set_config('test.uid', 'a0000000-0000-0000-0000-00000000e003', true);
+  FOREACH v_m IN ARRAY ARRAY[6, 12] LOOP
+    v_c := maalrise_create_cycle(jsonb_build_object(
+      'name', 'Markup rule ' || v_m || ' months', 'transaction_name', 'Rule check',
+      'counterparty_id', (SELECT v FROM ids WHERE k = 'cp'), 'start_date', '2026-11-01',
+      'duration_months', v_m, 'unit_price_kobo', 10000000));
+    -- ₦10,000,000 at 35%: ₦3,500,000 markup, ₦13,500,000 sale price, fee waived
+    v_terms := '{"cost_kobo":1000000000,"markup_type":"percent","markup_bps":3500,"stated_sale_price_kobo":1350000000,
+                 "fee_basis":"markup","fee_treatment":"waived","schedule_mode":"equal",
+                 "markup_kobo":350000000,"sale_price_kobo":1350000000,"fee_kobo":0,
+                 "investor_pool_kobo":350000000,"counterparty_total_kobo":1350000000,"engine_version":"test"}';
+    v_net := 350000000 / v_m;
+    SELECT jsonb_agg(jsonb_build_object('period', g,
+             'investor_net_kobo', v_net + CASE WHEN g = v_m THEN 350000000 % v_m ELSE 0 END,
+             'fee_kobo', 0,
+             'counterparty_gross_kobo', v_net + CASE WHEN g = v_m THEN 350000000 % v_m ELSE 0 END,
+             'rounding_adjustment_kobo', CASE WHEN g = v_m THEN 350000000 % v_m ELSE 0 END) ORDER BY g)
+      INTO v_sched FROM generate_series(1, v_m) g;
+
+    -- An annualised figure (35% × months/12) is refused
+    BEGIN
+      PERFORM maalrise_save_terms(v_c, v_terms || jsonb_build_object(
+        'markup_kobo', 350000000 * v_m / 12, 'sale_price_kobo', 1000000000 + 350000000 * v_m / 12,
+        'investor_pool_kobo', 350000000 * v_m / 12, 'counterparty_total_kobo', 1000000000 + 350000000 * v_m / 12,
+        'stated_sale_price_kobo', NULL), v_sched);
+      v_ok := (v_m = 12);  -- for 12 months the annualised and total figures coincide, so only 6 months can prove it
+    EXCEPTION WHEN OTHERS THEN v_ok := FALSE; END;
+    IF v_ok AND v_m <> 12 THEN RAISE EXCEPTION 'TEST FAIL R12: an annualised markup was accepted (% months)', v_m; END IF;
+
+    -- A per-month figure (35% × months) is refused
+    BEGIN
+      PERFORM maalrise_save_terms(v_c, v_terms || jsonb_build_object(
+        'markup_kobo', 350000000 * v_m, 'sale_price_kobo', 1000000000 + 350000000 * v_m,
+        'investor_pool_kobo', 350000000 * v_m, 'counterparty_total_kobo', 1000000000 + 350000000 * v_m,
+        'stated_sale_price_kobo', NULL), v_sched);
+      v_ok := TRUE;
+    EXCEPTION WHEN OTHERS THEN v_ok := FALSE; END;
+    IF v_ok THEN RAISE EXCEPTION 'TEST FAIL R12: a markup multiplied by the months was accepted (% months)', v_m; END IF;
+
+    -- The total-for-the-Cycle figure is accepted, for either duration
+    PERFORM maalrise_save_terms(v_c, v_terms, v_sched);
+    IF (SELECT markup_kobo FROM maalrise_cycle_terms WHERE cycle_id = v_c) <> 350000000
+       OR (SELECT sale_price_kobo FROM maalrise_cycle_terms WHERE cycle_id = v_c) <> 1350000000 THEN
+      RAISE EXCEPTION 'TEST FAIL R12: ₦10m at 35%% should be ₦3.5m markup and ₦13.5m sale price (% months)', v_m;
+    END IF;
+  END LOOP;
+  RAISE NOTICE 'PASS R12: 35%% of ₦10m is ₦3.5m markup / ₦13.5m sale price for 6 and 12 months alike; annualised or per-month figures refused';
 END $$;
 
 ROLLBACK;

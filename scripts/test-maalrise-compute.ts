@@ -193,6 +193,30 @@ const base: TermsInput = {
   check("fractional units are refused (A11 open)", threw);
 }
 
+// ── Markup rate: total for the whole Cycle (confirmed 12 Oct 2026) ─
+{
+  const at = (bps: number, months: number, cost = N(10_000_000)) =>
+    computeTerms({ costKobo: cost, markup: { type: "percent", bps }, statedSalePriceKobo: null,
+      fee: { basis: "fixed", kobo: 0, treatment: "waived" }, durationMonths: months, schedule: { mode: "equal" } });
+
+  const ex = at(3500, 12);
+  check("₦10m at 35% = ₦3.5m markup", ex.markupKobo === N(3_500_000), ex.markupKobo);
+  check("₦10m at 35% = ₦13.5m sale price", ex.salePriceKobo === N(13_500_000), ex.salePriceKobo);
+
+  const six = at(3000, 6), twelve = at(3500, 12);
+  check("6-month Cycle at 30% → 30% of cost for the 6 months", six.markupKobo === N(3_000_000));
+  check("12-month Cycle at 35% → 35% of cost for the 12 months", twelve.markupKobo === N(3_500_000));
+
+  const rates = [1, 3, 6, 9, 12, 24].map((m) => at(3500, m).markupKobo);
+  check("the same rate gives the same markup whatever the duration (never annualised or multiplied)",
+    rates.every((r) => r === N(3_500_000)), rates);
+  check("not annualised: a 6-month 30% Cycle is not 15%", six.markupKobo !== N(1_500_000));
+  check("not per month: a 6-month 30% Cycle is not 180%", six.markupKobo !== N(18_000_000));
+  check("the duration only spreads the total across months",
+    six.schedule.length === 6 && six.scheduleTotals.investorNetKobo === N(3_000_000));
+  check("the rate is set per Cycle (different Cycles, different rates)", six.markupBpsOfCost === 3000 && twelve.markupBpsOfCost === 3500);
+}
+
 // ── Input parsing never guesses ──────────────────────────
 {
   check("₦1,234.56 → 123456 kobo", parseNairaToKobo("1,234.56") === 123456);

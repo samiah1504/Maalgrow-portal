@@ -179,12 +179,13 @@ export function NewCycleForm() {
             <Select value={markupType} onValueChange={(v) => setMarkupType(v as "percent" | "amount")}>
               <SelectTrigger label="Murabaha markup entered as"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="percent">Percentage of cost (flat for the term)</SelectItem>
+                <SelectItem value="percent">Percentage of cost — total for the whole Cycle</SelectItem>
                 <SelectItem value="amount">Fixed amount</SelectItem>
               </SelectContent>
             </Select>
-            <Input label={markupType === "percent" ? "Markup (%)" : "Markup (₦)"} inputMode="decimal" value={markupValue}
-              onChange={(e) => setMarkupValue(e.target.value)} required />
+            <Input label={markupType === "percent" ? "Total markup for the Cycle (%)" : "Total markup for the Cycle (₦)"}
+              inputMode="decimal" value={markupValue} onChange={(e) => setMarkupValue(e.target.value)} required
+              hint={markupType === "percent" ? "The total for the whole Cycle duration — not an annual or monthly rate." : undefined} />
           </div>
           <Input label="Agreed sale price per contract (₦)" inputMode="decimal" value={statedSalePrice}
             onChange={(e) => setStatedSalePrice(e.target.value)}

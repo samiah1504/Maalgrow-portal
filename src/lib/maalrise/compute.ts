@@ -21,11 +21,21 @@
  * separately to the counterparty, or waived) both come from the
  * contract — nothing here picks one by default.
  *
+ * ── MARKUP RATE: CONFIRMED RULE (12 Oct 2026) ───────────────
+ *
+ * The markup percentage is entered per Cycle and is the TOTAL markup
+ * for the whole Cycle duration. It is never annual and never monthly:
+ * markup = cost × rate, once, whatever the duration. Nothing here — or
+ * in maalrise_save_terms(), which recalculates it — annualises the
+ * rate, multiplies it by the number of months or divides it into a
+ * monthly rate. ₦10,000,000 at 35% is ₦3,500,000 markup and a
+ * ₦13,500,000 sale price, for a 6-month or a 12-month Cycle alike,
+ * before any separately applicable service fee.
+ *
  * Still open (Implementation Plan v2, §9) and therefore NOT modelled
- * as fact: A2 (markup quoted flat for the term — the input here is
- * the flat amount for the whole term), A3 (markup paid monthly and
- * cost repaid at maturity), A7 (when within the schedule the fee is
- * taken). The breakdown says so wherever it leans on one of them.
+ * as fact: A3 (markup paid monthly and cost repaid at maturity), A7
+ * (when within the schedule the fee is taken). The breakdown says so
+ * wherever it leans on one of them.
  */
 
 export const ENGINE_VERSION = "maalrise-terms-0.1";
@@ -181,9 +191,10 @@ export function computeTerms(input: TermsInput): TermsBreakdown {
     if (!isWholeNonNegative(input.markup.bps)) {
       errors.push({ field: "markup", message: "Markup rate must be zero or more." });
     } else {
+      // Total for the whole Cycle — never annualised, never per month.
       markup = applyBps(cost || 0, input.markup.bps);
       notes.push(
-        "Markup is applied as a flat rate for the whole term (assumption A2 — confirm against the contract)."
+        "The markup rate is the total for the whole Cycle duration — not an annual or monthly rate (confirmed rule)."
       );
     }
   } else if (!isWholeNonNegative(input.markup.kobo)) {

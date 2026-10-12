@@ -152,7 +152,7 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
         <dl className="divide-y divide-border text-sm">
           {[
             ["Transaction cost", formatKobo(b.costKobo)],
-            ["Murabaha markup", `${formatKobo(b.markupKobo)} (${formatBps(b.markupBpsOfCost)} of cost${cycle.markup.type === "percent" ? ", flat for the term" : ", fixed amount"})`],
+            ["Murabaha markup", `${formatKobo(b.markupKobo)} (${formatBps(b.markupBpsOfCost)} of cost${cycle.markup.type === "percent" ? ", total for the whole Cycle" : ", fixed amount"})`],
             ["Agreed sale price", formatKobo(b.salePriceKobo)],
             ["Fee basis", cycle.fee.treatment === "waived" ? "Not applicable — fee waived" : FEE_BASIS_LABEL[cycle.fee.basis]],
             ["Fee rate / amount", cycle.fee.treatment === "waived" ? "—" : cycle.fee.basis === "fixed" ? formatKobo(cycle.fee.kobo ?? 0) : formatBps(cycle.fee.bps ?? 0)],
