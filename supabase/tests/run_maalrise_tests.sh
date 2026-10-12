@@ -24,6 +24,14 @@ summary_of() {     # prints the value of a '>>>' summary row
   q -f "$1" | grep -F ">>> $2" | cut -d'|' -f2
 }
 
+# 0. The six SQL Editor parts must be byte-for-byte the migration body
+PARTS=supabase/checks/051_parts
+for i in 1 2 3 4 5 6; do
+  awk '/^-- >>> 051 BODY START/{f=1;next} /^-- <<< 051 BODY END/{f=0} f' "$PARTS/051_part_${i}_of_6.sql"
+done | cmp -s - <(awk '/^BEGIN;$/{f=1;next} /^COMMIT;$/{f=0} f' supabase/migrations/051_maalrise_core.sql | sed '1d') \
+  || { echo "FAIL: 051 parts differ from the migration"; exit 1; }
+echo "PASS: 051 parts 1–6 are identical to the migration body"
+
 dropdb --if-exists "$DB"
 createdb "$DB"
 q -q -f supabase/tests/000_supabase_stub.sql
