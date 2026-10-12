@@ -365,3 +365,56 @@ export function computeAllocations(
     };
   });
 }
+
+export type CycleAllocation = {
+  lines: AllocationLine[];
+  /** The share of profit belonging to units nobody has funded, if any. Never paid to an investor. */
+  unallocated: AllocationLine | null;
+  unitsRequired: number;
+  unitsFunded: number;
+  fundedCapitalKobo: number;
+  fundingShortfallKobo: number;
+};
+
+const UNALLOCATED_KEY = "__unallocated";
+
+/**
+ * Allocations for a whole Cycle from its units.
+ *
+ * Capital is what each investor FUNDED (units × unit price). Profit is
+ * shared per unit of the WHOLE Cycle — the units the cost requires —
+ * so while a Cycle is part-subscribed the unsubscribed units' share is
+ * returned as `unallocated` rather than inflating funded investors.
+ * Once fully funded, `unallocated` is null and every kobo is allocated.
+ */
+export function allocateCycle(
+  cycle: { costKobo: number; unitPriceKobo: number },
+  schedule: Pick<ScheduleLine, "investorNetKobo">[],
+  holders: AllocationInput[]
+): CycleAllocation {
+  if (!Number.isInteger(cycle.unitPriceKobo) || cycle.unitPriceKobo <= 0) {
+    throw new Error("Unit price must be a positive whole number of kobo");
+  }
+  if (holders.some((h) => !Number.isInteger(h.units) || h.units <= 0)) {
+    throw new Error("Every holding must be a positive whole number of units");
+  }
+  const unitsRequired = Math.ceil(cycle.costKobo / cycle.unitPriceKobo);
+  const unitsFunded = holders.reduce((s, h) => s + h.units, 0);
+  if (unitsFunded > unitsRequired) {
+    throw new Error(`Holdings of ${unitsFunded} units exceed the ${unitsRequired} units the cost requires`);
+  }
+  const unsubscribed = unitsRequired - unitsFunded;
+  const all = computeAllocations(
+    { capitalKobo: unitsRequired * cycle.unitPriceKobo, schedule },
+    [...holders, ...(unsubscribed > 0 ? [{ key: UNALLOCATED_KEY, units: unsubscribed }] : [])]
+  );
+  const fundedCapitalKobo = unitsFunded * cycle.unitPriceKobo;
+  return {
+    lines: all.filter((a) => a.key !== UNALLOCATED_KEY),
+    unallocated: all.find((a) => a.key === UNALLOCATED_KEY) ?? null,
+    unitsRequired,
+    unitsFunded,
+    fundedCapitalKobo,
+    fundingShortfallKobo: Math.max(cycle.costKobo - fundedCapitalKobo, 0),
+  };
+}

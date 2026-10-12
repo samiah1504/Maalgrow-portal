@@ -4,7 +4,7 @@
  * here from the sample records, so the dashboard, the Cycle pages and
  * the investor pages cannot disagree with one another.
  */
-import { computeAllocations, computeTerms } from "./compute";
+import { allocateCycle, computeTerms } from "./compute";
 import { periodDueDate, maturityDate } from "./dates";
 import {
   SAMPLE_ALLOCATIONS,
@@ -16,9 +16,6 @@ import {
 } from "./sample-data";
 
 export type SamplePeriodStatus = "paid" | "partly_paid" | "pending" | "upcoming";
-
-/** Key of the pseudo-holder that keeps unsubscribed units unallocated. */
-export const UNSUBSCRIBED_KEY = "__unsubscribed";
 
 /**
  * How a sample receipt is split, for illustration only: the period's
@@ -39,24 +36,18 @@ export function sampleCycleFigures(cycle: SampleCycle) {
     schedule: cycle.schedule,
   });
   const holders = SAMPLE_ALLOCATIONS.filter((a) => a.cycleId === cycle.id);
-  const unitsFunded = holders.reduce((s, h) => s + h.units, 0);
-  const unitsRequired = Math.ceil(cycle.costKobo / cycle.unitPriceKobo);
-  const unitsUnsubscribed = Math.max(unitsRequired - unitsFunded, 0);
-  const fundedKobo = unitsFunded * cycle.unitPriceKobo;
-
-  // Profit is shared per unit of the WHOLE Cycle. Unsubscribed units
-  // take their share into an unallocated line rather than inflating the
-  // investors who have funded; capital is only what was paid in.
-  const withUnsubscribed = [
-    ...holders.map((h) => ({ key: h.investorId, units: h.units })),
-    ...(unitsUnsubscribed > 0 ? [{ key: UNSUBSCRIBED_KEY, units: unitsUnsubscribed }] : []),
-  ];
-  const all = computeAllocations(
-    { capitalKobo: unitsRequired * cycle.unitPriceKobo, schedule: breakdown.schedule },
-    withUnsubscribed
+  // Profit per unit of the whole Cycle; unsubscribed units' share stays
+  // unallocated, and capital is only what was paid in. See allocateCycle.
+  const alloc = allocateCycle(
+    { costKobo: cycle.costKobo, unitPriceKobo: cycle.unitPriceKobo },
+    breakdown.schedule,
+    holders.map((h) => ({ key: h.investorId, units: h.units }))
   );
-  const allocations = all.filter((a) => a.key !== UNSUBSCRIBED_KEY);
-  const unallocated = all.find((a) => a.key === UNSUBSCRIBED_KEY) ?? null;
+  const { unitsFunded, unitsRequired, fundingShortfallKobo } = alloc;
+  const unitsUnsubscribed = unitsRequired - unitsFunded;
+  const fundedKobo = alloc.fundedCapitalKobo;
+  const allocations = alloc.lines;
+  const unallocated = alloc.unallocated;
 
   const receipts = SAMPLE_RECEIPTS.filter((r) => r.cycleId === cycle.id);
 
@@ -96,7 +87,7 @@ export function sampleCycleFigures(cycle: SampleCycle) {
     unitsRequired,
     unitsUnsubscribed,
     fundedKobo,
-    fundingShortfallKobo: Math.max(cycle.costKobo - fundedKobo, 0),
+    fundingShortfallKobo,
     maturity: maturityDate(cycle.startDate, cycle.durationMonths),
     periods,
   };

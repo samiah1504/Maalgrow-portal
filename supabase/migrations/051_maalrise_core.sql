@@ -1,12 +1,11 @@
 -- ============================================================
--- 051 — MaalRise core (Phase 2)                 *** DRAFT ***
+-- 051 — MaalRise core (Phase 2)
 --
--- NOT APPROVED. DO NOT APPLY TO STAGING OR PRODUCTION.
---
--- Lives in supabase/drafts/, which no migration runner reads. It
--- moves to supabase/migrations/ only after review, after the
--- production schema check, and only when explicitly approved — and
--- then to STAGING first.
+-- APPLY ONLY AFTER supabase/checks/maalrise_preflight.sql reports
+-- ready_to_apply = true AND a recoverable backup is confirmed. Then run
+-- supabase/checks/maalrise_postapply.sql and compare fingerprints.
+-- To undo: supabase/checks/maalrise_rollback.sql (refuses if MaalRise
+-- holds data). Rehearsed end to end by supabase/tests/run_maalrise_tests.sh.
 --
 -- WHAT THIS ADDS
 --

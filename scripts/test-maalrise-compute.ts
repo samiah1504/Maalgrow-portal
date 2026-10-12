@@ -8,6 +8,7 @@
  *   npx tsx scripts/test-maalrise-compute.ts
  */
 import {
+  allocateCycle,
   apportion,
   applyBps,
   computeAllocations,
@@ -158,6 +159,38 @@ const base: TermsInput = {
   ]);
   check("150 funded units at ₦100k = ₦15m, not a share of the full cost", allocs[0].capitalKobo === N(15_000_000), allocs[0].capitalKobo);
   check("part-funded capital sums to what was funded", allocs.reduce((s, a) => s + a.capitalKobo, 0) === funded);
+}
+
+// ── allocateCycle: whole-Cycle profit, funded capital ──────
+{
+  const b = computeTerms({ ...base, costKobo: N(40_000_000), markup: { type: "amount", kobo: N(3_000_000) },
+    statedSalePriceKobo: null, fee: { basis: "fixed", kobo: 0, treatment: "waived" }, durationMonths: 4 });
+  const part = allocateCycle({ costKobo: N(40_000_000), unitPriceKobo: N(100_000) }, b.schedule,
+    [{ key: "three", units: 150 }, { key: "four", units: 100 }]);
+  check("part-funded: 400 required, 250 funded, ₦15m short",
+    part.unitsRequired === 400 && part.unitsFunded === 250 && part.fundingShortfallKobo === N(15_000_000));
+  check("part-funded: capital is what was paid in", part.lines[0].capitalKobo === N(15_000_000) && part.lines[1].capitalKobo === N(10_000_000));
+  check("part-funded: profit per unit of the whole Cycle",
+    part.lines[0].totalProfitKobo === N(1_125_000) && part.lines[1].totalProfitKobo === N(750_000));
+  check("part-funded: the unsubscribed share is unallocated, not given away",
+    part.unallocated?.totalProfitKobo === N(1_125_000) && part.unallocated?.units === 150);
+  check("part-funded: allocated + unallocated profit = pool",
+    part.lines.reduce((s, l) => s + l.totalProfitKobo, 0) + (part.unallocated?.totalProfitKobo ?? 0) === b.investorProfitPoolKobo);
+
+  const full = allocateCycle({ costKobo: N(40_000_000), unitPriceKobo: N(100_000) }, b.schedule,
+    [{ key: "a", units: 250 }, { key: "b", units: 150 }]);
+  check("fully funded: nothing unallocated", full.unallocated === null && full.fundingShortfallKobo === 0);
+  check("fully funded: every kobo of profit allocated",
+    full.lines.reduce((s, l) => s + l.totalProfitKobo, 0) === b.investorProfitPoolKobo);
+
+  let threw = false;
+  try { allocateCycle({ costKobo: N(40_000_000), unitPriceKobo: N(100_000) }, b.schedule, [{ key: "x", units: 401 }]); }
+  catch { threw = true; }
+  check("over-subscription is refused", threw);
+  threw = false;
+  try { allocateCycle({ costKobo: N(40_000_000), unitPriceKobo: N(100_000) }, b.schedule, [{ key: "x", units: 1.5 }]); }
+  catch { threw = true; }
+  check("fractional units are refused (A11 open)", threw);
 }
 
 // ── Input parsing never guesses ──────────────────────────

@@ -1,9 +1,8 @@
 -- ============================================================
--- MaalRise core (draft 051) — workflow, permissions, isolation
+-- MaalRise core (051) — workflow, permissions, isolation
 --
--- Run ONLY against a scratch database built from the stub,
--- migrations 001–050 and supabase/drafts/051_maalrise_core.sql.
--- Never against staging or production.
+-- Run ONLY against a scratch database built from the stub and the
+-- migrations. Never against staging or production: it creates users.
 --
 --   R1  only preparing roles can create counterparties and Cycles;
 --       the Payment Officer, finance and customer support cannot
