@@ -205,6 +205,7 @@ for (const c of SAMPLE_CYCLES) {
     ...walk("src/app/(admin)/admin/maalrise"),
     ...walk("src/lib/maalrise"),
     ...walk("src/components/maalrise"),
+    ...walk("src/app/(admin)/admin/payment-requests/maalrise"),
   ];
   // Phase 3 connects the screens to the database. What must still hold:
   // sample data never writes; nothing emails, uploads or uses the service
@@ -215,14 +216,33 @@ for (const c of SAMPLE_CYCLES) {
   check("sample data modules and pages never write or call an API", sampleModules.filter((p) => writers.test(read(p))).length === 0,
     sampleModules.filter((p) => writers.test(read(p))));
   const apiFiles = walk("src/app/api/admin/maalrise");
-  const forbidden = /createAdminClient|SUPABASE_SERVICE_ROLE|sendMail|resend|nodemailer|\.storage\b|inviteUserByEmail|auth\.admin/i;
-  const leaks = [...files, ...apiFiles].filter((p) => forbidden.test(read(p)));
-  check("no MaalRise code emails, uploads, invites or uses the service role", leaks.length === 0, leaks);
+  // Nothing emails or invites (email stays as unsent drafts in the database).
+  const mailers = /sendMail|resend|nodemailer|inviteUserByEmail|auth\.admin/i;
+  const mailing = [...files, ...apiFiles].filter((p) => mailers.test(read(p)));
+  check("no MaalRise code sends email or invites anyone", mailing.length === 0, mailing);
+  // The server storage key is used ONLY by the two document routes, for
+  // the private contracts bucket, after the person's role is checked.
+  const DOC_ROUTES = [
+    "src/app/api/admin/maalrise/cycles/[id]/documents/route.ts",
+    "src/app/api/admin/maalrise/documents/[id]/route.ts",
+  ];
+  const serviceRole = /createAdminClient|SUPABASE_SERVICE_ROLE|\.storage\b/;
+  const keyUsers = [...files, ...apiFiles].filter((p) => serviceRole.test(read(p)));
+  check("only the two document routes use the server storage key", keyUsers.every((p) => DOC_ROUTES.includes(p)), keyUsers);
+  check("each document route checks the role before touching storage",
+    DOC_ROUTES.every((p) => { const t = read(p); return t.indexOf("maalriseGate(") > -1 && t.indexOf("maalriseGate(") < t.indexOf("createAdminClient()"); }));
+  check("uploads are registered as the signed-in person (role re-checked by the database)",
+    read(DOC_ROUTES[0]).includes('gate.db.rpc("maalrise_register_document"'));
   const ungated = apiFiles.filter((p) => p.endsWith("route.ts") && !read(p).includes("maalriseGate("));
   check("every MaalRise API route checks the session and role", apiFiles.length > 0 && ungated.length === 0, ungated);
   const fetchers = files.filter((p) => /fetch\(/.test(read(p)));
-  const FETCH_OK = ["src/components/maalrise/use-maalrise-action.ts", "src/app/(admin)/admin/maalrise/investors/new/_new-investor-form.tsx"];
-  check("only the action hook and the investor lookup call the network", fetchers.every((p) => FETCH_OK.includes(p)), fetchers);
+  const FETCH_OK = [
+    "src/components/maalrise/use-maalrise-action.ts",
+    "src/components/maalrise/alerts-badge.tsx",
+    "src/app/(admin)/admin/maalrise/investors/new/_new-investor-form.tsx",
+    "src/app/(admin)/admin/maalrise/cycles/[id]/_payment-actions.tsx",
+  ];
+  check("only the action hook, alerts badge, investor lookup and document upload call the network", fetchers.every((p) => FETCH_OK.includes(p)), fetchers);
   const urls = files.flatMap((p) => [...read(p).matchAll(/["'`](\/api\/[^"'`$]*)/g)].map((m) => m[1]));
   check("screens only call MaalRise API routes", urls.every((u) => u.startsWith("/api/admin/maalrise/")), urls);
 

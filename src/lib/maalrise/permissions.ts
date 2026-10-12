@@ -2,10 +2,10 @@
  * Who may do what in MaalRise — Implementation Plan v2, D8.
  *
  * The pages and API routes use these to decide what to offer; the
- * database functions in migration 051 enforce the same lists
- * (maalrise_can_prepare / _can_approve / _can_finance), which is the
- * half that matters. Every role here is inside is_admin(); the
- * Payment Officer is in none of them.
+ * database functions in migrations 051 and 052 enforce the same lists
+ * (maalrise_can_prepare / _can_approve / _can_finance / _can_pay),
+ * which is the half that matters. The Payment Officer is outside
+ * is_admin() and appears only in MAALRISE_PAY_ROLES.
  */
 export const MAALRISE_PREPARE_ROLES = ["super_admin", "administrator", "operations"] as const;
 export const MAALRISE_APPROVE_ROLES = ["super_admin", "administrator"] as const;
@@ -22,19 +22,22 @@ export function canFinance(role: string | null | undefined) {
   return (MAALRISE_FINANCE_ROLES as readonly string[]).includes(role ?? "");
 }
 
-/**
- * Switches for actions that need the business's explicit go-ahead
- * before they may happen in production. Both are OFF unless the
- * environment variable is set to exactly "true".
- *
- *   MAALRISE_ACTIVATION_ENABLED — the Activate button. Activation
- *     makes a Cycle visible to its investors; no real Cycle is to be
- *     activated without approval.
- *   MAALRISE_NEW_LOGINS_ENABLED — reserved: creating a login (and
- *     sending an invitation) for an email with no account. Not built
- *     yet; adding investors works only for people who already have a
- *     login, e.g. existing MaalGrow investors.
- */
-export function activationEnabled() {
-  return process.env.MAALRISE_ACTIVATION_ENABLED === "true";
+/** Recording a payment received from the counterparty (finance + admins). */
+export const MAALRISE_RECEIPT_ROLES = MAALRISE_FINANCE_ROLES;
+/** Recording that an approved investor payment was transferred. */
+export const MAALRISE_PAY_ROLES = ["payment_officer", "super_admin", "administrator"] as const;
+
+export function canPay(role: string | null | undefined) {
+  return (MAALRISE_PAY_ROLES as readonly string[]).includes(role ?? "");
 }
+
+/*
+ * Activation is controlled by the approver roles above and the
+ * database's activation checklist (maalrise_activation_checks). The
+ * earlier MAALRISE_ACTIVATION_ENABLED switch was removed in Phase 4,
+ * as agreed, once payment tracking and distributions were in place.
+ *
+ * Creating NEW logins (and sending invitations) for people with no
+ * account is still not built; adding investors works only for people
+ * who already have a login.
+ */

@@ -3,15 +3,14 @@
  * activation.
  *
  * Approval is the database's decision as well as ours: it refuses an
- * approver who prepared or submitted the terms (D5). Activation is
- * additionally switched off unless MAALRISE_ACTIVATION_ENABLED=true,
- * because activating a real Cycle needs the business's go-ahead.
+ * approver who prepared or submitted the terms (D5). Activation is for
+ * the approver roles only, and the database refuses it unless every
+ * activation check passes.
  */
 import { NextResponse } from "next/server";
 import {
   MAALRISE_APPROVE_ROLES,
   MAALRISE_PREPARE_ROLES,
-  activationEnabled,
 } from "@/lib/maalrise/permissions";
 import { dbError, isUuid, maalriseGate, readJson } from "@/lib/maalrise/api";
 
@@ -57,13 +56,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(res.data);
   }
 
-  // activate
-  if (!activationEnabled()) {
-    return NextResponse.json(
-      { error: "Activation is switched off. Activating a Cycle needs the business's explicit approval." },
-      { status: 403 }
-    );
-  }
+  // activate — maalrise_activate_cycle re-runs every check and refuses if any fails
   const res = await gate.db.rpc("maalrise_activate_cycle", { p_cycle: id });
   if (res.error) return dbError(res.error);
   return NextResponse.json(res.data);

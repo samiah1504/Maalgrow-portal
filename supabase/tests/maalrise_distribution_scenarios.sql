@@ -474,8 +474,14 @@ BEGIN
   IF v_status <> 'paid' THEN RESET ROLE; RAISE EXCEPTION 'TEST FAIL R20: investor does not see paid'; END IF;
   PERFORM pg_temp.as_user('officer');
   SELECT COUNT(*) INTO v_n FROM maalrise_distribution_lines WHERE status = 'pending_approval';
+  IF v_n <> 0 THEN RESET ROLE; RAISE EXCEPTION 'TEST FAIL R20: officer saw lines awaiting approval'; END IF;
+  SELECT COUNT(*) INTO v_n FROM maalrise_distributions WHERE status = 'prepared';
+  IF v_n <> 0 THEN RESET ROLE; RAISE EXCEPTION 'TEST FAIL R20: officer saw a distribution awaiting approval'; END IF;
+  SELECT COUNT(*) INTO v_n FROM maalrise_distributions WHERE status = 'approved';
+  IF v_n = 0 THEN RESET ROLE; RAISE EXCEPTION 'TEST FAIL R20: officer cannot see the Cycle of an approved payment'; END IF;
+  SELECT COUNT(*) INTO v_n FROM maalrise_receipts;
   RESET ROLE;
-  IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R20: officer saw lines awaiting approval'; END IF;
+  IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R20: officer saw counterparty receipts'; END IF;
 
   -- investor notified (portal later) and an email DRAFT prepared
   IF NOT EXISTS (SELECT 1 FROM maalrise_notifications WHERE user_id = '10000000-0000-0000-0000-00000000f001' AND kind = 'payment_paid'

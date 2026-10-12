@@ -18,6 +18,7 @@ import {
 } from "../src/lib/maalrise/compute";
 import { koboInWords, parseNairaToKobo, parsePercentToBps } from "../src/lib/maalrise/format";
 import { maturityDate, periodDueDate } from "../src/lib/maalrise/dates";
+import { lagosToday, monthPositions, suggestedPeriod } from "../src/lib/maalrise/receipts";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -241,6 +242,33 @@ const base: TermsInput = {
   const m = koboInWords("Funding shortfall of 400000000 kobo");
   check("kobo amounts in database messages read as naira", m.includes("4,000,000.00") && !m.includes("kobo"), m);
   check("messages without kobo amounts are unchanged", koboInWords("Unauthorized") === "Unauthorized");
+}
+
+// ── Payments received against the schedule (Phase 4) ────
+{
+  const lines = [1, 2, 3, 4, 5].map((p) => ({ period: p, due_date: periodDueDate("2026-06-10", p)!, counterparty_gross_kobo: 200_000_000 }));
+  // today 2026-10-15: m1 due 07-10, m2 08-10, m3 09-10 (35 days), m4 10-10 (5 days), m5 11-10 (upcoming)
+  const rec = (period: number, amount: number, status: string, applied: number | null = null, held: number | null = null) =>
+    ({ period, amount_kobo: amount, status, applied_kobo: applied, held_kobo: held });
+  const pos = monthPositions(lines, [
+    rec(1, 201_000_000, "confirmed", 200_000_000, 1_000_000),
+    rec(2, 50_000_000, "confirmed", 50_000_000, 0),
+    rec(3, 200_000_000, "recorded"),
+    rec(3, 999, "rejected"),
+  ], "2026-10-15");
+  const st = Object.fromEntries(pos.map((p) => [p.period, p]));
+  check("fully received month", st[1].status === "received" && st[1].heldKobo === 1_000_000 && st[1].outstandingKobo === 0);
+  check("part-paid month keeps the rest outstanding, flagged after 5 days", st[2].status === "part_paid" && st[2].outstandingKobo === 150_000_000 && st[2].followUp);
+  check("recorded-but-unconfirmed month is not flagged, still outstanding", st[3].status === "awaiting" && !st[3].followUp && st[3].pendingKobo === 200_000_000 && st[3].outstandingKobo === 200_000_000);
+  check("rejected entries count for nothing", st[3].confirmedKobo === 0);
+  check("exactly 5 days late with nothing recorded → follow up", st[4].daysLate === 5 && st[4].status === "follow_up");
+  check("4 days late → awaiting, not yet follow-up",
+    monthPositions(lines, [], "2026-10-14")[3].status === "awaiting" && !monthPositions(lines, [], "2026-10-14")[3].followUp);
+  check("on the scheduled date → due today", monthPositions(lines, [], "2026-10-10")[3].status === "due_today");
+  check("future month → upcoming", st[5].status === "upcoming");
+  check("a passing date never counts as paid", monthPositions(lines, [], "2027-12-31").every((p) => p.confirmedKobo === 0 && p.outstandingKobo === 200_000_000));
+  check("suggested month = earliest not fully recorded", suggestedPeriod(pos) === 2);
+  check("Lagos date: 23:30 UTC is already the next day in Lagos", lagosToday(new Date("2026-10-12T23:30:00Z")) === "2026-10-13");
 }
 
 if (failures) {

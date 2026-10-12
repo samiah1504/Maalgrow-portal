@@ -27,9 +27,12 @@ import {
   Gauge,
   Landmark,
   UserRound,
+  Banknote,
+  BellRing,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { MaalriseAlertsBadge } from "@/components/maalrise/alerts-badge";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -86,6 +89,8 @@ const navGroups: NavGroup[] = [
       { label: "MaalRise Dashboard", href: "/admin/maalrise/dashboard", icon: <Gauge className="h-4 w-4" /> },
       { label: "MaalRise Cycles", href: "/admin/maalrise/cycles", icon: <Landmark className="h-4 w-4" /> },
       { label: "MaalRise Investors", href: "/admin/maalrise/investors", icon: <UserRound className="h-4 w-4" /> },
+      { label: "MaalRise Payments", href: "/admin/payment-requests/maalrise", icon: <Banknote className="h-4 w-4" /> },
+      { label: "MaalRise Alerts", href: "/admin/maalrise/notifications", icon: <BellRing className="h-4 w-4" /> },
     ],
   },
   {
@@ -120,8 +125,8 @@ interface AdminSidebarProps {
 }
 
 /**
- * What the Payment Officer is shown. One item, because one item is all
- * the role can reach.
+ * What the Payment Officer is shown: their two payment queues (MaalGrow
+ * payment requests and MaalRise payments), all the role can reach.
  *
  * This is presentation only. The confinement that matters is that
  * payment_officer is not in is_admin(), so every other table's policy
@@ -136,6 +141,11 @@ const PAYMENT_OFFICER_NAV: NavGroup[] = [
         label: "Payment Requests",
         href: "/admin/payment-requests",
         icon: <CreditCard className="h-4 w-4" />,
+      },
+      {
+        label: "MaalRise Payments",
+        href: "/admin/payment-requests/maalrise",
+        icon: <Banknote className="h-4 w-4" />,
       },
     ],
   },
@@ -153,7 +163,12 @@ export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, role }: Adm
     router.push("/login");
   };
 
-  const isActive = (href: string) => pathname.startsWith(href);
+  // The most specific matching link wins, so a page nested under
+  // another link's path (MaalRise Payments under Payment Requests)
+  // highlights only its own entry.
+  const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
+  const isActive = (href: string) =>
+    pathname.startsWith(href) && !hrefs.some((h) => h.length > href.length && h.startsWith(href) && pathname.startsWith(h));
 
   return (
     <>
@@ -223,6 +238,8 @@ export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, role }: Adm
                           {pendingPayments}
                         </span>
                       )}
+                      {(item.href === "/admin/maalrise/notifications" ||
+                        (role === "payment_officer" && item.href === "/admin/payment-requests/maalrise")) && <MaalriseAlertsBadge />}
                       {active && <ChevronRight className="h-3.5 w-3.5 text-gold-400" />}
                     </Link>
                   );

@@ -12,7 +12,7 @@ Pieces:
   - adding investors: MaalGrow KYC reuse and bank prefill; staff refused; unknown email refused; email wildcards;
   - bank confirmation, KYC record and review;
   - funding, recorded by one person and confirmed by another;
-  - activation checks, with activation switched off;
+  - activation checks; activation refused until every check passes;
   - dashboard and lists;
   - payment officer and investor refusals.
 
@@ -26,4 +26,15 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY=$A
 node supabase/tests/e2e-local/ui-e2e.mjs /tmp/shots
 ```
 
-Rebuild the database (`up.sh`) before each run; the run creates records.
+`ui-e2e-phase4.mjs` covers Phase 4:
+  - contract upload and download;
+  - activation;
+  - payment-date reminders and the five-day follow-up;
+  - recording, confirming, part and excess payments;
+  - distribution approval;
+  - Mark as Paid and super-admin reversal;
+  - the dashboard and refusals.
+
+`up.sh` also emulates Supabase storage on disk for the document routes.
+
+Rebuild the database (`up.sh`) before each run; each run creates records.

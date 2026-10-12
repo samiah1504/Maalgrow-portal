@@ -39,6 +39,9 @@ ALTER TABLE maalrise_email_outbox ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Staff read receipts" ON maalrise_receipts FOR SELECT USING (is_admin());
 CREATE POLICY "Staff read distributions" ON maalrise_distributions FOR SELECT USING (is_admin());
+-- The payment officer sees an approved distribution's Cycle and month, nothing earlier.
+CREATE POLICY "Payment officer reads approved distributions" ON maalrise_distributions
+  FOR SELECT USING (status = 'approved' AND maalrise_caller_role() = 'payment_officer');
 CREATE POLICY "Staff read payment lines" ON maalrise_distribution_lines FOR SELECT USING (is_admin());
 CREATE POLICY "Payment officer reads approved payment lines" ON maalrise_distribution_lines
   FOR SELECT USING (status IN ('payable', 'paid') AND maalrise_caller_role() = 'payment_officer');

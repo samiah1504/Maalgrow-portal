@@ -15,7 +15,7 @@ const P = {
   both: ["10000000-0000-0000-0000-0000000000c1", "both@test.local"],
 };
 let pass = 0, fail = 0;
-const check = (name, ok, extra = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"}: ${name}${ok || !extra ? "" : ` — ${extra}`}`); };
+const check = (name, ok, extra = "") => { if (ok) pass++; else fail++; console.log(`${ok ? "PASS" : "FAIL"}: ${name}${ok || !extra ? "" : ` — ${extra}`}`); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function cookieFor(who) {
@@ -34,6 +34,9 @@ const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
 async function as(who) {
+  // Leave the current page first: going to the same URL with a #section
+  // does not reload, which would keep the previous person's view.
+  await page.goto("about:blank");
   await page.deleteCookie(...(await page.cookies(BASE)));
   await page.setCookie({ name: "sb-127-auth-token", value: cookieFor(who), domain: "localhost", path: "/" });
 }
@@ -291,16 +294,18 @@ t = await text();
 check("allocation appears: 60 units, unsubscribed share shown separately", t.includes("Both Products") && /Unsubscribed|unallocated/i.test(t));
 await shot("08-funding-confirmed");
 
-// ── 5. Activation checks; activation switched off ─────────────────────────
+// ── 5. Activation checks; activation refused while any check fails ────────
 await as("admin");
 await go(`/admin/maalrise/cycles/${cycleId}`);
 await click("Run activation checks");
 await page.waitForSelector("ul.grid li", { timeout: 15000 }).catch(() => {});
 t = await text();
 check("activation checks run and list results", /fully funded|units|KYC|bank/i.test(t));
-check("Activate button absent while switched off", !(await hasButton("Activate Cycle")) && t.includes("Activation is switched off"));
+check("Activate is offered but disabled while checks fail", await page.evaluate(() =>
+  [...document.querySelectorAll("button")].some((b) => b.textContent.includes("Activate Cycle") && b.disabled)));
 r = await api("admin", "POST", `/api/admin/maalrise/cycles/${cycleId}/actions`, { action: "activate" });
-check("activation API refused while switched off", r.status === 403, JSON.stringify(r));
+check("database refuses activation while checks fail (shortfall, no contract)", r.status === 400 && /checks failed/.test(r.body.error ?? ""), JSON.stringify(r));
+check("operations cannot activate", (await api("ops", "POST", `/api/admin/maalrise/cycles/${cycleId}/actions`, { action: "activate" })).status === 403);
 await shot("09-activation-checks");
 
 // ── 6. Lists, dashboard and access ───────────────────────────────────────

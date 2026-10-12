@@ -2,3 +2,4 @@ pgrst.conf
 *.log
 *.pid
 shots/
+storage/

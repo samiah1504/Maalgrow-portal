@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { requireAdminPage } from "@/lib/admin-guard";
 import { getCycleDetail, listInvestors, mr } from "@/lib/maalrise/db";
 import { isSampleId } from "@/lib/maalrise/sample-data";
-import { activationEnabled, canApprove, canFinance, canPrepare } from "@/lib/maalrise/permissions";
+import { canApprove, canFinance, canPay, canPrepare } from "@/lib/maalrise/permissions";
 import { isUuid } from "@/lib/maalrise/api";
 import { SampleCycleDetail } from "./_sample-cycle-detail";
 import { CycleDetailView } from "./_cycle-detail";
@@ -28,8 +28,7 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
       d={d}
       me={user.id}
       role={role}
-      permissions={{ prepare: canPrepare(role), approve: canApprove(role), finance: canFinance(role) }}
-      activationOn={activationEnabled()}
+      permissions={{ prepare: canPrepare(role), approve: canApprove(role), finance: canFinance(role), pay: canPay(role), superAdmin: role === "super_admin" }}
       investorOptions={investors.map((i) => ({ id: i.id, label: `${i.full_name} (${i.investor_code})` }))}
     />
   );

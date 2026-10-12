@@ -7,7 +7,9 @@ GRANT anon, authenticated, service_role TO authenticator;
 GRANT USAGE ON SCHEMA public, auth TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public, auth TO anon, authenticated, service_role;
+-- Function rights come from supabase_roles_pre.sql's defaults (and each
+-- migration's own REVOKEs), not a blanket grant here.
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated, service_role;
 GRANT SELECT ON auth.users TO service_role;
 -- auth.uid() as Supabase defines it: from the request's JWT claims.
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$

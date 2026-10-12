@@ -31,19 +31,53 @@ Where it is enforced:
 - Tests — `scripts/test-maalrise-compute.ts` (markup-rate block) and
   scenario R12 in `supabase/tests/maalrise_core_scenarios.sql`.
 
-### Activation lock — decided 12 Oct 2026
+### Phase 4 — monthly profit distribution (confirmed 12 Oct 2026)
 
-`MAALRISE_ACTIVATION_ENABLED` stays **unset (activation off)** for now.
-In a later phase, once payment tracking (receipts, distributions, Mark
-as Paid) is in place, the lock is **removed entirely** — the flag, the
-`activationEnabled()` check in `src/lib/maalrise/permissions.ts`, the
-403 in the `activate` action and the "switched off" note on the Cycle
-page. Activation is then controlled only by:
-
-- the existing approver roles (super admin, administrator), and
-- the database's activation checklist (`maalrise_activation_checks()`).
-
-Until that phase, do not set the variable in any Vercel environment.
+- **Recording payments received.** Finance, administrators and super
+  admins record the amount, the ACTUAL date received and an optional
+  reference. No bank receipt documents are uploaded.
+- **Confirming.** An administrator or super admin confirms, including
+  an entry they recorded themselves (no second person needed). Finance
+  cannot confirm. A wrong unconfirmed entry is rejected with a reason;
+  confirmed entries are final.
+- **Reminders.** On the scheduled date, finance and admins get an
+  in-app notification: "Today is the scheduled payment date for
+  {counterparty}. Please record the payment received when available."
+  If the month is still not fully recorded five days later, it is
+  flagged for follow-up. Nothing is recorded as zero, assumed received,
+  or distributed because a date passed. Scheduled and actual dates are
+  kept apart.
+- **Distribution.** Confirming a payment calculates the month's
+  distribution automatically, for review and approval: the approved
+  terms, the fee taken **in proportion to each payment** (A7, now
+  decided), investors' shares by units of the whole Cycle with largest
+  remainder to the kobo, the unsubscribed units' share unallocated, and
+  a snapshot of each investor's confirmed bank account.
+- **Part and late payments.** Only confirmed money is distributed; the
+  rest stays outstanding. Each part is applied once. One open
+  distribution per Cycle and month; money confirmed after that month's
+  distribution was approved creates a follow-on distribution of the
+  new money only. Money beyond a month's schedule is held (D6).
+- **Approval.** An administrator or super admin approves; the person
+  who prepared it may approve. Approval is refused while an investor's
+  bank details are unconfirmed or changed since preparation (refresh
+  first). Nobody is paid automatically.
+- **Mark as Paid.** After the bank transfer is made outside MaalRise,
+  the payment officer (or an administrator / super admin) records the
+  transfer date and reference. The status lives in one place, the
+  payment line, and every screen — including the Phase 6 investor
+  portal — reads it there; an investor never sees "Paid" before it is
+  recorded. Only a super admin reverses, with a reason; the history is
+  append-only.
+- **Notifications.** In-app for reminders, follow-ups and payment and
+  distribution events. Emails are prepared as **unsent drafts**
+  (`maalrise_email_outbox`, status `draft`) until sending is approved.
+- **Contracts.** Cycle documents upload to the private
+  `maalrise-documents` bucket; the contract is required for activation.
+- **Activation lock removed.** As agreed, `MAALRISE_ACTIVATION_ENABLED`
+  no longer exists. Activation is controlled by the approver roles
+  (super admin, administrator) and the database's activation checklist,
+  which re-runs on activation and refuses if any check fails.
 
 ### Earlier decisions (Implementation Plan v2)
 
@@ -59,10 +93,11 @@ Until that phase, do not set the variable in any Vercel environment.
   treatment is confirmed.
 - **D5 Approval** — whoever prepares or submits terms cannot approve
   them; approval freezes the version and its breakdown.
-- **D6 Shortfalls and excess** — partial distributions where permitted;
-  excess held unallocated until assigned (Phase 4).
+- **D6 Shortfalls and excess** — partial distributions from confirmed
+  money; excess held, not distributed (Phase 4; assigning held money
+  to a later month or to capital is a later step).
 - **D7 Reversals** — super admin only, with a reason, history kept
-  (Phase 4).
+  (built in Phase 4).
 - **D8 Permissions** — prepare: super admin, administrator, operations;
   approve and activate: super admin, administrator; funding: super
   admin, administrator, finance; payment officer: payments only.
@@ -76,6 +111,5 @@ Until that phase, do not set the variable in any Vercel environment.
 |---|---|---|
 | A3 | Is markup paid monthly and cost repaid at maturity? | Schedule spreads markup monthly; capital settled separately at maturity |
 | A4 | Payment dates (first due date, weekends/holidays) | First payment one month after start; no adjustment |
-| A7 | When the fee is taken from receipts | Shown evenly across months; real rule set before distributions (Phase 4) |
 | A11 | Unit definition | Whole units at a fixed naira price per Cycle |
 | A12 | Tax treatment | Not configured |

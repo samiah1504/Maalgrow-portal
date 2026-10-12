@@ -161,6 +161,8 @@ export type AllocationRow = {
 
 export type DocumentRow = {
   id: string;
+  mime_type?: string;
+  size_bytes?: number;
   cycle_id: string | null;
   maalrise_investor_id: string | null;
   category: string;
@@ -180,3 +182,95 @@ export type AuditRow = {
 };
 
 export type ActivationCheck = { key: string; ok: boolean; detail: string };
+
+export type ReceiptRow = {
+  id: string;
+  cycle_id: string;
+  schedule_line_id: string;
+  period: number;
+  amount_kobo: number;
+  received_on: string;
+  reference: string | null;
+  notes: string | null;
+  status: "recorded" | "confirmed" | "rejected";
+  applied_kobo: number | null;
+  held_kobo: number | null;
+  fee_kobo: number | null;
+  net_kobo: number | null;
+  distribution_id: string | null;
+  recorded_by: string;
+  recorded_at: string;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  reject_reason: string | null;
+};
+
+export type DistributionRow = {
+  id: string;
+  cycle_id: string;
+  terms_id: string;
+  schedule_line_id: string;
+  period: number;
+  sequence: number;
+  due_date: string;
+  cycle_name: string;
+  counterparty_name: string;
+  applied_kobo: number;
+  fee_kobo: number;
+  tax_kobo: number;
+  net_kobo: number;
+  allocated_kobo: number;
+  unallocated_kobo: number;
+  status: "prepared" | "approved";
+  prepared_by: string;
+  prepared_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
+export type PaymentStatus = "pending_approval" | "payable" | "paid";
+
+export type DistributionLineRow = {
+  id: string;
+  distribution_id: string;
+  cycle_id: string;
+  period: number;
+  maalrise_investor_id: string;
+  investor_name: string;
+  investor_code: string;
+  units: number;
+  amount_kobo: number;
+  tax_kobo: number;
+  bank_name: string | null;
+  account_name: string | null;
+  account_number: string | null;
+  status: PaymentStatus;
+  paid_on: string | null;
+  paid_reference: string | null;
+  paid_by: string | null;
+  paid_at: string | null;
+};
+
+export type PaymentEventRow = {
+  id: string;
+  line_id: string;
+  event: "marked_paid" | "reversed";
+  amount_kobo: number;
+  paid_on: string | null;
+  reference: string | null;
+  reason: string | null;
+  actor: string;
+  created_at: string;
+};
+
+export type NotificationRow = {
+  id: string;
+  kind: string;
+  title: string;
+  message: string;
+  link: string | null;
+  read_at: string | null;
+  created_at: string;
+};

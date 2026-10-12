@@ -89,17 +89,18 @@ export function TermsWorkflow({
   );
 }
 
-/** Run the database's activation checks, and — only if switched on — activate. */
+/**
+ * Run the database's activation checks, and activate. Approver roles
+ * only; the database re-runs every check and refuses if any fails.
+ */
 export function ActivationPanel({
   cycleId,
   cycleStatus,
   canApprove,
-  activationOn,
 }: {
   cycleId: string;
   cycleStatus: string;
   canApprove: boolean;
-  activationOn: boolean;
 }) {
   const { run, busy } = useMaalriseAction();
   const [checks, setChecks] = useState<{ all_ok: boolean; checks: ActivationCheck[] } | null>(null);
@@ -113,14 +114,18 @@ export function ActivationPanel({
           <CheckCircle2 className="h-3.5 w-3.5" /> Run activation checks
         </Button>
         {canApprove && cycleStatus === "terms_approved" && (
-          activationOn ? (
+          <>
             <Button size="sm" disabled={!checks?.all_ok} loading={busy === "activate"}
-              onClick={() => run("activate", url, { action: "activate" }, { success: "Cycle activated." })}>
+              title={checks?.all_ok ? undefined : "Run the activation checks; every one must pass"}
+              onClick={() => {
+                if (window.confirm("Activate this Cycle? Its terms, allocations and monthly schedule become live and its investors can see it.")) {
+                  run("activate", url, { action: "activate" }, { success: "Cycle activated." });
+                }
+              }}>
               <Play className="h-3.5 w-3.5" /> Activate Cycle
             </Button>
-          ) : (
-            <span className="text-xs text-muted">Activation is switched off until the business approves activating a real Cycle.</span>
-          )
+            {!checks?.all_ok && <span className="text-xs text-muted">Activate becomes available when every check passes.</span>}
+          </>
         )}
       </div>
       {checks && (
