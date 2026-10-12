@@ -15,13 +15,14 @@ import {
 } from "@/lib/maalrise/format";
 import {
   SAMPLE_ACTIVITY,
+  SAMPLE_AS_OF,
   SAMPLE_DOCUMENTS,
   SAMPLE_RECEIPTS,
   isSampleId,
   sampleCycle,
   sampleInvestor,
 } from "@/lib/maalrise/sample-data";
-import { sampleCycleFigures } from "@/lib/maalrise/sample-summary";
+import { SAMPLE_RECEIPT_RULE, sampleCycleFigures } from "@/lib/maalrise/sample-summary";
 import { DetailSection, FieldGrid, SectionIndex } from "@/components/maalrise/section";
 import { EmptyState, PhaseNotice, SampleDataBanner, SampleTag } from "@/components/maalrise/sample-notice";
 
@@ -95,7 +96,7 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
         </div>
       </div>
 
-      <SampleDataBanner />
+      <SampleDataBanner asOf={SAMPLE_AS_OF} />
       <SectionIndex items={SECTIONS} />
 
       <DetailSection id="business" title="1. Business and transaction details">
@@ -153,8 +154,8 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
             ["Transaction cost", formatKobo(b.costKobo)],
             ["Murabaha markup", `${formatKobo(b.markupKobo)} (${formatBps(b.markupBpsOfCost)} of cost${cycle.markup.type === "percent" ? ", flat for the term" : ", fixed amount"})`],
             ["Agreed sale price", formatKobo(b.salePriceKobo)],
-            ["Fee basis", FEE_BASIS_LABEL[cycle.fee.basis]],
-            ["Fee rate / amount", cycle.fee.basis === "fixed" ? formatKobo(cycle.fee.kobo ?? 0) : formatBps(cycle.fee.bps ?? 0)],
+            ["Fee basis", cycle.fee.treatment === "waived" ? "Not applicable — fee waived" : FEE_BASIS_LABEL[cycle.fee.basis]],
+            ["Fee rate / amount", cycle.fee.treatment === "waived" ? "—" : cycle.fee.basis === "fixed" ? formatKobo(cycle.fee.kobo ?? 0) : formatBps(cycle.fee.bps ?? 0)],
             ["Fee treatment", FEE_TREATMENT_LABEL[cycle.fee.treatment]],
             ["Service fee", formatKobo(b.feeKobo)],
             ["Investor profit pool", formatKobo(b.investorProfitPoolKobo)],
@@ -198,23 +199,33 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
                   </tr>
                 );
               })}
+              {f.unallocated && (
+                <tr className="text-amber-800">
+                  <td className="py-2 italic">Unsubscribed — not allocated</td>
+                  <td className="py-2 text-right">{f.unallocated.units}</td>
+                  <td className="py-2 text-right">{formatBps(f.unallocated.participationBps)}</td>
+                  <td className="py-2 text-right">{formatKobo(0)}</td>
+                  <td className="py-2 text-right">{formatKobo(f.unallocated.totalProfitKobo)}</td>
+                </tr>
+              )}
             </tbody>
             <tfoot>
               <tr className="border-t border-border font-semibold">
                 <td className="py-2">Total</td>
-                <td className="py-2 text-right">{f.unitsFunded}</td>
+                <td className="py-2 text-right">{f.unitsRequired}</td>
                 <td className="py-2 text-right">100.00%</td>
                 <td className="py-2 text-right">{formatKobo(f.allocations.reduce((s, a) => s + a.capitalKobo, 0))}</td>
-                <td className="py-2 text-right">{formatKobo(f.allocations.reduce((s, a) => s + a.totalProfitKobo, 0))}</td>
+                <td className="py-2 text-right">{formatKobo(b.investorProfitPoolKobo)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
         {f.fundingShortfallKobo > 0 && (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            Funding shortfall: {formatKobo(f.fundingShortfallKobo)} ({f.unitsRequired - f.unitsFunded} units unsubscribed).
-            Capital above is what each investor has funded. Expected profit is provisional and shown against units
-            funded so far — the Cycle cannot be activated until it is fully funded.
+            {`Funding shortfall: ${formatKobo(f.fundingShortfallKobo)} (${f.unitsUnsubscribed} units unsubscribed). `}
+            Capital above is what each investor has funded. Profit is shared per unit of the whole Cycle, so the
+            unsubscribed units&apos; share stays unallocated rather than inflating funded investors. The Cycle cannot be
+            activated until it is fully funded.
           </p>
         )}
       </DetailSection>
@@ -230,7 +241,7 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
                 <th className="py-2 text-right font-medium">Fee</th>
                 <th className="py-2 text-right font-medium">Net to investors</th>
                 <th className="py-2 text-right font-medium">Paid</th>
-                <th className="py-2 text-right font-medium">Outstanding</th>
+                <th className="py-2 text-right font-medium">Outstanding (due)</th>
                 <th className="py-2 text-center font-medium">Status</th>
               </tr>
             </thead>
@@ -269,13 +280,16 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
                   <th className="py-2 font-medium">Reference</th>
                   <th className="py-2 text-right font-medium">Gross received</th>
                   <th className="py-2 text-right font-medium">Expected gross</th>
-                  <th className="py-2 text-right font-medium">Difference</th>
+                  <th className="py-2 text-right font-medium">Fee retained</th>
+                  <th className="py-2 text-right font-medium">Distributed to investors</th>
+                  <th className="py-2 text-right font-medium">Shortfall</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {receipts.map((r) => {
-                  const expected = b.schedule[r.period - 1]?.counterpartyGrossKobo ?? 0;
-                  const diff = r.grossKobo - expected;
+                  const p = f.periods[r.period - 1];
+                  const expected = p?.counterpartyGrossKobo ?? 0;
+                  const shortfall = Math.max(expected - r.grossKobo, 0);
                   return (
                     <tr key={r.reference}>
                       <td className="py-2 text-muted">{formatDate(r.receivedOn)}</td>
@@ -283,7 +297,9 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
                       <td className="py-2 font-mono text-xs">{r.reference}</td>
                       <td className="py-2 text-right">{formatKobo(r.grossKobo)}</td>
                       <td className="py-2 text-right">{formatKobo(expected)}</td>
-                      <td className={`py-2 text-right ${diff < 0 ? "text-red-700" : ""}`}>{formatKobo(diff)}</td>
+                      <td className="py-2 text-right">{formatKobo(p?.feeRetainedKobo ?? 0)}</td>
+                      <td className="py-2 text-right">{formatKobo(p?.paidKobo ?? 0)}</td>
+                      <td className={`py-2 text-right ${shortfall > 0 ? "text-red-700" : ""}`}>{formatKobo(shortfall)}</td>
                     </tr>
                   );
                 })}
@@ -291,6 +307,7 @@ export default async function MaalRiseCycleDetailsPage({ params }: { params: Pro
             </table>
           </div>
         )}
+        {receipts.length > 0 && <p className="mt-3 text-xs text-amber-800">{SAMPLE_RECEIPT_RULE}</p>}
         <div className="mt-4">
           <PhaseNotice>
             Recording receipts, applying the fee, &quot;Distribute Profit&quot; and the Payment Officer&apos;s &quot;Mark as Paid&quot;

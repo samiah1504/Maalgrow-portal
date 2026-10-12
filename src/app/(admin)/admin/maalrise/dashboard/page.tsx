@@ -52,7 +52,7 @@ export default async function MaalRiseDashboardPage({
         </div>
       </div>
 
-      {showSample && <SampleDataBanner />}
+      {s && <SampleDataBanner asOf={s.asOf} />}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
@@ -71,28 +71,28 @@ export default async function MaalRiseDashboardPage({
         <StatCard
           title={`Total allocated capital${tag}`}
           value={s ? formatKobo(s.allocatedCapitalKobo) : NONE}
-          subtitle={s ? "Across all sample Cycles" : "No allocations yet"}
+          subtitle={s ? `Active ${formatKobo(s.activeAllocatedKobo)} · draft ${formatKobo(s.draftAllocatedKobo)}` : "No allocations yet"}
           icon={<Wallet className="h-5 w-5" />}
           accentColor="gold"
         />
         <StatCard
           title={`Monthly profit payments due${tag}`}
           value={s ? formatKobo(s.dueKobo) : NONE}
-          subtitle={s ? `${s.due.length} period(s) pending or part-paid` : "Nothing due"}
+          subtitle={s ? `${s.due.length} due period(s) not yet fully paid` : "Nothing due"}
           icon={<CalendarClock className="h-5 w-5" />}
           accentColor="info"
         />
         <StatCard
-          title={`Payments completed / outstanding${tag}`}
+          title={`Monthly profit paid / outstanding${tag}`}
           value={s ? `${formatKobo(s.completedKobo)} / ${formatKobo(s.outstandingKobo)}` : NONE}
-          subtitle={s ? "Paid to investors vs. still owed for due periods" : "No payments recorded"}
+          subtitle={s ? "Profit only — capital is settled separately" : "No payments recorded"}
           icon={<CheckCircle2 className="h-5 w-5" />}
           accentColor="success"
         />
         <StatCard
           title={`Upcoming capital settlements${tag}`}
           value={s ? s.capitalSettlements.length : NONE}
-          subtitle={s ? formatKobo(s.capitalSettlements.reduce((t, c) => t + c.amountKobo, 0)) + " due at maturity" : "None scheduled"}
+          subtitle={s ? formatKobo(s.capitalSettlements.reduce((t, c) => t + c.amountKobo, 0)) + " capital due at maturity" : "None scheduled"}
           icon={<Coins className="h-5 w-5" />}
           accentColor="gold"
         />
@@ -109,27 +109,27 @@ export default async function MaalRiseDashboardPage({
                 Payments appear here once a Cycle&apos;s terms are approved and it is activated.
               </EmptyState>
             ) : (
-              <table className="w-full text-sm">
+              <table className="-mx-3 w-[calc(100%+1.5rem)] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted">
-                    <th className="py-2 font-medium">Cycle</th>
-                    <th className="py-2 font-medium">Period</th>
-                    <th className="py-2 font-medium">Due</th>
-                    <th className="py-2 text-right font-medium">Outstanding</th>
+                    <th className="px-3 py-2 font-medium">Cycle</th>
+                    <th className="px-3 py-2 font-medium">Period</th>
+                    <th className="px-3 py-2 font-medium">Due</th>
+                    <th className="px-3 py-2 text-right font-medium">Outstanding</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {s.due.map((d) => (
                     <tr key={`${d.cycle.id}-${d.period}`}>
-                      <td className="py-2">
+                      <td className="px-3 py-2">
                         <Link href={`/admin/maalrise/cycles/${d.cycle.id}`} className="text-primary-700 hover:underline">
                           {d.cycle.name}
                         </Link>{" "}
                         <SampleTag />
                       </td>
-                      <td className="py-2">Month {d.period}</td>
-                      <td className="py-2 text-muted">{d.dueDate ? formatDate(d.dueDate) : NONE}</td>
-                      <td className="py-2 text-right font-medium">
+                      <td className="px-3 py-2">Month {d.period}</td>
+                      <td className="px-3 py-2 text-muted">{d.dueDate ? formatDate(d.dueDate) : NONE}</td>
+                      <td className="px-3 py-2 text-right font-medium">
                         {formatKobo(d.amountKobo)}{" "}
                         {d.status === "partly_paid" && <Badge variant="warning">Part-paid</Badge>}
                       </td>
@@ -151,27 +151,27 @@ export default async function MaalRiseDashboardPage({
                 Capital settlement is tracked separately from monthly profit and falls due at each Cycle&apos;s maturity.
               </EmptyState>
             ) : (
-              <table className="w-full text-sm">
+              <table className="-mx-3 w-[calc(100%+1.5rem)] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted">
-                    <th className="py-2 font-medium">Cycle</th>
-                    <th className="py-2 font-medium">Maturity</th>
-                    <th className="py-2 font-medium">Investors</th>
-                    <th className="py-2 text-right font-medium">Capital due</th>
+                    <th className="px-3 py-2 font-medium">Cycle</th>
+                    <th className="px-3 py-2 font-medium">Maturity</th>
+                    <th className="px-3 py-2 font-medium">Investors</th>
+                    <th className="px-3 py-2 text-right font-medium">Capital due</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {s.capitalSettlements.map((c) => (
                     <tr key={c.cycle.id}>
-                      <td className="py-2">
+                      <td className="px-3 py-2">
                         <Link href={`/admin/maalrise/cycles/${c.cycle.id}`} className="text-primary-700 hover:underline">
                           {c.cycle.name}
                         </Link>{" "}
                         <SampleTag />
                       </td>
-                      <td className="py-2 text-muted">{c.dueDate ? formatDate(c.dueDate) : NONE}</td>
-                      <td className="py-2">{c.holders}</td>
-                      <td className="py-2 text-right font-medium">{formatKobo(c.amountKobo)}</td>
+                      <td className="px-3 py-2 text-muted">{c.dueDate ? formatDate(c.dueDate) : NONE}</td>
+                      <td className="px-3 py-2">{c.holders}</td>
+                      <td className="px-3 py-2 text-right font-medium">{formatKobo(c.amountKobo)}</td>
                     </tr>
                   ))}
                 </tbody>

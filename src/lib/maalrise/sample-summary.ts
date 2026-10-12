@@ -1,22 +1,33 @@
 /**
- * Dashboard figures derived from the SAMPLE data. Illustrative only —
- * see sample-data.ts. Kept apart so the dashboard page never computes
- * a "total" that a reader could mistake for one over real records.
+ * Figures derived from the SAMPLE data. Illustrative only — see
+ * sample-data.ts. Every number the sample screens show is computed
+ * here from the sample records, so the dashboard, the Cycle pages and
+ * the investor pages cannot disagree with one another.
  */
 import { computeAllocations, computeTerms } from "./compute";
 import { periodDueDate, maturityDate } from "./dates";
 import {
   SAMPLE_ALLOCATIONS,
+  SAMPLE_AS_OF,
   SAMPLE_CYCLES,
   SAMPLE_INVESTORS,
-  SAMPLE_PERIOD_STATUS,
+  SAMPLE_RECEIPTS,
   type SampleCycle,
 } from "./sample-data";
 
-/** Illustrative: how much of a part-paid period has gone out. */
-export const SAMPLE_PARTIAL_PAID_KOBO: Record<string, Record<number, number>> = {
-  "sample-cycle-1": { 3: 1_400_000_00 },
-};
+export type SamplePeriodStatus = "paid" | "partly_paid" | "pending" | "upcoming";
+
+/** Key of the pseudo-holder that keeps unsubscribed units unallocated. */
+export const UNSUBSCRIBED_KEY = "__unsubscribed";
+
+/**
+ * How a sample receipt is split, for illustration only: the period's
+ * fee is retained first and the rest goes to investors, capped at what
+ * the period owes them. Whether the real fee is taken first, last or
+ * pro rata is assumption A7 and is NOT decided by this.
+ */
+export const SAMPLE_RECEIPT_RULE =
+  "Sample receipts are split with the period's fee retained first and the remainder distributed to investors, capped at the amount due. This is illustrative only — the real rule is assumption A7.";
 
 export function sampleCycleFigures(cycle: SampleCycle) {
   const breakdown = computeTerms({
@@ -30,32 +41,60 @@ export function sampleCycleFigures(cycle: SampleCycle) {
   const holders = SAMPLE_ALLOCATIONS.filter((a) => a.cycleId === cycle.id);
   const unitsFunded = holders.reduce((s, h) => s + h.units, 0);
   const unitsRequired = Math.ceil(cycle.costKobo / cycle.unitPriceKobo);
+  const unitsUnsubscribed = Math.max(unitsRequired - unitsFunded, 0);
   const fundedKobo = unitsFunded * cycle.unitPriceKobo;
-  const allocations = computeAllocations(
-    { capitalKobo: fundedKobo, schedule: breakdown.schedule },
-    holders.map((h) => ({ key: h.investorId, units: h.units }))
-  );
-  const statuses = SAMPLE_PERIOD_STATUS[cycle.id] ?? [];
-  const partial = SAMPLE_PARTIAL_PAID_KOBO[cycle.id] ?? {};
 
-  const periods = breakdown.schedule.map((line, i) => {
-    const status = statuses[i] ?? "upcoming";
-    const paid =
-      status === "paid" ? line.investorNetKobo : status === "partly_paid" ? partial[line.period] ?? 0 : 0;
+  // Profit is shared per unit of the WHOLE Cycle. Unsubscribed units
+  // take their share into an unallocated line rather than inflating the
+  // investors who have funded; capital is only what was paid in.
+  const withUnsubscribed = [
+    ...holders.map((h) => ({ key: h.investorId, units: h.units })),
+    ...(unitsUnsubscribed > 0 ? [{ key: UNSUBSCRIBED_KEY, units: unitsUnsubscribed }] : []),
+  ];
+  const all = computeAllocations(
+    { capitalKobo: unitsRequired * cycle.unitPriceKobo, schedule: breakdown.schedule },
+    withUnsubscribed
+  );
+  const allocations = all.filter((a) => a.key !== UNSUBSCRIBED_KEY);
+  const unallocated = all.find((a) => a.key === UNSUBSCRIBED_KEY) ?? null;
+
+  const receipts = SAMPLE_RECEIPTS.filter((r) => r.cycleId === cycle.id);
+
+  const periods = breakdown.schedule.map((line) => {
+    const dueDate = periodDueDate(cycle.startDate, line.period);
+    const grossReceived = receipts
+      .filter((r) => r.period === line.period)
+      .reduce((s, r) => s + r.grossKobo, 0);
+    const feeRetained = Math.min(grossReceived, line.feeKobo);
+    const paid = Math.min(grossReceived - feeRetained, line.investorNetKobo);
+    const isDue = dueDate !== null && dueDate <= SAMPLE_AS_OF;
+    const status: SamplePeriodStatus =
+      paid >= line.investorNetKobo && line.investorNetKobo > 0
+        ? "paid"
+        : paid > 0
+          ? "partly_paid"
+          : isDue
+            ? "pending"
+            : "upcoming";
     return {
       ...line,
-      dueDate: periodDueDate(cycle.startDate, line.period),
+      dueDate,
+      grossReceivedKobo: grossReceived,
+      feeRetainedKobo: feeRetained,
       status,
       paidKobo: paid,
-      outstandingKobo: status === "upcoming" ? 0 : line.investorNetKobo - paid,
+      /** Owed now: only periods that have fallen due carry an outstanding balance. */
+      outstandingKobo: isDue ? line.investorNetKobo - paid : 0,
     };
   });
 
   return {
     breakdown,
     allocations,
+    unallocated,
     unitsFunded,
     unitsRequired,
+    unitsUnsubscribed,
     fundedKobo,
     fundingShortfallKobo: Math.max(cycle.costKobo - fundedKobo, 0),
     maturity: maturityDate(cycle.startDate, cycle.durationMonths),
@@ -69,25 +108,30 @@ export function sampleDashboard() {
 
   const due = active.flatMap(({ cycle, f }) =>
     f.periods
-      .filter((p) => p.status === "pending" || p.status === "partly_paid")
+      .filter((p) => p.outstandingKobo > 0)
       .map((p) => ({ cycle, period: p.period, dueDate: p.dueDate, amountKobo: p.outstandingKobo, status: p.status }))
   );
 
-  const completedKobo = active.reduce((s, x) => s + x.f.periods.reduce((t, p) => t + p.paidKobo, 0), 0);
-  const outstandingKobo = active.reduce((s, x) => s + x.f.periods.reduce((t, p) => t + p.outstandingKobo, 0), 0);
+  const activeAllocatedKobo = active.reduce((s, x) => s + x.f.fundedKobo, 0);
+  const draftAllocatedKobo = perCycle
+    .filter((x) => x.cycle.status !== "active")
+    .reduce((s, x) => s + x.f.fundedKobo, 0);
 
   return {
+    asOf: SAMPLE_AS_OF,
     investorCount: SAMPLE_INVESTORS.length,
     activeCycleCount: active.length,
-    allocatedCapitalKobo: perCycle.reduce((s, x) => s + x.f.fundedKobo, 0),
+    allocatedCapitalKobo: activeAllocatedKobo + draftAllocatedKobo,
+    activeAllocatedKobo,
+    draftAllocatedKobo,
     due,
     dueKobo: due.reduce((s, d) => s + d.amountKobo, 0),
-    completedKobo,
-    outstandingKobo,
+    completedKobo: active.reduce((s, x) => s + x.f.periods.reduce((t, p) => t + p.paidKobo, 0), 0),
+    outstandingKobo: active.reduce((s, x) => s + x.f.periods.reduce((t, p) => t + p.outstandingKobo, 0), 0),
     capitalSettlements: active.map(({ cycle, f }) => ({
       cycle,
       dueDate: f.maturity,
-      amountKobo: f.fundedKobo,
+      amountKobo: f.allocations.reduce((s, a) => s + a.capitalKobo, 0),
       holders: f.allocations.length,
     })),
   };

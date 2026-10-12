@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KYC_STATUS_LABEL, KYC_STATUS_VARIANT } from "@/lib/maalrise/format";
-import { SAMPLE_ALLOCATIONS, SAMPLE_INVESTORS } from "@/lib/maalrise/sample-data";
+import { SAMPLE_ALLOCATIONS, SAMPLE_AS_OF, SAMPLE_INVESTORS } from "@/lib/maalrise/sample-data";
 import { EmptyState, SampleDataBanner, SampleTag, SampleToggle } from "@/components/maalrise/sample-notice";
 
 export const metadata: Metadata = { title: "MaalRise Investors | Admin" };
@@ -41,7 +41,7 @@ export default async function MaalRiseInvestorsPage({
         </div>
       </div>
 
-      {showSample && <SampleDataBanner />}
+      {showSample && <SampleDataBanner asOf={SAMPLE_AS_OF} />}
 
       {investors.length === 0 ? (
         <EmptyState icon={<Users className="h-5 w-5" />} title="No MaalRise investors yet">

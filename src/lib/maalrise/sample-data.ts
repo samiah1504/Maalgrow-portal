@@ -15,6 +15,13 @@ import type { FeeInput, MarkupInput, ScheduleInput } from "./compute";
 
 export const SAMPLE_PREFIX = "sample-";
 
+/**
+ * The fixed date the sample figures are "as of". Statuses (paid,
+ * part-paid, pending, upcoming) are derived from it and the receipts,
+ * never typed in by hand, so they cannot drift from the amounts.
+ */
+export const SAMPLE_AS_OF = "2026-10-12";
+
 export function isSampleId(id: string): boolean {
   return id.startsWith(SAMPLE_PREFIX);
 }
@@ -54,8 +61,6 @@ export type SampleInvestor = {
 
 export type SampleAllocation = { cycleId: string; investorId: string; units: number };
 
-export type SamplePeriodStatus = "paid" | "partly_paid" | "pending" | "upcoming";
-
 export const SAMPLE_INVESTORS: SampleInvestor[] = [
   {
     id: "sample-investor-1",
@@ -67,7 +72,7 @@ export const SAMPLE_INVESTORS: SampleInvestor[] = [
     bank: { bankName: "Sample Bank", accountName: "Sample Investor One", accountNumber: "0000000001", confirmed: true },
     alsoMaalGrow: true,
     status: "active",
-    addedOn: "2026-10-01",
+    addedOn: "2026-06-10",
   },
   {
     id: "sample-investor-2",
@@ -79,7 +84,7 @@ export const SAMPLE_INVESTORS: SampleInvestor[] = [
     bank: { bankName: "Sample Bank", accountName: "Sample Investor Two", accountNumber: "0000000002", confirmed: true },
     alsoMaalGrow: false,
     status: "active",
-    addedOn: "2026-10-02",
+    addedOn: "2026-06-12",
   },
   {
     id: "sample-investor-3",
@@ -158,12 +163,6 @@ export const SAMPLE_ALLOCATIONS: SampleAllocation[] = [
   { cycleId: "sample-cycle-2", investorId: "sample-investor-3", units: 150 },
   { cycleId: "sample-cycle-2", investorId: "sample-investor-4", units: 100 },
 ];
-
-/** Illustrative progress of the active sample Cycle, period by period. */
-export const SAMPLE_PERIOD_STATUS: Record<string, SamplePeriodStatus[]> = {
-  "sample-cycle-1": ["paid", "paid", "partly_paid", "pending", "upcoming", "upcoming"],
-  "sample-cycle-2": ["upcoming", "upcoming", "upcoming", "upcoming"],
-};
 
 /** Illustrative receipts for the active sample Cycle. */
 export const SAMPLE_RECEIPTS = [

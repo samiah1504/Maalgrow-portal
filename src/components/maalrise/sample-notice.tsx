@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FlaskConical, Info } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 /**
  * The banner on every MaalRise screen that is showing sample data.
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * Loud on purpose. A figure on an admin screen reads as a fact unless
  * something next to it says otherwise, and these are not facts.
  */
-export function SampleDataBanner({ className }: { className?: string }) {
+export function SampleDataBanner({ className, asOf }: { className?: string; asOf?: string }) {
   return (
     <div
       role="note"
@@ -26,6 +26,7 @@ export function SampleDataBanner({ className }: { className?: string }) {
           MaalRise is in its first build phase and has no database yet. Every
           name, amount and status on this screen is fictitious and exists only
           to show the layout. Nothing here is saved, paid or sent.
+          {asOf && <> Sample statuses are calculated as of {formatDate(asOf)}.</>}
         </p>
       </div>
     </div>

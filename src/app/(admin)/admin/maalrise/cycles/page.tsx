@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { CYCLE_STATUS_LABEL, CYCLE_STATUS_VARIANT, formatKobo } from "@/lib/maalrise/format";
-import { SAMPLE_CYCLES } from "@/lib/maalrise/sample-data";
+import { SAMPLE_AS_OF, SAMPLE_CYCLES } from "@/lib/maalrise/sample-data";
 import { sampleCycleFigures } from "@/lib/maalrise/sample-summary";
 import { EmptyState, SampleDataBanner, SampleTag, SampleToggle } from "@/components/maalrise/sample-notice";
 
@@ -43,7 +43,7 @@ export default async function MaalRiseCyclesPage({
         </div>
       </div>
 
-      {showSample && <SampleDataBanner />}
+      {showSample && <SampleDataBanner asOf={SAMPLE_AS_OF} />}
 
       {rows.length === 0 ? (
         <EmptyState icon={<Landmark className="h-5 w-5" />} title="No MaalRise Cycles yet">

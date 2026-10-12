@@ -6,7 +6,7 @@ import { requireAdminPage } from "@/lib/admin-guard";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { KYC_STATUS_LABEL, KYC_STATUS_VARIANT, formatBps, formatKobo } from "@/lib/maalrise/format";
-import { SAMPLE_ALLOCATIONS, isSampleId, sampleCycle, sampleInvestor } from "@/lib/maalrise/sample-data";
+import { SAMPLE_ALLOCATIONS, SAMPLE_AS_OF, isSampleId, sampleCycle, sampleInvestor } from "@/lib/maalrise/sample-data";
 import { sampleCycleFigures } from "@/lib/maalrise/sample-summary";
 import { DetailSection, FieldGrid, SectionIndex } from "@/components/maalrise/section";
 import { EmptyState, PhaseNotice, SampleDataBanner, SampleTag } from "@/components/maalrise/sample-notice";
@@ -55,7 +55,7 @@ export default async function MaalRiseInvestorDetailsPage({ params }: { params: 
         </div>
       </div>
 
-      <SampleDataBanner />
+      <SampleDataBanner asOf={SAMPLE_AS_OF} />
       <SectionIndex items={SECTIONS} />
 
       <DetailSection id="contact" title="1. Contact information">
@@ -121,25 +121,25 @@ export default async function MaalRiseInvestorDetailsPage({ params }: { params: 
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted">
-                  <th className="py-2 font-medium">Cycle</th>
-                  <th className="py-2 text-right font-medium">Units</th>
-                  <th className="py-2 text-right font-medium">Participation</th>
-                  <th className="py-2 text-right font-medium">Allocated capital</th>
-                  <th className="py-2 text-right font-medium">Expected profit (term)</th>
-                  <th className="py-2 font-medium">Maturity</th>
+                  <th className="py-2 pr-4 font-medium">Cycle</th>
+                  <th className="px-4 py-2 text-right font-medium">Units</th>
+                  <th className="px-4 py-2 text-right font-medium">Participation</th>
+                  <th className="px-4 py-2 text-right font-medium">Allocated capital</th>
+                  <th className="px-4 py-2 text-right font-medium">Expected monthly profit (term total)</th>
+                  <th className="py-2 pl-6 font-medium">Capital due (maturity)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {allocations.map(({ cycle, f, line }) => (
                   <tr key={cycle.id}>
-                    <td className="py-2">
+                    <td className="py-2 pr-4">
                       <Link href={`/admin/maalrise/cycles/${cycle.id}`} className="text-primary-700 hover:underline">{cycle.name}</Link>
                     </td>
-                    <td className="py-2 text-right">{line.units}</td>
-                    <td className="py-2 text-right">{formatBps(line.participationBps)}</td>
-                    <td className="py-2 text-right">{formatKobo(line.capitalKobo)}</td>
-                    <td className="py-2 text-right">{formatKobo(line.totalProfitKobo)}</td>
-                    <td className="py-2 text-muted">{f.maturity ? formatDate(f.maturity) : "—"}</td>
+                    <td className="px-4 py-2 text-right">{line.units}</td>
+                    <td className="px-4 py-2 text-right">{formatBps(line.participationBps)}</td>
+                    <td className="px-4 py-2 text-right">{formatKobo(line.capitalKobo)}</td>
+                    <td className="px-4 py-2 text-right">{formatKobo(line.totalProfitKobo)}</td>
+                    <td className="py-2 pl-6 text-muted whitespace-nowrap">{f.maturity ? formatDate(f.maturity) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
