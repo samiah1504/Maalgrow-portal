@@ -31,6 +31,20 @@ Where it is enforced:
 - Tests — `scripts/test-maalrise-compute.ts` (markup-rate block) and
   scenario R12 in `supabase/tests/maalrise_core_scenarios.sql`.
 
+### Activation lock — decided 12 Oct 2026
+
+`MAALRISE_ACTIVATION_ENABLED` stays **unset (activation off)** for now.
+In a later phase, once payment tracking (receipts, distributions, Mark
+as Paid) is in place, the lock is **removed entirely** — the flag, the
+`activationEnabled()` check in `src/lib/maalrise/permissions.ts`, the
+403 in the `activate` action and the "switched off" note on the Cycle
+page. Activation is then controlled only by:
+
+- the existing approver roles (super admin, administrator), and
+- the database's activation checklist (`maalrise_activation_checks()`).
+
+Until that phase, do not set the variable in any Vercel environment.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;
