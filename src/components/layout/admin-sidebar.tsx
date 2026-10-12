@@ -24,6 +24,9 @@ import {
   BookOpen,
   Receipt,
   Archive,
+  Gauge,
+  Landmark,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -72,6 +75,17 @@ const navGroups: NavGroup[] = [
       { label: "Payment Requests", href: "/admin/payment-requests", icon: <CreditCard className="h-4 w-4" /> },
       { label: "Reports", href: "/admin/reports", icon: <BarChart3 className="h-4 w-4" /> },
       { label: "Withholding Tax", href: "/admin/wht", icon: <Receipt className="h-4 w-4" /> },
+    ],
+  },
+  {
+    // A separate product with its own pages under /admin/maalrise. Its
+    // labels are distinct from MaalGrow's ("Cycles", "Investors") so
+    // the active-state prefix match never lights up both.
+    label: "MaalRise (Murabaha)",
+    items: [
+      { label: "MaalRise Dashboard", href: "/admin/maalrise/dashboard", icon: <Gauge className="h-4 w-4" /> },
+      { label: "MaalRise Cycles", href: "/admin/maalrise/cycles", icon: <Landmark className="h-4 w-4" /> },
+      { label: "MaalRise Investors", href: "/admin/maalrise/investors", icon: <UserRound className="h-4 w-4" /> },
     ],
   },
   {
