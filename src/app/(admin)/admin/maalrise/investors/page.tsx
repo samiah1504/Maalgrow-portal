@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KYC_STATUS_LABEL, KYC_STATUS_VARIANT } from "@/lib/maalrise/format";
 import { SAMPLE_ALLOCATIONS, SAMPLE_AS_OF, SAMPLE_INVESTORS } from "@/lib/maalrise/sample-data";
+import { listInvestors, mr } from "@/lib/maalrise/db";
 import { EmptyState, SampleDataBanner, SampleTag, SampleToggle } from "@/components/maalrise/sample-notice";
 
 export const metadata: Metadata = { title: "MaalRise Investors | Admin" };
@@ -18,9 +19,21 @@ export default async function MaalRiseInvestorsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await requireAdminPage();
+  const { supabase } = await requireAdminPage();
   const showSample = (await searchParams).sample === "1";
-  const investors = showSample ? SAMPLE_INVESTORS : [];
+  // Real records and sample rows are never mixed: one or the other.
+  const investors = showSample
+    ? SAMPLE_INVESTORS.map((i) => ({
+        id: i.id, fullName: i.fullName, email: i.email, investorCode: i.investorCode, kycStatus: i.kycStatus,
+        bankConfirmed: i.bank.confirmed, hasBank: !!i.bank.accountNumber, alsoMaalGrow: i.alsoMaalGrow, status: i.status,
+        cycles: SAMPLE_ALLOCATIONS.filter((a) => a.investorId === i.id).length, sample: true,
+      }))
+    : (await listInvestors(mr(supabase))).map((i) => ({
+        id: i.id, fullName: i.full_name, email: i.email, investorCode: i.investor_code,
+        kycStatus: i.kyc_status === "verified" && i.kyc_source === "maalgrow" ? "verified_via_maalgrow" : i.kyc_status,
+        bankConfirmed: !!i.bank_confirmed_at, hasBank: !!i.account_number, alsoMaalGrow: i.has_maalgrow, status: i.status,
+        cycles: i.cycles, sample: false,
+      }));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -70,22 +83,22 @@ export default async function MaalRiseInvestorsPage({
                         <Link href={`/admin/maalrise/investors/${inv.id}`} className="font-medium text-primary-700 hover:underline">
                           {inv.fullName}
                         </Link>{" "}
-                        <SampleTag />
+                        {inv.sample && <SampleTag />}
                         <p className="text-xs text-muted">{inv.email}</p>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">{inv.investorCode}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={KYC_STATUS_VARIANT[inv.kycStatus]}>{KYC_STATUS_LABEL[inv.kycStatus]}</Badge>
+                        <Badge variant={KYC_STATUS_VARIANT[inv.kycStatus] ?? "pending"}>{KYC_STATUS_LABEL[inv.kycStatus] ?? inv.kycStatus}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        {inv.bank.confirmed ? (
+                        {inv.bankConfirmed ? (
                           <span className="flex items-center gap-1 text-xs text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Confirmed</span>
                         ) : (
-                          <span className="flex items-center gap-1 text-xs text-amber-700"><AlertCircle className="h-3.5 w-3.5" /> {inv.bank.accountNumber ? "Awaiting confirmation" : "Not provided"}</span>
+                          <span className="flex items-center gap-1 text-xs text-amber-700"><AlertCircle className="h-3.5 w-3.5" /> {inv.hasBank ? "Awaiting confirmation" : "Not provided"}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">{inv.alsoMaalGrow ? "MaalRise + MaalGrow" : "MaalRise only"}</td>
-                      <td className="px-4 py-3 text-right">{SAMPLE_ALLOCATIONS.filter((a) => a.investorId === inv.id).length}</td>
+                      <td className="px-4 py-3 text-right">{inv.cycles}</td>
                       <td className="px-4 py-3 text-center">
                         <Badge variant={STATUS_VARIANT[inv.status]} className="capitalize">{inv.status}</Badge>
                       </td>

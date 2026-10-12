@@ -1,15 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, Mail } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle2, Mail, Search, UserPlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PhaseNotice } from "@/components/maalrise/sample-notice";
+import { useMaalriseAction } from "@/components/maalrise/use-maalrise-action";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type Lookup =
+  | { status: "no_login" | "staff" }
+  | { status: "already_maalrise"; investor_id: string }
+  | {
+      status: "can_add";
+      name: string;
+      maalgrow: { kyc_approved: boolean; bank_name: string | null; account_name: string | null; account_number: string | null } | null;
+    };
+
 export function NewInvestorForm() {
+  const router = useRouter();
+  const { run, busy } = useMaalriseAction();
+  const [lookup, setLookup] = useState<{ email: string; result: Lookup } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [lookupError, setLookupError] = useState("");
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -27,14 +44,48 @@ export function NewInvestorForm() {
     if (!/^\d{10}$/.test(accountNumber)) errors.push("Account number must be 10 digits (NUBAN).");
   }
 
+  const normalized = email.trim().toLowerCase();
+  const found = lookup && lookup.email === normalized ? lookup.result : null;
+  const mg = found?.status === "can_add" ? found.maalgrow : null;
+  const mgBank = mg?.account_number ? mg : null;
+
+  /** Read only: what adding this email would do. Nothing is created or sent. */
+  async function checkEmail() {
+    if (!EMAIL_RE.test(normalized)) return;
+    setLooking(true);
+    setLookupError("");
+    try {
+      const res = await fetch(`/api/admin/maalrise/investors/lookup?email=${encodeURIComponent(normalized)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setLookupError(data.error ?? "Could not check this email."); return; }
+      setLookup({ email: normalized, result: data as Lookup });
+      if (data.status === "can_add" && !fullName.trim() && data.name) setFullName(data.name);
+    } catch {
+      setLookupError("Network error. Please try again.");
+    } finally {
+      setLooking(false);
+    }
+  }
+
+  const canAdd = found?.status === "can_add" && errors.length === 0;
+
   return (
     <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setChecked(true); }}>
       <Card>
         <CardHeader className="pb-4"><CardTitle className="text-base">1. Email and contact</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <Input label="Email address" type="email" leftIcon={<Mail className="h-4 w-4" />} value={email}
-            onChange={(e) => setEmail(e.target.value)} required
-            hint="If this email already has a MaalVest login (for example a MaalGrow investor), MaalRise access is added to that login. Staff accounts cannot be added as investors." />
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[240px]">
+              <Input label="Email address" type="email" leftIcon={<Mail className="h-4 w-4" />} value={email}
+                onChange={(e) => setEmail(e.target.value)} onBlur={checkEmail} required
+                hint="MaalRise access is added to the existing MaalVest login with this email. Staff accounts cannot be investors." />
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={checkEmail} loading={looking} disabled={!EMAIL_RE.test(normalized)}>
+              <Search className="h-3.5 w-3.5" /> Check email
+            </Button>
+          </div>
+          {lookupError && <p className="text-xs text-red-700">{lookupError}</p>}
+          {found && <LookupResult r={found} />}
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
             <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -46,11 +97,18 @@ export function NewInvestorForm() {
         <CardHeader className="pb-4">
           <CardTitle className="text-base">2. Bank details</CardTitle>
           <p className="text-xs text-muted">
-            For an existing MaalGrow investor these are pre-filled for review. They stay unconfirmed until an admin confirms
-            them, and each payment records the exact account it was sent to.
+            Bank details stay unconfirmed until an admin confirms them on the investor&apos;s page, and each payment records
+            the exact account it was sent to.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          {mgBank && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="font-medium">MaalGrow bank details on file — used if you leave the fields below empty:</p>
+              <p className="mt-1">{mgBank.bank_name} · {mgBank.account_name} · <span className="font-mono">{mgBank.account_number}</span></p>
+              <p className="mt-1">They are copied as <strong>unconfirmed</strong> and must be confirmed before any payment.</p>
+            </div>
+          )}
           <Input label="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Account name" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
@@ -73,17 +131,24 @@ export function NewInvestorForm() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="outline"><CheckCircle2 className="h-4 w-4" /> Check details</Button>
-        <Button type="button" disabled title="Enabled in Phase 2">Add investor</Button>
+        <Button type="button" disabled={!canAdd} loading={busy === "add"}
+          title={found?.status === "can_add" ? undefined : "Check the email first"}
+          onClick={() => run("add", "/api/admin/maalrise/investors",
+            { email: normalized, full_name: fullName, phone, bank_name: bankName, account_name: accountName, account_number: accountNumber },
+            { success: "MaalRise access added. No email or invitation was sent.",
+              onDone: (d) => { if (typeof d.id === "string") router.push(`/admin/maalrise/investors/${d.id}`); } })}>
+          <UserPlus className="h-4 w-4" /> Add investor
+        </Button>
       </div>
       <PhaseNotice>
-        Phase 1 preview: no account is created, no existing login is changed and no invitation is sent. Adding investors
-        is enabled in Phase 2, after the MaalRise tables are approved and tested on staging.
+        Only people who already have a MaalVest login can be added for now. No new login is created, the existing login
+        and its MaalGrow records are not changed, and no invitation or email is sent.
       </PhaseNotice>
 
       {checked && (
         errors.length === 0 ? (
           <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            <CheckCircle2 className="h-4 w-4 mt-0.5" /> Details look complete. Nothing has been saved.
+            <CheckCircle2 className="h-4 w-4 mt-0.5" /> Details look complete.{found?.status === "can_add" ? "" : " Check the email to continue."}
           </div>
         ) : (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -94,4 +159,42 @@ export function NewInvestorForm() {
       )}
     </form>
   );
+}
+
+function LookupResult({ r }: { r: Lookup }) {
+  const box = "rounded-lg border p-3 text-xs";
+  switch (r.status) {
+    case "no_login":
+      return (
+        <p className={`${box} border-amber-200 bg-amber-50 text-amber-900`}>
+          No MaalVest login uses this email. Creating new logins and sending invitations is not enabled yet, so this person
+          cannot be added for now.
+        </p>
+      );
+    case "staff":
+      return <p className={`${box} border-red-200 bg-red-50 text-red-800`}>This is a staff account. Staff cannot be MaalRise investors.</p>;
+    case "already_maalrise":
+      return (
+        <p className={`${box} border-border bg-surface-2 text-foreground`}>
+          This person already has MaalRise access.{" "}
+          <Link href={`/admin/maalrise/investors/${r.investor_id}`} className="text-primary-700 hover:underline">Open their record</Link>
+        </p>
+      );
+    case "can_add":
+      return (
+        <div className={`${box} border-emerald-200 bg-emerald-50 text-emerald-900 space-y-1`}>
+          <p className="font-medium">Existing login found{r.name ? `: ${r.name}` : ""}. MaalRise access will be added to it.</p>
+          {r.maalgrow ? (
+            <p>
+              Also a MaalGrow investor.{" "}
+              {r.maalgrow.kyc_approved
+                ? "Their verified MaalGrow KYC will be reused (shown as “Verified via MaalGrow”)."
+                : "Their MaalGrow KYC is not approved, so MaalRise KYC will be needed."}
+            </p>
+          ) : (
+            <p>Not a MaalGrow investor; MaalRise KYC will be needed.</p>
+          )}
+        </div>
+      );
+  }
 }

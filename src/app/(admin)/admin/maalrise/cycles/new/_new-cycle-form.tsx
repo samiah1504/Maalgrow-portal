@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, Calculator, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Calculator, CheckCircle2, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,30 @@ import {
   parsePercentToBps,
 } from "@/lib/maalrise/format";
 import { PhaseNotice } from "@/components/maalrise/sample-notice";
+import { useMaalriseAction } from "@/components/maalrise/use-maalrise-action";
+import type { ScheduleLineRow, TermsRow } from "@/lib/maalrise/types";
+
+/** An existing Cycle whose terms are being edited; its own fields are fixed by now. */
+export type EditTarget = {
+  cycle: {
+    id: string;
+    name: string;
+    transaction_name: string;
+    description: string | null;
+    counterparty_name: string;
+    start_date: string;
+    duration_months: number;
+    stated_maturity_date: string | null;
+    unit_price_kobo: number;
+  };
+  /** The terms to start from: the open draft, or the approved version for a new one. */
+  terms: TermsRow | null;
+  schedule: ScheduleLineRow[];
+};
+
+const koboInput = (k: number | null | undefined) =>
+  k == null ? "" : `${Math.floor(k / 100)}${k % 100 ? `.${String(k % 100).padStart(2, "0")}` : ""}`;
+const bpsInput = koboInput; // both are hundredths
 
 const textareaClass =
   "flex min-h-[88px] w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted/60 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20";
@@ -38,34 +63,54 @@ function FormSection({ title, children }: { title: string; children: React.React
   );
 }
 
-export function NewCycleForm() {
+export function NewCycleForm({
+  counterparties,
+  edit,
+}: {
+  counterparties: { id: string; name: string }[];
+  edit?: EditTarget;
+}) {
+  const router = useRouter();
+  const { run, busy } = useMaalriseAction();
+  const c0 = edit?.cycle;
+  const t0 = edit?.terms ?? null;
+  const fixed = !!edit; // an existing Cycle: only its terms change here
+
   // Business and transaction
-  const [name, setName] = useState("");
-  const [transactionName, setTransactionName] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(c0?.name ?? "");
+  const [transactionName, setTransactionName] = useState(c0?.transaction_name ?? "");
+  const [description, setDescription] = useState(c0?.description ?? "");
+  const [counterpartyId, setCounterpartyId] = useState(counterparties.length ? "" : "new");
   const [counterparty, setCounterparty] = useState("");
   const [counterpartyReg, setCounterpartyReg] = useState("");
+  const [counterpartyEmail, setCounterpartyEmail] = useState("");
 
   // Dates
-  const [startDate, setStartDate] = useState("");
-  const [duration, setDuration] = useState("");
-  const [statedMaturity, setStatedMaturity] = useState("");
+  const [startDate, setStartDate] = useState(c0?.start_date ?? "");
+  const [duration, setDuration] = useState(c0 ? String(c0.duration_months) : "");
+  const [statedMaturity, setStatedMaturity] = useState(c0?.stated_maturity_date ?? "");
 
   // Financial terms
-  const [cost, setCost] = useState("");
-  const [unitPrice, setUnitPrice] = useState("");
-  const [markupType, setMarkupType] = useState<"percent" | "amount">("percent");
-  const [markupValue, setMarkupValue] = useState("");
-  const [statedSalePrice, setStatedSalePrice] = useState("");
+  const [cost, setCost] = useState(koboInput(t0?.cost_kobo));
+  const [unitPrice, setUnitPrice] = useState(koboInput(c0?.unit_price_kobo));
+  const [markupType, setMarkupType] = useState<"percent" | "amount">(t0?.markup_type ?? "percent");
+  const [markupValue, setMarkupValue] = useState(
+    t0 ? (t0.markup_type === "percent" ? bpsInput(t0.markup_bps) : koboInput(t0.markup_amount_kobo)) : ""
+  );
+  const [statedSalePrice, setStatedSalePrice] = useState(koboInput(t0?.stated_sale_price_kobo));
 
   // Service fee — no default treatment: the contract decides.
-  const [feeBasis, setFeeBasis] = useState<FeeBasis>("markup");
-  const [feeValue, setFeeValue] = useState("");
-  const [feeTreatment, setFeeTreatment] = useState<FeeTreatment | "">("");
+  const [feeBasis, setFeeBasis] = useState<FeeBasis>(t0?.fee_basis ?? "markup");
+  const [feeValue, setFeeValue] = useState(
+    t0 ? (t0.fee_basis === "fixed" ? koboInput(t0.fee_amount_kobo) : bpsInput(t0.fee_bps)) : ""
+  );
+  const [feeTreatment, setFeeTreatment] = useState<FeeTreatment | "">(t0?.fee_treatment ?? "");
 
   // Schedule
-  const [scheduleMode, setScheduleMode] = useState<"equal" | "contract">("equal");
-  const [contractAmounts, setContractAmounts] = useState<string[]>([]);
+  const [scheduleMode, setScheduleMode] = useState<"equal" | "contract">(t0?.schedule_mode ?? "equal");
+  const [contractAmounts, setContractAmounts] = useState<string[]>(
+    t0?.schedule_mode === "contract" ? [...(edit?.schedule ?? [])].sort((a, b) => a.period - b.period).map((l) => koboInput(l.investor_net_kobo)) : []
+  );
 
   const [checked, setChecked] = useState(false);
 
@@ -118,7 +163,8 @@ export function NewCycleForm() {
   const formErrors: string[] = [];
   if (!name.trim()) formErrors.push("Cycle name is required.");
   if (!transactionName.trim()) formErrors.push("Business or transaction name is required.");
-  if (!counterparty.trim()) formErrors.push("Counterparty is required.");
+  if (!fixed && counterpartyId === "") formErrors.push("Choose the counterparty, or add a new one.");
+  if (!fixed && counterpartyId === "new" && !counterparty.trim()) formErrors.push("Enter the new counterparty's name.");
   if (!startDate || !parseIsoDate(startDate)) formErrors.push("A valid transaction start date is required.");
   if (months <= 0) formErrors.push("Duration must be a whole number of months.");
   if (parsed.costKobo === null) formErrors.push("Transaction cost must be a naira amount, e.g. 100000000 or 100,000,000.00.");
@@ -136,6 +182,46 @@ export function NewCycleForm() {
   }
   const allErrors = [...formErrors, ...(breakdown?.errors.map((e) => e.message) ?? [])];
 
+  const canSave = !!breakdown && allErrors.length === 0;
+
+  /** Inputs only; the server and then the database recalculate every figure. */
+  function termsPayload() {
+    const fee = feeTreatment === "waived" ? 0 : parsed.feeNum ?? 0;
+    return {
+      costKobo: parsed.costKobo,
+      markup: markupType === "percent" ? { type: "percent", bps: parsed.markupNum } : { type: "amount", kobo: parsed.markupNum },
+      fee: feeBasis === "fixed" ? { basis: "fixed", kobo: fee, treatment: feeTreatment } : { basis: feeBasis, bps: fee, treatment: feeTreatment },
+      schedule: scheduleMode === "equal" ? { mode: "equal" } : { mode: "contract", netKobo: parsed.contractKobo },
+      statedSalePriceKobo: parsed.stated,
+    };
+  }
+
+  async function save() {
+    setChecked(true);
+    if (!canSave) return;
+    if (edit) {
+      await run("save", `/api/admin/maalrise/cycles/${edit.cycle.id}/terms`, { terms: termsPayload() }, {
+        method: "PUT",
+        success: "Draft terms saved. Submit them for approval from the Cycle page.",
+        onDone: () => router.push(`/admin/maalrise/cycles/${edit.cycle.id}#terms`),
+      });
+      return;
+    }
+    await run("save", "/api/admin/maalrise/cycles", {
+      counterparty: counterpartyId === "new"
+        ? { name: counterparty, registration_no: counterpartyReg, contact_email: counterpartyEmail }
+        : { id: counterpartyId },
+      cycle: {
+        name, transaction_name: transactionName, description, start_date: startDate,
+        duration_months: months, stated_maturity_date: statedMaturity || null, unit_price_kobo: unitPriceKobo,
+      },
+      terms: termsPayload(),
+    }, {
+      success: "Draft Cycle created. Nothing has been submitted, approved or sent to anyone.",
+      onDone: (d) => { if (typeof d.id === "string") router.push(`/admin/maalrise/cycles/${d.id}`); },
+    });
+  }
+
   const setContractAmount = (i: number, v: string) =>
     setContractAmounts((prev) => {
       const next = [...prev];
@@ -147,24 +233,46 @@ export function NewCycleForm() {
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setChecked(true); }}>
         <FormSection title="1. Cycle and business">
-          <Input label="Cycle name" placeholder="e.g. MaalRise Cycle One" value={name} onChange={(e) => setName(e.target.value)} required />
-          <Input label="Business or transaction name" value={transactionName} onChange={(e) => setTransactionName(e.target.value)} required />
+          {fixed && (
+            <p className="text-xs text-muted">The Cycle&apos;s name, counterparty, dates and unit price are set when it is created. Only its terms change here.</p>
+          )}
+          <Input label="Cycle name" placeholder="e.g. MaalRise Cycle One" value={name} onChange={(e) => setName(e.target.value)} required disabled={fixed} />
+          <Input label="Business or transaction name" value={transactionName} onChange={(e) => setTransactionName(e.target.value)} required disabled={fixed} />
           <div className="space-y-1.5">
             <label htmlFor="description" className="block text-sm font-medium text-foreground">Description</label>
-            <textarea id="description" className={textareaClass} value={description} onChange={(e) => setDescription(e.target.value)}
+            <textarea id="description" className={textareaClass} value={description} onChange={(e) => setDescription(e.target.value)} disabled={fixed}
               placeholder="What is being bought and sold, and on what terms — this is shown to investors once approved." />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Counterparty / business" value={counterparty} onChange={(e) => setCounterparty(e.target.value)} required />
-            <Input label="Counterparty registration (RC no.)" value={counterpartyReg} onChange={(e) => setCounterpartyReg(e.target.value)} />
-          </div>
+          {fixed ? (
+            <Input label="Counterparty / business" value={c0?.counterparty_name ?? ""} disabled />
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                <label htmlFor="counterparty" className="block text-sm font-medium text-foreground">Counterparty / business</label>
+                <select id="counterparty" value={counterpartyId} onChange={(e) => setCounterpartyId(e.target.value)}
+                  className="flex h-10 w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20">
+                  <option value="">Select…</option>
+                  {counterparties.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <option value="new">+ Add a new counterparty</option>
+                </select>
+              </div>
+              {counterpartyId === "new" && (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Input label="New counterparty name" value={counterparty} onChange={(e) => setCounterparty(e.target.value)} required />
+                  <Input label="Registration (RC no.)" value={counterpartyReg} onChange={(e) => setCounterpartyReg(e.target.value)} />
+                  <Input label="Contact email" type="email" value={counterpartyEmail} onChange={(e) => setCounterpartyEmail(e.target.value)}
+                    hint="Kept on record only — nothing is sent" />
+                </div>
+              )}
+            </>
+          )}
         </FormSection>
 
         <FormSection title="2. Dates">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Input label="Transaction start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-            <Input label="Duration (months)" inputMode="numeric" value={duration} onChange={(e) => setDuration(e.target.value.replace(/\D/g, ""))} required />
-            <Input label="Maturity date per contract" type="date" value={statedMaturity} onChange={(e) => setStatedMaturity(e.target.value)}
+            <Input label="Transaction start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required disabled={fixed} />
+            <Input label="Duration (months)" inputMode="numeric" value={duration} onChange={(e) => setDuration(e.target.value.replace(/\D/g, ""))} required disabled={fixed} />
+            <Input label="Maturity date per contract" type="date" value={statedMaturity} onChange={(e) => setStatedMaturity(e.target.value)} disabled={fixed}
               hint={computedMaturity ? `Start + duration: ${formatDate(computedMaturity)}` : "Optional — checked against start + duration"} />
           </div>
         </FormSection>
@@ -172,7 +280,7 @@ export function NewCycleForm() {
         <FormSection title="3. Financial terms">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Transaction cost (₦)" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} required />
-            <Input label="Unit price (₦)" inputMode="decimal" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)}
+            <Input label="Unit price (₦)" inputMode="decimal" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} disabled={fixed}
               hint={unitsRequired ? `${unitsRequired.toLocaleString("en-NG")} units to fully fund the cost` : "Used for units and participation"} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -240,7 +348,7 @@ export function NewCycleForm() {
         <FormSection title="6. Tax, documents and approval">
           <PhaseNotice>
             <p><strong>Tax:</strong> no withholding is applied. Tax treatment stays unconfigured until the applicable Nigerian treatment is confirmed (A12).</p>
-            <p className="mt-1"><strong>Documents:</strong> the original contract and supporting files are uploaded from the Cycle&apos;s Documents section once storage is connected (Phase 2).</p>
+            <p className="mt-1"><strong>Documents:</strong> the original contract and supporting files are uploaded from the Cycle&apos;s Documents section once document storage is connected (next phase).</p>
             <p className="mt-1"><strong>Approval:</strong> whoever prepares or submits these terms cannot approve them. Approval freezes the terms and this breakdown.</p>
           </PhaseNotice>
         </FormSection>
@@ -249,13 +357,13 @@ export function NewCycleForm() {
           <Button type="submit" variant="outline">
             <CheckCircle2 className="h-4 w-4" /> Check terms
           </Button>
-          <Button type="button" disabled title="Saving is enabled in Phase 2">
-            Save draft
+          <Button type="button" onClick={save} disabled={checked && !canSave} loading={busy === "save"}>
+            <Save className="h-4 w-4" /> {fixed ? "Save draft terms" : "Save draft Cycle"}
           </Button>
         </div>
         <PhaseNotice>
-          Phase 1 preview: nothing on this form is saved. Saving drafts, submitting terms and approval are enabled in
-          Phase 2, once the MaalRise tables are approved and applied to the staging database.
+          Saving creates or updates a <strong>draft</strong> only. Submitting for approval is a separate step on the Cycle page;
+          nothing here approves, activates or notifies anyone.
         </PhaseNotice>
 
         {checked && (

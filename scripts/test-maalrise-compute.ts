@@ -16,7 +16,7 @@ import {
   splitEqually,
   type TermsInput,
 } from "../src/lib/maalrise/compute";
-import { parseNairaToKobo, parsePercentToBps } from "../src/lib/maalrise/format";
+import { koboInWords, parseNairaToKobo, parsePercentToBps } from "../src/lib/maalrise/format";
 import { maturityDate, periodDueDate } from "../src/lib/maalrise/dates";
 
 let failures = 0;
@@ -234,6 +234,13 @@ const base: TermsInput = {
   check("maturity = start + duration", maturityDate("2026-07-01", 6) === "2027-01-01");
   check("month-end start clamps", periodDueDate("2026-01-31", 1) === "2026-02-28");
   check("invalid date gives null", periodDueDate("2026-02-30", 1) === null);
+}
+
+// ── Database messages shown to staff ─────────────────────
+{
+  const m = koboInWords("Funding shortfall of 400000000 kobo");
+  check("kobo amounts in database messages read as naira", m.includes("4,000,000.00") && !m.includes("kobo"), m);
+  check("messages without kobo amounts are unchanged", koboInWords("Unauthorized") === "Unauthorized");
 }
 
 if (failures) {

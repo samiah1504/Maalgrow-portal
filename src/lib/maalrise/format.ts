@@ -78,3 +78,8 @@ export const KYC_STATUS_VARIANT: Record<string, "upcoming" | "pending" | "approv
   verified: "approved",
   rejected: "rejected",
 };
+
+/** The database states amounts in kobo ("shortfall of 400000000 kobo"); staff read naira. */
+export function koboInWords(message: string): string {
+  return message.replace(/(\d+) kobo\b/g, (_, k: string) => formatKobo(Number(k)));
+}

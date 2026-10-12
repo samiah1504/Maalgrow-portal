@@ -206,10 +206,25 @@ for (const c of SAMPLE_CYCLES) {
     ...walk("src/lib/maalrise"),
     ...walk("src/components/maalrise"),
   ];
-  const writers = /\.(insert|update|upsert|delete|rpc)\(|fetch\(|createAdminClient|sendMail|resend|\.storage\b|method:\s*["']POST/i;
-  const offenders = files.filter((p) => writers.test(readFileSync(p, "utf8")));
-  check("no MaalRise screen or library can write, call an API, upload or email", offenders.length === 0, offenders);
-  check("there is no MaalRise API route to save to", !walk("src/app/api").some((p) => p.includes("maalrise")));
+  // Phase 3 connects the screens to the database. What must still hold:
+  // sample data never writes; nothing emails, uploads or uses the service
+  // role; every write goes through a gated MaalRise API route.
+  const read = (p: string) => readFileSync(p, "utf8");
+  const sampleModules = files.filter((p) => /sample/i.test(p));
+  const writers = /\.(insert|update|upsert|delete|rpc)\(|fetch\(|method:\s*["']POST/i;
+  check("sample data modules and pages never write or call an API", sampleModules.filter((p) => writers.test(read(p))).length === 0,
+    sampleModules.filter((p) => writers.test(read(p))));
+  const apiFiles = walk("src/app/api/admin/maalrise");
+  const forbidden = /createAdminClient|SUPABASE_SERVICE_ROLE|sendMail|resend|nodemailer|\.storage\b|inviteUserByEmail|auth\.admin/i;
+  const leaks = [...files, ...apiFiles].filter((p) => forbidden.test(read(p)));
+  check("no MaalRise code emails, uploads, invites or uses the service role", leaks.length === 0, leaks);
+  const ungated = apiFiles.filter((p) => p.endsWith("route.ts") && !read(p).includes("maalriseGate("));
+  check("every MaalRise API route checks the session and role", apiFiles.length > 0 && ungated.length === 0, ungated);
+  const fetchers = files.filter((p) => /fetch\(/.test(read(p)));
+  const FETCH_OK = ["src/components/maalrise/use-maalrise-action.ts", "src/app/(admin)/admin/maalrise/investors/new/_new-investor-form.tsx"];
+  check("only the action hook and the investor lookup call the network", fetchers.every((p) => FETCH_OK.includes(p)), fetchers);
+  const urls = files.flatMap((p) => [...read(p).matchAll(/["'`](\/api\/[^"'`$]*)/g)].map((m) => m[1]));
+  check("screens only call MaalRise API routes", urls.every((u) => u.startsWith("/api/admin/maalrise/")), urls);
 
   const pages = files.filter((p) => p.endsWith("page.tsx"));
   const showsSample = pages.filter((p) => /SAMPLE_|sample(Cycle|Investor|Dashboard)/.test(readFileSync(p, "utf8")));

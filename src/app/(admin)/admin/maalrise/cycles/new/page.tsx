@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import { requireAdminPage } from "@/lib/admin-guard";
 import { MAALRISE_PREPARE_ROLES } from "@/lib/maalrise/permissions";
+import { listCounterparties, mr } from "@/lib/maalrise/db";
 import { NewCycleForm } from "./_new-cycle-form";
 
 export const metadata: Metadata = { title: "New MaalRise Cycle | Admin" };
@@ -10,7 +11,8 @@ export const metadata: Metadata = { title: "New MaalRise Cycle | Admin" };
 export default async function NewMaalRiseCyclePage() {
   // Preparing terms is for the roles in D8. Approving them is a
   // different person's job, and is not on this page.
-  await requireAdminPage(MAALRISE_PREPARE_ROLES);
+  const { supabase } = await requireAdminPage(MAALRISE_PREPARE_ROLES);
+  const counterparties = (await listCounterparties(mr(supabase))).map(({ id, name }) => ({ id, name }));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -29,7 +31,7 @@ export default async function NewMaalRiseCyclePage() {
           </p>
         </div>
       </div>
-      <NewCycleForm />
+      <NewCycleForm counterparties={counterparties} />
     </div>
   );
 }
