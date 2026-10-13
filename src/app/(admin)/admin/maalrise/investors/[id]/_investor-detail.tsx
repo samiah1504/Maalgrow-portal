@@ -6,7 +6,7 @@ import { CYCLE_STATUS_LABEL, KYC_STATUS_LABEL, KYC_STATUS_VARIANT, formatKobo } 
 import type { InvestorDetail } from "@/lib/maalrise/db";
 import { DetailSection, FieldGrid, SectionIndex } from "@/components/maalrise/section";
 import { EmptyState } from "@/components/maalrise/sample-notice";
-import { BankActions, KycActions } from "./_investor-actions";
+import { BankActions, BankChangeReview, KycActions } from "./_investor-actions";
 
 const SECTIONS = [
   { id: "contact", label: "Contact" },
@@ -20,6 +20,13 @@ const BANK_EVENT: Record<string, string> = {
   prefilled_from_maalgrow: "Pre-filled from MaalGrow (unconfirmed)",
   set: "Bank details set",
   confirmed: "Confirmed",
+};
+
+const CHANGE_STATUS: Record<string, { label: string; variant: "pending" | "approved" | "rejected" | "upcoming" }> = {
+  pending: { label: "Awaiting review", variant: "pending" },
+  approved: { label: "Approved", variant: "approved" },
+  rejected: { label: "Rejected", variant: "rejected" },
+  cancelled: { label: "Withdrawn by investor", variant: "upcoming" },
 };
 
 const ACTIVITY: Record<string, string> = {
@@ -39,6 +46,7 @@ export function InvestorDetailView({ d, canPrepare }: { d: InvestorDetail; canPr
   const inv = d.investor;
   const kyc = kycDisplay(inv.kyc_status, inv.kyc_source);
   const pending = d.kyc.some((k) => k.status === "pending_review");
+  const pendingChange = d.bankChanges.find((c) => c.status === "pending");
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -92,9 +100,38 @@ export function InvestorDetailView({ d, canPrepare }: { d: InvestorDetail; canPr
         ) : (
           <EmptyState icon={<Wallet className="h-5 w-5" />} title="No bank details provided" />
         )}
+        {pendingChange && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm" data-testid="bank-change-request">
+            <p className="font-medium text-amber-900">The investor asked to change their payment account</p>
+            <p className="mt-1">
+              {pendingChange.bank_name} · {pendingChange.account_name} · <span className="font-mono">{pendingChange.account_number}</span>
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              Requested {formatDateTime(pendingChange.requested_at)}. Check the account belongs to the investor before approving.
+              Payments already approved keep the account they were approved with; distributions awaiting approval must be refreshed.
+            </p>
+            {canPrepare && <div className="mt-3"><BankChangeReview requestId={pendingChange.id} /></div>}
+          </div>
+        )}
         {canPrepare && (
           <div className="mt-4">
             <BankActions investorId={inv.id} hasDetails={!!inv.account_number} confirmed={!!inv.bank_confirmed_at} />
+          </div>
+        )}
+        {d.bankChanges.some((c) => c.status !== "pending") && (
+          <div className="mt-4">
+            <p className="text-xs font-medium text-muted mb-2">Requests from the investor</p>
+            <ul className="space-y-1.5 text-xs">
+              {d.bankChanges.filter((c) => c.status !== "pending").map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-x-2 text-muted">
+                  <Badge variant={CHANGE_STATUS[c.status].variant}>{CHANGE_STATUS[c.status].label}</Badge>
+                  <span>{c.bank_name} · {c.account_name} · <span className="font-mono">{c.account_number}</span></span>
+                  <span>— requested {formatDateTime(c.requested_at)}</span>
+                  {c.reviewed_by && <span>· {d.names[c.reviewed_by] ?? "—"}{c.reviewed_at ? `, ${formatDateTime(c.reviewed_at)}` : ""}</span>}
+                  {c.reject_reason && <span>· “{c.reject_reason}”</span>}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {d.bankHistory.length > 0 && (

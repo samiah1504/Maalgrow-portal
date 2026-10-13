@@ -1,15 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { InvestorSidebar } from "@/components/layout/investor-sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { createClient } from "@/lib/supabase/client";
+
+/** MaalGrow pages a MaalRise-only investor has no use for. */
+const MAALGROW_ONLY = ["/dashboard", "/investments", "/roi-history", "/payment-requests", "/documents"];
 
 export function InvestorShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userName, setUserName] = useState<string>("");
   const [unreadCount, setUnreadCount] = useState(0);
+  // Which products this person has. Until it loads (or if MaalRise is
+  // not available), the portal is exactly the MaalGrow portal.
+  const [products, setProducts] = useState({ maalgrow: true, maalrise: false });
+  const [maalriseUnread, setMaalriseUnread] = useState(0);
+  const router = useRouter();
 
   /*
    * Recounted on every navigation, not once on mount.
@@ -47,6 +55,24 @@ export function InvestorShell({ children }: { children: React.ReactNode }) {
 
       if (!cancelled) setUnreadCount(count ?? 0);
 
+      // MaalRise access, from migration 054. Any error — including the
+      // function not existing yet — leaves the portal MaalGrow-only.
+      try {
+        const { data: access } = await supabase.rpc("maalrise_my_access" as never);
+        const a = access as { maalgrow?: boolean; maalrise?: boolean } | null;
+        if (a?.maalrise && !cancelled) {
+          const both = { maalgrow: !!a.maalgrow, maalrise: true };
+          setProducts(both);
+          if (!both.maalgrow && MAALGROW_ONLY.some((r) => pathname === r || pathname.startsWith(`${r}/`))) {
+            router.replace("/maalrise");
+          }
+          const { data: n } = await supabase.rpc("maalrise_my_notifications" as never);
+          if (!cancelled) setMaalriseUnread(Number((n as { unread?: number } | null)?.unread ?? 0));
+        }
+      } catch {
+        // Leave the portal as it is.
+      }
+
       // Filtered to this user. Without the filter every INSERT on the
       // table bumped the badge, so an announcement to somebody else
       // could light up a bell with nothing behind it.
@@ -72,7 +98,7 @@ export function InvestorShell({ children }: { children: React.ReactNode }) {
       cancelled = true;
       void teardown.then((fn) => fn?.());
     };
-  }, [pathname]);
+  }, [pathname, router]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -80,6 +106,8 @@ export function InvestorShell({ children }: { children: React.ReactNode }) {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         unreadNotifications={unreadCount}
+        products={products}
+        maalriseUnread={maalriseUnread}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar

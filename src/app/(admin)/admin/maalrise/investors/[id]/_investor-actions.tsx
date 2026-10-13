@@ -127,3 +127,43 @@ export function KycActions({
     </div>
   );
 }
+
+/**
+ * An investor's request to change their payment account. Approving
+ * makes the new details the confirmed account; rejecting needs a
+ * reason, which the investor sees.
+ */
+export function BankChangeReview({ requestId }: { requestId: string }) {
+  const { run, busy } = useMaalriseAction();
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const url = `/api/admin/maalrise/bank-changes/${requestId}`;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" loading={busy === "approve"}
+          onClick={() => run("approve", url, { action: "approve" }, { success: "New bank details approved and confirmed." })}>
+          <CheckCircle2 className="h-3.5 w-3.5" /> Approve new details
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setRejecting((v) => !v)}>
+          <XCircle className="h-3.5 w-3.5" /> Reject
+        </Button>
+      </div>
+      {rejecting && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-64 flex-1">
+            <Input label="Reason (the investor sees this)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+          <Button size="sm" variant="destructive" disabled={!reason.trim()} loading={busy === "reject"}
+            onClick={async () => {
+              if (await run("reject", url, { action: "reject", reason }, { success: "Request rejected." })) {
+                setRejecting(false); setReason("");
+              }
+            }}>
+            Reject request
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

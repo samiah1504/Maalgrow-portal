@@ -395,16 +395,22 @@ BEGIN
 
   -- The investor in both products
   PERFORM set_config('test.uid', '10000000-0000-0000-0000-00000000e001', true);
+  -- Since 054 (Phase 6) an investor reads their Cycle, terms and own
+  -- record only through the maalrise_my_* functions, never directly.
   SELECT COUNT(*) INTO v_n FROM maalrise_investors;
-  IF v_n <> 1 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % MaalRise investor rows, expected 1', v_n; END IF;
+  IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor reads % MaalRise investor rows directly', v_n; END IF;
   SELECT COUNT(*) INTO v_n FROM maalrise_allocations;
   IF v_n <> 1 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % allocations, expected only their own', v_n; END IF;
   SELECT COUNT(*) INTO v_n FROM maalrise_cycles;
-  IF v_n <> 1 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % Cycles, expected their one active Cycle', v_n; END IF;
+  IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor reads % Cycles directly', v_n; END IF;
   SELECT COUNT(*) INTO v_n FROM maalrise_cycle_terms;
-  IF v_n <> 1 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % term versions, expected only the approved one', v_n; END IF;
+  IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor reads % term versions directly', v_n; END IF;
   SELECT COUNT(*) INTO v_n FROM maalrise_schedule_lines;
-  IF v_n <> 6 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % schedule lines, expected 6', v_n; END IF;
+  IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor reads % schedule lines directly', v_n; END IF;
+  v_n := jsonb_array_length(maalrise_my_cycles());
+  IF v_n <> 1 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % Cycles, expected their one active Cycle', v_n; END IF;
+  v_n := jsonb_array_length(maalrise_my_cycles()->0->'months');
+  IF v_n <> 6 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor sees % months, expected 6', v_n; END IF;
   SELECT COUNT(*) INTO v_n FROM maalrise_bank_details_history;
   IF v_n <> 0 THEN RAISE EXCEPTION 'TEST FAIL R9: an investor reads bank history'; END IF;
   SELECT COUNT(*) INTO v_n FROM maalrise_documents;
@@ -413,7 +419,8 @@ BEGIN
   -- A MaalGrow-only investor sees no MaalRise data at all
   PERFORM set_config('test.uid', '10000000-0000-0000-0000-00000000e003', true);
   IF EXISTS (SELECT 1 FROM maalrise_investors) OR EXISTS (SELECT 1 FROM maalrise_cycles)
-     OR EXISTS (SELECT 1 FROM maalrise_allocations) OR EXISTS (SELECT 1 FROM maalrise_schedule_lines) THEN
+     OR EXISTS (SELECT 1 FROM maalrise_allocations) OR EXISTS (SELECT 1 FROM maalrise_schedule_lines)
+     OR maalrise_my_cycles() <> '[]'::JSONB OR maalrise_my_profile() IS NOT NULL THEN
     RAISE EXCEPTION 'TEST FAIL R9: a MaalGrow-only investor read MaalRise data';
   END IF;
 
@@ -446,7 +453,8 @@ BEGIN
   PERFORM set_config('test.uid', '10000000-0000-0000-0000-00000000e002', true);
   IF EXISTS (SELECT 1 FROM maalrise_cycles WHERE id = v_beta)
      OR EXISTS (SELECT 1 FROM maalrise_allocations WHERE cycle_id = v_beta)
-     OR EXISTS (SELECT 1 FROM maalrise_cycle_terms WHERE cycle_id = v_beta) THEN
+     OR EXISTS (SELECT 1 FROM maalrise_cycle_terms WHERE cycle_id = v_beta)
+     OR maalrise_my_cycle(v_beta) IS NOT NULL THEN
     RAISE EXCEPTION 'TEST FAIL R9: an investor saw a Cycle before it was activated';
   END IF;
   RESET ROLE;

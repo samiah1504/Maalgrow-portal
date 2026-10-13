@@ -17,6 +17,7 @@ import type {
   CapitalReceiptRow,
   CapitalSettlementRow,
   AuditRow,
+  BankChangeRequestRow,
   BankHistoryRow,
   Counterparty,
   CycleRow,
@@ -238,6 +239,7 @@ export type InvestorDetail = {
   investor: InvestorRow;
   kyc: KycSubmissionRow[];
   bankHistory: BankHistoryRow[];
+  bankChanges: BankChangeRequestRow[];
   allocations: (AllocationRow & { cycle: Pick<CycleRow, "id" | "name" | "status" | "start_date" | "duration_months"> | null })[];
   fundings: FundingRow[];
   activity: AuditRow[];
@@ -250,13 +252,14 @@ export async function getInvestorDetail(db: SupabaseClient, id: string): Promise
   const investor = res.data as InvestorRow | null;
   if (!investor) return null;
 
-  const [kyc, bank, allocs, funds, activity] = await Promise.all([
+  const [kyc, bank, allocs, funds, activity, changes] = await Promise.all([
     db.from("maalrise_kyc_submissions").select("*").eq("maalrise_investor_id", id).order("submitted_at", { ascending: false }),
     db.from("maalrise_bank_details_history").select("*").eq("maalrise_investor_id", id).order("created_at", { ascending: false }),
     db.from("maalrise_allocations").select("*").eq("maalrise_investor_id", id),
     db.from("maalrise_investor_fundings").select("*").eq("maalrise_investor_id", id).order("created_at", { ascending: false }),
     db.from("audit_logs").select("id, user_id, action, entity_type, entity_id, new_values, created_at")
       .like("action", "maalrise_%").eq("entity_id", id).order("created_at", { ascending: false }).limit(50),
+    db.from("maalrise_bank_change_requests").select("*").eq("maalrise_investor_id", id).order("requested_at", { ascending: false }),
   ]);
   const allocations = must<AllocationRow[]>(allocs, "allocations");
   const cycleIds = allocations.map((a) => a.cycle_id);
@@ -270,11 +273,13 @@ export async function getInvestorDetail(db: SupabaseClient, id: string): Promise
   const kycRows = must<KycSubmissionRow[]>(kyc, "KYC");
   const bankRows = must<BankHistoryRow[]>(bank, "bank history");
   const activityRows = must<AuditRow[]>(activity, "activity");
+  const changeRows = must<BankChangeRequestRow[]>(changes, "bank change requests");
 
   return {
     investor,
     kyc: kycRows,
     bankHistory: bankRows,
+    bankChanges: changeRows,
     allocations: allocations.map((a) => ({ ...a, cycle: cyc[a.cycle_id] ?? null })),
     fundings: must<FundingRow[]>(funds, "funding"),
     activity: activityRows,
@@ -284,12 +289,13 @@ export async function getInvestorDetail(db: SupabaseClient, id: string): Promise
       ...kycRows.map((k) => k.reviewed_by),
       ...bankRows.map((b) => b.actor),
       ...activityRows.map((a) => a.user_id),
+      ...changeRows.map((c) => c.reviewed_by),
     ]),
   };
 }
 
 export async function dashboardFigures(db: SupabaseClient) {
-  const [invs, cycles, allocs, cps, recs, dists, lines, caps, cpays, cterms] = await Promise.all([
+  const [invs, cycles, allocs, cps, recs, dists, lines, caps, cpays, cterms, bankReqs] = await Promise.all([
     db.from("maalrise_investors").select("id", { count: "exact", head: true }),
     db.from("maalrise_cycles").select("id, name, status, start_date, duration_months, approved_terms_id, counterparty_id"),
     db.from("maalrise_allocations").select("cycle_id, capital_kobo"),
@@ -300,6 +306,7 @@ export async function dashboardFigures(db: SupabaseClient) {
     db.from("maalrise_capital_receipts").select("cycle_id, amount_kobo, status"),
     db.from("maalrise_capital_payments").select("status, amount_kobo"),
     db.from("maalrise_cycle_terms").select("id, cost_kobo").eq("status", "approved"),
+    db.from("maalrise_bank_change_requests").select("id, maalrise_investor_id, requested_at").eq("status", "pending").order("requested_at"),
   ]);
   const capReceipts = must<Pick<CapitalReceiptRow, "cycle_id" | "amount_kobo" | "status">[]>(caps, "capital entries");
   const capPays = must<Pick<CapitalPaymentRow, "status" | "amount_kobo">[]>(cpays, "capital payments");
@@ -344,6 +351,7 @@ export async function dashboardFigures(db: SupabaseClient) {
     capitalReceipts: capReceipts,
     capitalPaidKobo: sumBy(capPays.filter((l) => l.status === "paid"), (l) => l.amount_kobo),
     capitalToPayKobo: sumBy(capPays.filter((l) => l.status === "payable"), (l) => l.amount_kobo),
+    pendingBankChanges: must<Pick<BankChangeRequestRow, "id" | "maalrise_investor_id" | "requested_at">[]>(bankReqs, "bank change requests"),
   };
 }
 

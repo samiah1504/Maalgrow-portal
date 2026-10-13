@@ -43,6 +43,13 @@ node supabase/tests/e2e-local/ui-e2e.mjs /tmp/shots
   - settlement approval and capital Mark as Paid;
   - closing checks and closing, and a closed Cycle being final.
 
+`ui-e2e-phase6.mjs` covers Phase 6 (the investor portal):
+  - the MaalGrow | MaalRise switch for an investor in both products;
+  - the overview, a Cycle's months and capital, payments, statement and CSV;
+  - a MaalRise-only investor; a MaalGrow-only investor seeing no change;
+  - bank detail change requests: submit, withdraw, approve, reject with a reason;
+  - investors reading nothing of a Cycle's terms directly; staff and investor routes kept apart.
+
 `up.sh` also emulates Supabase storage on disk for the document routes.
 
 Rebuild the database (`up.sh`) before each run; each run creates records.

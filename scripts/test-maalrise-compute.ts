@@ -19,6 +19,7 @@ import {
 import { koboInWords, parseNairaToKobo, parsePercentToBps } from "../src/lib/maalrise/format";
 import { maturityDate, periodDueDate } from "../src/lib/maalrise/dates";
 import { capitalPosition, lagosToday, monthPositions, suggestedPeriod } from "../src/lib/maalrise/receipts";
+import { portfolioSummary, statementCsv, type MyCycle, type MyMonth, type MyPayment } from "../src/lib/maalrise/portal";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -290,6 +291,61 @@ const base: TermsInput = {
     [{ period: 1, amount_kobo: 200, status: "confirmed", applied_kobo: 200, held_kobo: 0 }, { period: 1, amount_kobo: 100, status: "recorded", applied_kobo: null, held_kobo: null },
      { period: 1, amount_kobo: 300, status: "reversed", applied_kobo: 300, held_kobo: 0 }], "2026-11-12")[0];
   check("monthly: only ₦3 left to record after ₦2 confirmed + ₦1 pending; reversed ignored", m.recordableKobo === 300 && m.confirmedKobo === 200);
+}
+
+// ------------------------------------------------------------------
+// Investor portal figures (Phase 6)
+// ------------------------------------------------------------------
+{
+  const month = (period: number, due: string, over: Partial<MyMonth> = {}): MyMonth => ({
+    period, due_date: due, expected_kobo: 321_911, paid_kobo: 0, approved_kobo: 0, processing_kobo: 0,
+    paid_on: null, references: null, status: "scheduled", ...over,
+  });
+  const cycle = (over: Partial<MyCycle>): MyCycle => ({
+    id: "c1", name: "Kanziy 1", counterparty_name: "Kanziy", description: null, status: "active",
+    start_date: "2026-09-07", maturity_date: "2026-12-07", duration_months: 3, units: 333, unit_price_kobo: 100_000,
+    capital_kobo: 33_300_000, months: [], capital: { due_date: "2026-12-07", expected_kobo: 33_300_000, paid_kobo: 0, paid_on: null,
+      reference: null, account_ending: null, status: "scheduled" }, ...over,
+  });
+  const a = cycle({
+    months: [
+      month(1, "2026-10-07", { status: "paid", paid_kobo: 321_911, paid_on: "2026-10-13" }),
+      month(2, "2026-11-07", { status: "approved", approved_kobo: 160_000 }),
+      month(3, "2026-12-07"),
+    ],
+  });
+  const b = cycle({
+    id: "c2", name: "Alpha", status: "closed", capital_kobo: 10_000_000,
+    months: [month(1, "2026-06-01", { status: "paid", expected_kobo: 50_000, paid_kobo: 50_000 })],
+    capital: { due_date: "2026-07-01", expected_kobo: 10_000_000, paid_kobo: 10_000_000, paid_on: "2026-07-03", reference: "C1",
+      account_ending: "0001", status: "paid" },
+  });
+  const s = portfolioSummary([a, b], "2026-10-20");
+  check("portfolio: repaid capital is no longer counted as invested", s.capitalInvestedKobo === 33_300_000 && s.capitalRepaidKobo === 10_000_000);
+  check("portfolio: profit paid counts only months marked paid", s.profitPaidKobo === 321_911 + 50_000);
+  check("portfolio: approved-not-paid shown separately", s.awaitingTransferKobo === 160_000);
+  check("portfolio: profit to come = expected − paid", s.profitToComeKobo === 321_911 * 2);
+  check("portfolio: closed Cycles are not in progress", s.activeCycles === 1);
+  check("portfolio: next payment is the earliest unpaid date from today",
+    s.next?.label === "Profit · month 2" && s.next.dueDate === "2026-11-07" && s.next.expectedKobo === 321_911);
+  check("portfolio: nothing ahead → no next payment", portfolioSummary([b], "2026-10-20").next === null);
+  const nextCap = portfolioSummary([cycle({ months: [month(3, "2026-12-07", { status: "paid", paid_kobo: 321_911 })] })], "2026-12-01").next;
+  check("portfolio: capital repayment is a next payment", nextCap?.label === "Capital repayment" && nextCap.expectedKobo === 33_300_000);
+
+  const pay = (over: Partial<MyPayment>): MyPayment => ({
+    id: "p", kind: "profit", cycle_id: "c1", cycle_name: "Kanziy 1", period: 1, amount_kobo: 321_911, status: "paid",
+    paid_on: "2026-10-13", reference: "TRF-1", bank_name: "GTB", account_ending: "0001", ...over,
+  });
+  const csv = statementCsv([
+    pay({}),
+    pay({ id: "q", status: "payable", paid_on: null, reference: null }),
+    pay({ id: "r", kind: "capital", period: null, amount_kobo: 33_300_000, reference: "=HYPERLINK(\"x\")", cycle_name: "A, B" }),
+  ]);
+  const lines = csv.trim().split("\r\n");
+  check("statement: header plus paid payments only", lines.length === 3 && lines[0].startsWith("Date paid,Cycle,Payment"));
+  check("statement: naira to the kobo, account masked", lines[1] === "2026-10-13,Kanziy 1,Profit · month 1,3219.11,TRF-1,GTB,****0001", lines[1]);
+  check("statement: commas quoted; spreadsheet formulas neutralised",
+    lines[2].includes('"A, B"') && lines[2].includes(`"'=HYPERLINK(""x"")"`) && lines[2].includes("Capital repayment,333000.00"), lines[2]);
 }
 
 if (failures) {

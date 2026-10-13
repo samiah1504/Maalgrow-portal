@@ -55,6 +55,7 @@ export default async function MaalRiseDashboardPage({
   const showSample = (await searchParams).sample === "1";
 
   let v: View;
+  let pendingBank: { id: string; maalrise_investor_id: string; requested_at: string }[] = [];
   if (showSample) {
     // Opt-in, labelled on every tile, and never mixed with real records.
     const s = sampleDashboard();
@@ -72,6 +73,7 @@ export default async function MaalRiseDashboardPage({
     };
   } else {
     const f = await dashboardFigures(mr(supabase));
+    pendingBank = f.pendingBankChanges;
     const today = lagosToday();
     const horizon = format(addDays(new Date(`${today}T12:00:00`), DUE_WINDOW_DAYS), "yyyy-MM-dd");
     // Every active Cycle's months against what was actually received.
@@ -141,6 +143,23 @@ export default async function MaalRiseDashboardPage({
       </div>
 
       {v.sample && <SampleDataBanner asOf={v.asOf} />}
+
+      {pendingBank.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm" data-testid="bank-change-banner">
+          <p className="font-medium text-amber-900">
+            {pendingBank.length} bank detail change request{pendingBank.length === 1 ? "" : "s"} from investors awaiting review
+          </p>
+          <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {pendingBank.map((r) => (
+              <li key={r.id}>
+                <Link href={`/admin/maalrise/investors/${r.maalrise_investor_id}#bank`} className="text-primary-700 hover:underline">
+                  Review request of {formatDate(r.requested_at)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className={`grid gap-4 sm:grid-cols-2 ${v.sample ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
         <StatCard title={`Total MaalRise investors${tag}`} value={v.investors.value} subtitle={v.investors.sub} icon={<Users className="h-5 w-5" />} />

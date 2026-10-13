@@ -16,6 +16,9 @@ import {
   HelpCircle,
   LogOut,
   X,
+  Layers,
+  Wallet,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -38,6 +41,15 @@ const navItems: NavItem[] = [
   { label: "Documents", href: "/documents", icon: <FileText className="h-5 w-5" /> },
 ];
 
+/** MaalRise, for investors who hold it (migration 054). */
+const maalriseNavItems: NavItem[] = [
+  { label: "Overview", href: "/maalrise", icon: <LayoutDashboard className="h-5 w-5" /> },
+  { label: "My Cycles", href: "/maalrise/cycles", icon: <Layers className="h-5 w-5" /> },
+  { label: "Payments", href: "/maalrise/payments", icon: <Wallet className="h-5 w-5" /> },
+  { label: "Alerts", href: "/maalrise/notifications", icon: <Bell className="h-5 w-5" /> },
+  { label: "My Details", href: "/maalrise/profile", icon: <UserCheck className="h-5 w-5" /> },
+];
+
 const bottomNavItems: NavItem[] = [
   { label: "Profile", href: "/profile", icon: <User className="h-5 w-5" /> },
   { label: "Settings", href: "/settings", icon: <Settings className="h-5 w-5" /> },
@@ -48,9 +60,18 @@ interface InvestorSidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   unreadNotifications?: number;
+  /** Which products this person holds. MaalGrow-only by default. */
+  products?: { maalgrow: boolean; maalrise: boolean };
+  maalriseUnread?: number;
 }
 
-export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: InvestorSidebarProps) {
+export function InvestorSidebar({
+  isOpen,
+  onClose,
+  unreadNotifications = 0,
+  products = { maalgrow: true, maalrise: false },
+  maalriseUnread = 0,
+}: InvestorSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -61,8 +82,14 @@ export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: In
     router.push("/login");
   };
 
+  // MaalRise pages, or a person who only holds MaalRise.
+  const inMaalrise = products.maalrise && (pathname.startsWith("/maalrise") || !products.maalgrow);
+  const items = inMaalrise ? maalriseNavItems : navItems;
+  const badgeFor = (label: string) =>
+    inMaalrise ? (label === "Alerts" ? maalriseUnread : 0) : label === "Notifications" ? unreadNotifications : 0;
+
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === href;
+    if (href === "/dashboard" || href === "/maalrise") return pathname === href;
     return pathname.startsWith(href);
   };
 
@@ -94,7 +121,7 @@ export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: In
               className="h-8 w-8 rounded-lg"
             />
             <div>
-              <p className="text-sm font-bold tracking-wide">MaalGrow</p>
+              <p className="text-sm font-bold tracking-wide">{inMaalrise ? "MaalRise" : "MaalGrow"}</p>
               <p className="text-[10px] text-primary-300 -mt-0.5">A MaalVest Platform</p>
             </div>
           </div>
@@ -106,9 +133,33 @@ export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: In
           </button>
         </div>
 
+        {/* Product switch: only for someone holding both */}
+        {products.maalrise && products.maalgrow && (
+          <div className="mx-3 mt-4 grid grid-cols-2 gap-1 rounded-lg bg-primary-800/60 p-1" role="tablist" aria-label="Product">
+            {[
+              { label: "MaalGrow", href: "/dashboard", on: !inMaalrise },
+              { label: "MaalRise", href: "/maalrise", on: inMaalrise },
+            ].map((t) => (
+              <Link
+                key={t.label}
+                href={t.href}
+                onClick={onClose}
+                role="tab"
+                aria-selected={t.on}
+                className={cn(
+                  "rounded-md px-2 py-1.5 text-center text-xs font-semibold transition-colors",
+                  t.on ? "bg-white text-primary-800" : "text-primary-200 hover:text-white"
+                )}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          {navItems.map((item) => (
+          {items.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -126,9 +177,9 @@ export function InvestorSidebar({ isOpen, onClose, unreadNotifications = 0 }: In
               <span>{item.label}</span>
               {/* Red here too — gold is decorative throughout this
                   sidebar, including the active-item icon just above. */}
-              {item.label === "Notifications" && unreadNotifications > 0 && (
+              {badgeFor(item.label) > 0 && (
                 <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  {badgeFor(item.label) > 99 ? "99+" : badgeFor(item.label)}
                 </span>
               )}
             </Link>

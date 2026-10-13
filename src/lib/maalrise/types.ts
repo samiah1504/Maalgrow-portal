@@ -133,6 +133,21 @@ export type BankHistoryRow = {
   created_at: string;
 };
 
+/** An investor's request to change their payment account (migration 054). */
+export type BankChangeRequestRow = {
+  id: string;
+  maalrise_investor_id: string;
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  requested_by: string;
+  requested_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  reject_reason: string | null;
+};
+
 export type FundingRow = {
   id: string;
   cycle_id: string;

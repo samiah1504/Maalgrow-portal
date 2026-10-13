@@ -63,7 +63,7 @@ http.createServer(async (req, res) => {
     if (!headers.authorization && headers.apikey) headers.authorization = `Bearer ${headers.apikey}`;
     const r = await fetch(PGRST + url.pathname.replace("/rest/v1", "") + url.search, { method: req.method, headers, body: ["GET","HEAD"].includes(req.method) ? undefined : body });
     const out = Buffer.from(await r.arrayBuffer());
-    const h = { ...cors }; r.headers.forEach((v, k) => { if (!["content-encoding","transfer-encoding","connection"].includes(k)) h[k] = v; });
+    const h = { ...cors }; r.headers.forEach((v, k) => { if (!["content-encoding","transfer-encoding","connection"].includes(k) && !k.startsWith("access-control-")) h[k] = v; });
     res.writeHead(r.status, h); return res.end(out);
   }
   res.writeHead(404, cors); res.end();

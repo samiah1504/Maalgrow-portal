@@ -9,8 +9,20 @@ import type { NotificationRow } from "@/lib/maalrise/types";
 
 const URGENT = new Set(["payment_followup", "capital_followup"]);
 
-/** The signed-in person's MaalRise notifications, with mark-as-read. */
-export function NotificationList({ items, compact = false }: { items: NotificationRow[]; compact?: boolean }) {
+/**
+ * The signed-in person's MaalRise notifications, with mark-as-read.
+ * Staff mark them read through the admin route, investors through
+ * their own (/api/maalrise/notifications).
+ */
+export function NotificationList({
+  items,
+  compact = false,
+  endpoint = "/api/admin/maalrise/notifications",
+}: {
+  items: NotificationRow[];
+  compact?: boolean;
+  endpoint?: string;
+}) {
   const { run, busy } = useMaalriseAction();
   const unread = items.filter((n) => !n.read_at);
   return (
@@ -19,7 +31,7 @@ export function NotificationList({ items, compact = false }: { items: Notificati
         <p className="flex items-center gap-2 text-sm font-medium"><BellRing className="h-4 w-4 text-primary-600" /> {compact ? "New for you" : "Notifications"}</p>
         {unread.length > 0 && (
           <Button size="xs" variant="outline" loading={busy === "all"}
-            onClick={() => run("all", "/api/admin/maalrise/notifications", {}, { success: "Marked as read." })}>
+            onClick={() => run("all", endpoint, {}, { success: "Marked as read." })}>
             <CheckCheck className="h-3 w-3" /> Mark all read
           </Button>
         )}
@@ -42,7 +54,7 @@ export function NotificationList({ items, compact = false }: { items: Notificati
                 {n.link && <Link href={n.link} className="text-primary-700 hover:underline">Open</Link>}
                 {!n.read_at && (
                   <button className="text-muted hover:text-foreground" disabled={busy === n.id}
-                    onClick={() => run(n.id, "/api/admin/maalrise/notifications", { ids: [n.id] })}>
+                    onClick={() => run(n.id, endpoint, { ids: [n.id] })}>
                     Mark read
                   </button>
                 )}

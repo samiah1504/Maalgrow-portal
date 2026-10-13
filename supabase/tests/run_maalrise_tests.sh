@@ -45,6 +45,12 @@ for i in 1 2 3; do
 done | cmp -s - <(awk '/^BEGIN;$/{f=1;next} /^COMMIT;$/{f=0} f' supabase/migrations/053_maalrise_capital_settlement.sql) \
   || { echo "FAIL: 053 parts differ from the migration"; exit 1; }
 echo "PASS: 053 parts 1–3 are identical to the migration body"
+PARTS=supabase/checks/054_parts
+for i in 1 2; do
+  awk '/^-- >>> 054 BODY START/{f=1;next} /^-- <<< 054 BODY END/{f=0} f' "$PARTS/054_part_${i}_of_2.sql"
+done | cmp -s - <(awk '/^BEGIN;$/{f=1;next} /^COMMIT;$/{f=0} f' supabase/migrations/054_maalrise_investor_portal.sql) \
+  || { echo "FAIL: 054 parts differ from the migration"; exit 1; }
+echo "PASS: 054 parts 1–2 are identical to the migration body"
 
 dropdb --if-exists "$DB"
 createdb "$DB"
@@ -60,7 +66,7 @@ CREATE SCHEMA IF NOT EXISTS storage;
 CREATE TABLE IF NOT EXISTS storage.buckets (id TEXT PRIMARY KEY, name TEXT, public BOOLEAN);
 SQL
 for f in supabase/migrations/0*.sql; do
-  [[ "$f" == *051_maalrise_core.sql || "$f" == *052_maalrise_distributions.sql || "$f" == *053_maalrise_capital_settlement.sql ]] && continue
+  [[ "$f" == *051_maalrise_core.sql || "$f" == *052_maalrise_distributions.sql || "$f" == *053_maalrise_capital_settlement.sql || "$f" == *054_maalrise_investor_portal.sql ]] && continue
   q -q -f "$f" >/dev/null
 done
 echo "scratch database: stub + migrations 001–050"
@@ -157,10 +163,42 @@ q -q -f $P53/053_part_3_of_3.sql >/dev/null
 [ "$(fingerprint_of supabase/checks/maalrise_053_postapply.sql)" = "$H0" ] || { echo "FAIL: 053 parts changed an object they should not touch"; exit 1; }
 echo "PASS: 053 applied in parts 1–3; out-of-order and repeat runs refused; post-apply true; fingerprint unchanged"
 
+# 054 (Phase 6), rehearsed the same way
+[ "$(summary_of supabase/checks/maalrise_054_preflight.sql ready_to_apply)" = "t" ] || { echo "FAIL: 054 preflight not ready"; q -f supabase/checks/maalrise_054_preflight.sql; exit 1; }
+K0=$(fingerprint_of supabase/checks/maalrise_054_preflight.sql)
+echo "PASS: 054 preflight ready_to_apply; fingerprint ${K0}"
+# The five policies 054 drops, so the rollback can be proved to restore them exactly.
+touched54() {
+  q -c "SELECT md5(string_agg(tablename || policyname || coalesce(qual, '') || cmd || array_to_string(roles, ','), E'\n' ORDER BY policyname))
+          FROM pg_policies WHERE schemaname = 'public' AND policyname LIKE 'Investor reads%'"
+}
+U0=$(touched54)
+q -q -f supabase/migrations/054_maalrise_investor_portal.sql
+[ "$(summary_of supabase/checks/maalrise_054_postapply.sql all_ok)" = "t" ] || { echo "FAIL: 054 post-apply checks"; q -f supabase/checks/maalrise_054_postapply.sql; exit 1; }
+[ "$(fingerprint_of supabase/checks/maalrise_054_postapply.sql)" = "$K0" ] || { echo "FAIL: 054 changed an object it should not touch"; exit 1; }
+echo "PASS: 054 post-apply checks all true; fingerprint of everything else unchanged"
+[ "$(summary_of supabase/checks/maalrise_054_preflight.sql ready_to_apply)" = "f" ] || { echo "FAIL: 054 preflight should refuse a second apply"; exit 1; }
+if q -q -f supabase/migrations/054_maalrise_investor_portal.sql >/dev/null 2>&1; then echo "FAIL: 054 applied twice"; exit 1; fi
+q -q -f supabase/checks/maalrise_054_rollback.sql
+[ "$(fingerprint_of supabase/checks/maalrise_054_preflight.sql)" = "$K0" ] || { echo "FAIL: 054 rollback left the schema different"; exit 1; }
+[ "$(summary_of supabase/checks/maalrise_054_preflight.sql ready_to_apply)" = "t" ] || { echo "FAIL: 054 preflight not ready after rollback"; exit 1; }
+[ "$(touched54)" = "$U0" ] || { echo "FAIL: 054 rollback did not restore the five investor read policies exactly"; exit 1; }
+echo "PASS: 054 cannot be applied twice; rollback restores the five investor read policies exactly"
+P54=supabase/checks/054_parts
+if q -q -f $P54/054_part_2_of_2.sql >/dev/null 2>&1; then echo "FAIL: 054 part 2 ran before part 1"; exit 1; fi
+q -q -f $P54/054_part_1_of_2.sql >/dev/null
+if q -q -f $P54/054_part_1_of_2.sql >/dev/null 2>&1; then echo "FAIL: 054 part 1 ran twice"; exit 1; fi
+q -q -f $P54/054_part_2_of_2.sql >/dev/null
+if q -q -f $P54/054_part_2_of_2.sql >/dev/null 2>&1; then echo "FAIL: 054 part 2 ran twice"; exit 1; fi
+[ "$(summary_of supabase/checks/maalrise_054_postapply.sql all_ok)" = "t" ] || { echo "FAIL: 054 post-apply after parts"; exit 1; }
+[ "$(fingerprint_of supabase/checks/maalrise_054_postapply.sql)" = "$K0" ] || { echo "FAIL: 054 parts changed an object they should not touch"; exit 1; }
+echo "PASS: 054 applied in parts 1–2; out-of-order and repeat runs refused; post-apply true; fingerprint unchanged"
+
 # 6. scenarios
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_core_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_distribution_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_capital_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
+psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_portal_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 npx tsx scripts/test-maalrise-sql-contract.ts "$DB" | grep -E "PASS|FAIL"
 npx tsx scripts/check-unfiltered-writes.ts "$DB"
 
@@ -170,8 +208,8 @@ for t in supabase/tests/*_scenarios.sql; do
   [[ "$t" == *maalrise* ]] && continue
   s=$(basename "$t" .sql)
   dropdb --if-exists "mr_$s"; createdb -T "$DB" "mr_$s"
-  psql -d "mr_$s" -v ON_ERROR_STOP=1 -q -f "$t" >/dev/null 2>&1 || { echo "FAIL: MaalGrow $s with 051, 052 and 053 applied"; exit 1; }
+  psql -d "mr_$s" -v ON_ERROR_STOP=1 -q -f "$t" >/dev/null 2>&1 || { echo "FAIL: MaalGrow $s with 051–054 applied"; exit 1; }
   dropdb "mr_$s"; n=$((n + 1))
 done
 psql -d postgres -qc "ALTER DATABASE $DB WITH is_template false"
-echo "PASS: all $n existing MaalGrow scenarios pass with 051, 052 and 053 applied"
+echo "PASS: all $n existing MaalGrow scenarios pass with 051–054 applied"

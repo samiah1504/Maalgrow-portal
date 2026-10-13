@@ -104,6 +104,42 @@ Where it is enforced:
   the capital is not fully recorded; capital approval, Mark as Paid and
   super-admin reversal work as for monthly profit.
 
+### Phase 6 — investor portal (confirmed 13 Oct 2026)
+
+- **What investors see.** Their own Cycles: name, counterparty, dates,
+  their units and capital, their expected profit for each month, and
+  each profit and capital payment's status. **Never** the Cycle's total
+  size, the markup rate, the service fee workings, other investors,
+  staff notes or internal approvals. These come only from the
+  `maalrise_my_*` database functions (migration 054); the direct read
+  rules that would have let an investor read a Cycle's terms and
+  schedule, the Cycle row, or their own record with KYC notes were
+  removed.
+- **Expected profit** is shown, labelled "Expected": the investor's
+  share of each month's scheduled profit by units of the whole Cycle,
+  largest remainder to the kobo, the same rule distributions use. If a
+  month is paid in part, the portal shows what was actually paid.
+- **Statuses**: Scheduled → Awaiting payment (date passed, nothing
+  received yet) → Being processed (received; distribution under
+  review) → Approved for payment → **Paid** (green, with date and
+  reference) or Part paid. "Paid" appears only once staff marked the
+  transfer paid; a super-admin reversal takes it back to Approved.
+- **Bank detail changes**: the investor submits new details in the
+  portal; one request at a time; they may withdraw it. Super admin,
+  administrator or operations (the roles that already confirm bank
+  details) approve — the new details become the confirmed account — or
+  reject with a reason the investor sees. Until approved, payments go
+  to the confirmed account. Payments already approved keep the account
+  they were approved with.
+- **Documents**: not shown to investors in Phase 6.
+- **Statements**: a printable page (Print → Save as PDF) and a CSV of
+  payments marked paid; accounts by their last four digits.
+- **Product switch**: investors in both products switch between
+  MaalGrow and MaalRise in the sidebar; MaalRise-only investors see
+  MaalRise only; MaalGrow-only investors see no change.
+- **New logins / invitations**: unchanged — MaalRise access is given
+  only to existing logins; no invitations are sent.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;
