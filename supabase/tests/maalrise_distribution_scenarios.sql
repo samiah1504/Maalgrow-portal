@@ -12,7 +12,8 @@
 --   R15 a full month: fee taken, net shared by units to the kobo,
 --       bank accounts snapshotted, nothing payable before approval
 --   R16 part-payments: each applied once, fee in proportion and exact
---       in total, one open distribution, excess HELD not distributed
+--       in total, one open distribution; an entry above what is still
+--       owed is refused as an entry error (053)
 --   R17 approval: admins only (the preparer may approve); refused while
 --       a bank account is unconfirmed or changed until refreshed
 --   R18 a part-payment after approval makes a follow-on distribution
@@ -298,7 +299,7 @@ END $$;
 -- R16 — part-payments for month 2 (an admin records AND confirms)
 -- ------------------------------------------------------------
 DO $$
-DECLARE c UUID := (SELECT v FROM ids WHERE k = 'alpha'); a UUID; b UUID; d maalrise_distributions%ROWTYPE; v_sum BIGINT;
+DECLARE c UUID := (SELECT v FROM ids WHERE k = 'alpha'); a UUID; b UUID; d maalrise_distributions%ROWTYPE; v_sum BIGINT; v_err TEXT;
 BEGIN
   PERFORM pg_temp.as_user('admin');
   a := maalrise_record_receipt(c, jsonb_build_object('period', 2, 'amount_kobo', 123456789, 'received_on', maalrise_today() - 10, 'reference', 'KZ-0002A'));
@@ -316,25 +317,29 @@ BEGIN
     RAISE EXCEPTION 'TEST FAIL R16: largest remainder not applied';
   END IF;
 
-  -- second part, ₦10,000 more than is outstanding: the excess is HELD
-  b := maalrise_record_receipt(c, jsonb_build_object('period', 2, 'amount_kobo', 77543211, 'received_on', maalrise_today() - 2));
+  -- an entry above what is still owed is an entry error: refused
+  v_err := pg_temp.err(format('SELECT maalrise_record_receipt(%L, %L)', c,
+    jsonb_build_object('period', 2, 'amount_kobo', 77543211, 'received_on', maalrise_today() - 2)));
+  IF v_err IS NULL OR v_err NOT LIKE '%more than the ₦765,432.11 still owed for month 2%' THEN
+    RAISE EXCEPTION 'TEST FAIL R16: an entry above what is owed was not refused (%)', v_err;
+  END IF;
+  -- the exact remainder is accepted and completes the month
+  b := maalrise_record_receipt(c, jsonb_build_object('period', 2, 'amount_kobo', 76543211, 'received_on', maalrise_today() - 2));
   IF maalrise_confirm_receipt(b) <> d.id THEN RAISE EXCEPTION 'TEST FAIL R16: a second open distribution was made for month 2'; END IF;
   SELECT * INTO d FROM maalrise_distributions WHERE id = d.id;
   IF d.applied_kobo <> 200000000 OR d.fee_kobo <> 10000000 OR d.net_kobo <> 190000000 THEN
     RAISE EXCEPTION 'TEST FAIL R16: parts do not add up to the scheduled month %', row_to_json(d);
   END IF;
-  IF (SELECT held_kobo FROM maalrise_receipts WHERE id = b) <> 1000000 OR (SELECT applied_kobo FROM maalrise_receipts WHERE id = b) <> 76543211 THEN
-    RAISE EXCEPTION 'TEST FAIL R16: the excess was not held';
-  END IF;
   IF (SELECT COUNT(*) FROM maalrise_distributions WHERE cycle_id = c AND period = 2) <> 1 THEN
     RAISE EXCEPTION 'TEST FAIL R16: duplicate distributions for month 2';
   END IF;
-  -- more money for a month already fully received: all held, no distribution
-  b := maalrise_record_receipt(c, jsonb_build_object('period', 2, 'amount_kobo', 5000, 'received_on', maalrise_today()));
-  IF maalrise_confirm_receipt(b) IS NOT NULL OR (SELECT held_kobo FROM maalrise_receipts WHERE id = b) <> 5000 THEN
-    RAISE EXCEPTION 'TEST FAIL R16: money beyond the schedule was distributed';
+  -- a fully recorded month takes no more
+  v_err := pg_temp.err(format('SELECT maalrise_record_receipt(%L, %L)', c,
+    jsonb_build_object('period', 2, 'amount_kobo', 5000, 'received_on', maalrise_today())));
+  IF v_err IS NULL OR v_err NOT LIKE '%already fully recorded%' THEN
+    RAISE EXCEPTION 'TEST FAIL R16: a fully recorded month accepted more (%)', v_err;
   END IF;
-  RAISE NOTICE 'PASS R16: part-payments applied once, fee exact in total (₦100,000), one open distribution, excess held';
+  RAISE NOTICE 'PASS R16: part-payments applied once, fee exact in total (₦100,000), one open distribution, entries above what is owed refused';
 END $$;
 
 -- ------------------------------------------------------------
