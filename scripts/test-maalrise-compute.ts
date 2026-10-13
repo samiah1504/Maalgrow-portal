@@ -18,7 +18,7 @@ import {
 } from "../src/lib/maalrise/compute";
 import { koboInWords, parseNairaToKobo, parsePercentToBps } from "../src/lib/maalrise/format";
 import { maturityDate, periodDueDate } from "../src/lib/maalrise/dates";
-import { lagosToday, monthPositions, suggestedPeriod } from "../src/lib/maalrise/receipts";
+import { capitalPosition, lagosToday, monthPositions, suggestedPeriod } from "../src/lib/maalrise/receipts";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -269,6 +269,27 @@ const base: TermsInput = {
   check("a passing date never counts as paid", monthPositions(lines, [], "2027-12-31").every((p) => p.confirmedKobo === 0 && p.outstandingKobo === 200_000_000));
   check("suggested month = earliest not fully recorded", suggestedPeriod(pos) === 2);
   check("Lagos date: 23:30 UTC is already the next day in Lagos", lagosToday(new Date("2026-10-12T23:30:00Z")) === "2026-10-13");
+}
+
+// ── Capital at maturity (Phase 5) ────────────────────────
+{
+  const due = 10_000_000_000;
+  const cap = (rs: { amount_kobo: number; status: string }[], today: string) => capitalPosition(due, "2026-12-10", rs, today);
+  check("capital before maturity → not yet due", cap([], "2026-12-01").status === "upcoming");
+  check("capital on maturity → due today", cap([], "2026-12-10").status === "due_today");
+  check("capital 5 days after maturity, nothing recorded → follow up", cap([], "2026-12-15").status === "follow_up" && cap([], "2026-12-15").followUp);
+  check("capital fully recorded but unconfirmed → awaiting, no follow-up",
+    cap([{ amount_kobo: due, status: "recorded" }], "2026-12-20").status === "awaiting" && !cap([{ amount_kobo: due, status: "recorded" }], "2026-12-20").followUp);
+  const part = cap([{ amount_kobo: 4_000_000_000, status: "confirmed" }, { amount_kobo: 1_000_000_000, status: "recorded" }, { amount_kobo: 9, status: "rejected" }], "2026-12-11");
+  check("split capital: part confirmed, part pending; rejected ignored",
+    part.status === "part_received" && part.confirmedKobo === 4_000_000_000 && part.pendingKobo === 1_000_000_000
+      && part.recordableKobo === 5_000_000_000 && part.outstandingKobo === 6_000_000_000);
+  check("full capital confirmed → received", cap([{ amount_kobo: due, status: "confirmed" }], "2026-12-11").status === "received");
+  check("reversed capital entries count for nothing", cap([{ amount_kobo: due, status: "reversed" }], "2026-12-11").confirmedKobo === 0);
+  const m = monthPositions([{ period: 1, due_date: "2026-11-10", counterparty_gross_kobo: 600 }],
+    [{ period: 1, amount_kobo: 200, status: "confirmed", applied_kobo: 200, held_kobo: 0 }, { period: 1, amount_kobo: 100, status: "recorded", applied_kobo: null, held_kobo: null },
+     { period: 1, amount_kobo: 300, status: "reversed", applied_kobo: 300, held_kobo: 0 }], "2026-11-12")[0];
+  check("monthly: only ₦3 left to record after ₦2 confirmed + ₦1 pending; reversed ignored", m.recordableKobo === 300 && m.confirmedKobo === 200);
 }
 
 if (failures) {

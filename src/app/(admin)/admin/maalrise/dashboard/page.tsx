@@ -12,7 +12,17 @@ import { formatKobo } from "@/lib/maalrise/format";
 import { maturityDate } from "@/lib/maalrise/dates";
 import { sampleDashboard } from "@/lib/maalrise/sample-summary";
 import { dashboardFigures, mr } from "@/lib/maalrise/db";
-import { MONTH_STATUS_LABEL, MONTH_STATUS_VARIANT, lagosToday, monthPositions, type MonthStatus } from "@/lib/maalrise/receipts";
+import {
+  CAPITAL_STATUS_LABEL,
+  CAPITAL_STATUS_VARIANT,
+  MONTH_STATUS_LABEL,
+  MONTH_STATUS_VARIANT,
+  capitalPosition,
+  lagosToday,
+  monthPositions,
+  type CapitalStatus,
+  type MonthStatus,
+} from "@/lib/maalrise/receipts";
 import { EmptyState, SampleDataBanner, SampleTag, SampleToggle } from "@/components/maalrise/sample-notice";
 
 export const metadata: Metadata = { title: "MaalRise Dashboard | Admin" };
@@ -33,7 +43,7 @@ type View = {
   received?: { value: string; sub: string };
   distributed?: { value: string; sub: string };
   dueRows: { key: string; cycleId: string; cycleName: string; period: number; dueDate: string | null; amountKobo: number; partly: boolean; status?: MonthStatus; counterparty?: string }[];
-  settleRows: { cycleId: string; cycleName: string; dueDate: string | null; holders: number; amountKobo: number }[];
+  settleRows: { cycleId: string; cycleName: string; dueDate: string | null; holders: number; amountKobo: number; status?: CapitalStatus }[];
 };
 
 export default async function MaalRiseDashboardPage({
@@ -93,14 +103,21 @@ export default async function MaalRiseDashboardPage({
         sub: `Approved for investors${f.preparedCount ? ` · ${formatKobo(f.preparedKobo)} in ${f.preparedCount} distribution(s) awaiting approval` : ""}`,
       },
       paid: { value: `${formatKobo(f.paidKobo)} / ${formatKobo(f.toPayKobo)}`, sub: `Paid to investors / approved and still to pay (${f.toPayCount})` },
-      settle: { value: f.activeCapital.length || NONE, sub: f.activeCapital.length ? `${formatKobo(f.activeCapital.reduce((t, c) => t + c.capitalKobo, 0))} capital due at maturity` : "None scheduled" },
+      settle: {
+        value: f.activeCapital.length || NONE,
+        sub: f.activeCapital.length || f.capitalPaidKobo
+          ? `${formatKobo(f.activeCapital.reduce((t, c) => t + c.capitalKobo, 0))} capital due at maturity · ${formatKobo(f.capitalPaidKobo)} repaid to investors${f.capitalToPayKobo ? ` · ${formatKobo(f.capitalToPayKobo)} approved to pay` : ""}`
+          : "None scheduled",
+      },
       dueRows: upcoming.map((m) => ({
         key: `${m.cycle.id}-${m.period}`, cycleId: m.cycle.id, cycleName: m.cycle.name, period: m.period, dueDate: m.dueDate,
         amountKobo: m.outstandingKobo, partly: m.status === "part_paid", status: m.status, counterparty: f.counterpartyName(m.cycle.id),
       })),
-      settleRows: f.activeCapital.map(({ cycle, capitalKobo }) => ({
-        cycleId: cycle.id, cycleName: cycle.name, dueDate: maturityDate(cycle.start_date, cycle.duration_months), holders: 0, amountKobo: capitalKobo,
-      })),
+      settleRows: f.activeCapital.map(({ cycle, capitalKobo }) => {
+        const due = maturityDate(cycle.start_date, cycle.duration_months);
+        const pos = due ? capitalPosition(f.capitalDue(cycle.id), due, f.capitalReceipts.filter((r) => r.cycle_id === cycle.id), today) : null;
+        return { cycleId: cycle.id, cycleName: cycle.name, dueDate: due, holders: 0, amountKobo: capitalKobo, status: pos?.status };
+      }),
     };
   }
   const tag = v.sample ? " (sample)" : "";
@@ -196,11 +213,14 @@ export default async function MaalRiseDashboardPage({
                   {v.settleRows.map((c) => (
                     <tr key={c.cycleId}>
                       <td className="px-3 py-2">
-                        <Link href={`/admin/maalrise/cycles/${c.cycleId}`} className="text-primary-700 hover:underline">{c.cycleName}</Link>{" "}
+                        <Link href={`/admin/maalrise/cycles/${c.cycleId}${v.sample ? "" : "#capital"}`} className="text-primary-700 hover:underline">{c.cycleName}</Link>{" "}
                         {v.sample && <SampleTag />}
                       </td>
                       <td className="px-3 py-2 text-muted">{c.dueDate ? formatDate(c.dueDate) : NONE}</td>
-                      <td className="px-3 py-2 text-right font-medium">{formatKobo(c.amountKobo)}</td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatKobo(c.amountKobo)}
+                        {c.status && <Badge variant={CAPITAL_STATUS_VARIANT[c.status]} className="ml-1">{CAPITAL_STATUS_LABEL[c.status]}</Badge>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

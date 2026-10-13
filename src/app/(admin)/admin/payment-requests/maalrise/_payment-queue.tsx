@@ -11,10 +11,11 @@ import { useMaalriseAction } from "@/components/maalrise/use-maalrise-action";
 
 export type QueueItem = {
   id: string;
+  kind: "profit" | "capital";
+  label: string;
   investorName: string;
   investorCode: string;
   cycleName: string | null;
-  period: number;
   amountKobo: number;
   bankName: string | null;
   accountName: string | null;
@@ -45,7 +46,7 @@ export function PaymentQueue({ items, today, canReverse }: { items: QueueItem[];
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted">
                 <th className="px-3 py-2 font-medium">Investor</th>
-                <th className="px-3 py-2 font-medium">Cycle / month</th>
+                <th className="px-3 py-2 font-medium">Cycle / payment</th>
                 <th className="px-3 py-2 text-right font-medium">Amount</th>
                 <th className="px-3 py-2 font-medium">Pay to</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -74,7 +75,7 @@ function Row({ item: i, today, canReverse }: { item: QueueItem; today: string; c
   return (
     <tr className="align-top">
       <td className="px-3 py-2">{i.investorName} <span className="block text-xs font-mono text-muted">{i.investorCode}</span></td>
-      <td className="px-3 py-2">{i.cycleName ?? "MaalRise"} <span className="block text-xs text-muted">{`Month ${i.period}`}</span></td>
+      <td className="px-3 py-2">{i.cycleName ?? "MaalRise"} <span className={`block text-xs ${i.kind === "capital" ? "font-medium text-primary-700" : "text-muted"}`}>{i.label}</span></td>
       <td className="px-3 py-2 text-right font-semibold">{formatKobo(i.amountKobo)}</td>
       <td className="px-3 py-2 text-xs">
         {i.bankName}<br />{i.accountName}<br /><span className="font-mono text-sm">{i.accountNumber}</span>
@@ -109,7 +110,7 @@ function Row({ item: i, today, canReverse }: { item: QueueItem; today: string; c
             <div className="flex gap-1">
               <Button size="xs" disabled={!paidOn} loading={busy === "pay"}
                 onClick={async () => {
-                  if (await run("pay", url, { action: "mark_paid", paid_on: paidOn, reference }, { success: `${i.investorName} marked paid.` })) setPaying(false);
+                  if (await run("pay", url, { action: "mark_paid", paid_on: paidOn, reference, kind: i.kind }, { success: `${i.investorName} marked paid.` })) setPaying(false);
                 }}>
                 Confirm transfer made
               </Button>
@@ -126,7 +127,7 @@ function Row({ item: i, today, canReverse }: { item: QueueItem; today: string; c
             <div className="flex gap-1">
               <Button size="xs" variant="destructive" disabled={!reason.trim()} loading={busy === "reverse"}
                 onClick={async () => {
-                  if (await run("reverse", url, { action: "reverse", reason }, { success: "Payment reversed — it is payable again. The history keeps both records." })) {
+                  if (await run("reverse", url, { action: "reverse", reason, kind: i.kind }, { success: "Payment reversed — it is payable again. The history keeps both records." })) {
                     setReversing(false); setReason("");
                   }
                 }}>

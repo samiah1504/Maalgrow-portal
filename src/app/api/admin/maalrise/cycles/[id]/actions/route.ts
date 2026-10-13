@@ -1,6 +1,6 @@
 /**
  * Cycle workflow: submit, approve or return terms; activation checks;
- * activation.
+ * activation; closing checks and closing (Phase 5).
  *
  * Approval is the database's decision as well as ours: it refuses an
  * approver who prepared or submitted the terms (D5). Activation is for
@@ -22,6 +22,8 @@ const ROLES: Record<string, readonly string[]> = {
   return: MAALRISE_APPROVE_ROLES,
   check: [...MAALRISE_PREPARE_ROLES, "finance", "customer_support"],
   activate: MAALRISE_APPROVE_ROLES,
+  close_check: [...MAALRISE_PREPARE_ROLES, "finance", "customer_support"],
+  close: MAALRISE_APPROVE_ROLES,
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -52,6 +54,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (action === "check") {
     const res = await gate.db.rpc("maalrise_activation_checks", { p_cycle: id });
+    if (res.error) return dbError(res.error);
+    return NextResponse.json(res.data);
+  }
+
+  if (action === "close_check" || action === "close") {
+    // maalrise_close_cycle re-runs every check and refuses if any fails.
+    const res = await gate.db.rpc(action === "close" ? "maalrise_close_cycle" : "maalrise_close_checks", { p_cycle: id });
     if (res.error) return dbError(res.error);
     return NextResponse.json(res.data);
   }

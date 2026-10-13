@@ -13,6 +13,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AllocationRow,
+  CapitalPaymentRow,
+  CapitalReceiptRow,
+  CapitalSettlementRow,
   AuditRow,
   BankHistoryRow,
   Counterparty,
@@ -108,6 +111,8 @@ export type CycleDetail = {
   receipts: ReceiptRow[];
   distributions: (DistributionRow & { lines: DistributionLineRow[] })[];
   paymentEvents: PaymentEventRow[];
+  capitalReceipts: CapitalReceiptRow[];
+  capitalSettlements: (CapitalSettlementRow & { payments: CapitalPaymentRow[] })[];
   activity: AuditRow[];
   names: Record<string, string>;
 };
@@ -118,7 +123,7 @@ export async function getCycleDetail(db: SupabaseClient, id: string): Promise<Cy
   const cycle = cycleRes.data as CycleRow | null;
   if (!cycle) return null;
 
-  const [cp, terms, allocs, funds, docs, recs, dists, dlines] = await Promise.all([
+  const [cp, terms, allocs, funds, docs, recs, dists, dlines, caps, csets, cpays] = await Promise.all([
     db.from("maalrise_counterparties").select("id, name, registration_no, contact_email, contact_phone").eq("id", cycle.counterparty_id).maybeSingle(),
     db.from("maalrise_cycle_terms").select("*").eq("cycle_id", id).order("version", { ascending: false }),
     db.from("maalrise_allocations").select("*").eq("cycle_id", id),
@@ -128,7 +133,13 @@ export async function getCycleDetail(db: SupabaseClient, id: string): Promise<Cy
     db.from("maalrise_receipts").select("*").eq("cycle_id", id).order("recorded_at", { ascending: false }),
     db.from("maalrise_distributions").select("*").eq("cycle_id", id).order("period", { ascending: false }).order("sequence", { ascending: false }),
     db.from("maalrise_distribution_lines").select("*").eq("cycle_id", id).order("investor_name"),
+    db.from("maalrise_capital_receipts").select("*").eq("cycle_id", id).order("recorded_at", { ascending: false }),
+    db.from("maalrise_capital_settlements").select("*").eq("cycle_id", id).order("prepared_at", { ascending: false }),
+    db.from("maalrise_capital_payments").select("*").eq("cycle_id", id).order("investor_name"),
   ]);
+  const capitalReceipts = must<CapitalReceiptRow[]>(caps, "capital entries");
+  const settlementRows = must<CapitalSettlementRow[]>(csets, "capital settlements");
+  const capitalPayments = must<CapitalPaymentRow[]>(cpays, "capital payments");
   const receipts = must<ReceiptRow[]>(recs, "receipts");
   const distRows = must<DistributionRow[]>(dists, "distributions");
   const lineRows = must<DistributionLineRow[]>(dlines, "payment lines");
@@ -160,7 +171,8 @@ export async function getCycleDetail(db: SupabaseClient, id: string): Promise<Cy
     : [];
   const inv = Object.fromEntries(investors.map((i) => [i.id, i]));
 
-  const entityIds = [id, ...termIds, ...fundings.map((f) => f.id), ...receipts.map((r) => r.id), ...distRows.map((x) => x.id)];
+  const entityIds = [id, ...termIds, ...fundings.map((f) => f.id), ...receipts.map((r) => r.id), ...distRows.map((x) => x.id),
+    ...capitalReceipts.map((r) => r.id), ...settlementRows.map((x) => x.id)];
   const activity = must<AuditRow[]>(
     await db
       .from("audit_logs")
@@ -175,7 +187,10 @@ export async function getCycleDetail(db: SupabaseClient, id: string): Promise<Cy
   const names = await peopleNames(db, [
     ...versions.flatMap((v) => [v.prepared_by, v.submitted_by, v.approved_by, v.returned_by]),
     ...fundings.flatMap((f) => [f.recorded_by, f.confirmed_by, f.rejected_by]),
-    ...receipts.flatMap((r) => [r.recorded_by, r.confirmed_by, r.rejected_by]),
+    ...receipts.flatMap((r) => [r.recorded_by, r.confirmed_by, r.rejected_by, r.reversed_by]),
+    ...capitalReceipts.flatMap((r) => [r.recorded_by, r.confirmed_by, r.rejected_by, r.reversed_by]),
+    ...settlementRows.flatMap((x) => [x.prepared_by, x.approved_by]),
+    ...capitalPayments.map((l) => l.paid_by),
     ...distRows.flatMap((x) => [x.prepared_by, x.approved_by]),
     ...lineRows.map((l) => l.paid_by),
     ...paymentEvents.map((e) => e.actor),
@@ -197,6 +212,8 @@ export async function getCycleDetail(db: SupabaseClient, id: string): Promise<Cy
     receipts,
     distributions: distRows.map((x) => ({ ...x, lines: lineRows.filter((l) => l.distribution_id === x.id) })),
     paymentEvents,
+    capitalReceipts,
+    capitalSettlements: settlementRows.map((x) => ({ ...x, payments: capitalPayments.filter((l) => l.settlement_id === x.id) })),
     activity,
     names,
   };
@@ -272,7 +289,7 @@ export async function getInvestorDetail(db: SupabaseClient, id: string): Promise
 }
 
 export async function dashboardFigures(db: SupabaseClient) {
-  const [invs, cycles, allocs, cps, recs, dists, lines] = await Promise.all([
+  const [invs, cycles, allocs, cps, recs, dists, lines, caps, cpays, cterms] = await Promise.all([
     db.from("maalrise_investors").select("id", { count: "exact", head: true }),
     db.from("maalrise_cycles").select("id, name, status, start_date, duration_months, approved_terms_id, counterparty_id"),
     db.from("maalrise_allocations").select("cycle_id, capital_kobo"),
@@ -280,7 +297,13 @@ export async function dashboardFigures(db: SupabaseClient) {
     db.from("maalrise_receipts").select("cycle_id, period, amount_kobo, status, applied_kobo, held_kobo"),
     db.from("maalrise_distributions").select("id, cycle_id, status, net_kobo, allocated_kobo, unallocated_kobo"),
     db.from("maalrise_distribution_lines").select("status, amount_kobo"),
+    db.from("maalrise_capital_receipts").select("cycle_id, amount_kobo, status"),
+    db.from("maalrise_capital_payments").select("status, amount_kobo"),
+    db.from("maalrise_cycle_terms").select("id, cost_kobo").eq("status", "approved"),
   ]);
+  const capReceipts = must<Pick<CapitalReceiptRow, "cycle_id" | "amount_kobo" | "status">[]>(caps, "capital entries");
+  const capPays = must<Pick<CapitalPaymentRow, "status" | "amount_kobo">[]>(cpays, "capital payments");
+  const termCost = Object.fromEntries(must<{ id: string; cost_kobo: number }[]>(cterms, "terms").map((x) => [x.id, x.cost_kobo]));
   if (invs.error) throw new Error(`Could not load investors: ${invs.error.message}`);
   const c = must<Pick<CycleRow, "id" | "name" | "status" | "start_date" | "duration_months" | "approved_terms_id" | "counterparty_id">[]>(cycles, "Cycles");
   const cpName = Object.fromEntries(must<{ id: string; name: string }[]>(cps, "counterparties").map((x) => [x.id, x.name]));
@@ -317,11 +340,22 @@ export async function dashboardFigures(db: SupabaseClient) {
     paidKobo: sumBy(payLines.filter((l) => l.status === "paid"), (l) => l.amount_kobo),
     toPayKobo: sumBy(payLines.filter((l) => l.status === "payable"), (l) => l.amount_kobo),
     toPayCount: payLines.filter((l) => l.status === "payable").length,
+    capitalDue: (cycleId: string) => termCost[c.find((x) => x.id === cycleId)?.approved_terms_id ?? ""] ?? 0,
+    capitalReceipts: capReceipts,
+    capitalPaidKobo: sumBy(capPays.filter((l) => l.status === "paid"), (l) => l.amount_kobo),
+    capitalToPayKobo: sumBy(capPays.filter((l) => l.status === "payable"), (l) => l.amount_kobo),
   };
 }
 
 export type PaymentQueueItem = DistributionLineRow & {
+  kind: "profit";
   distribution: Pick<DistributionRow, "id" | "cycle_name" | "counterparty_name" | "period" | "sequence" | "due_date" | "approved_at"> | null;
+  history: PaymentEventRow[];
+};
+
+export type CapitalQueueItem = CapitalPaymentRow & {
+  kind: "capital";
+  settlement: Pick<CapitalSettlementRow, "id" | "cycle_name" | "maturity_date" | "approved_at"> | null;
   history: PaymentEventRow[];
 };
 
@@ -345,7 +379,24 @@ export async function listPaymentQueue(db: SupabaseClient): Promise<PaymentQueue
     ? must<PaymentEventRow[]>(await db.from("maalrise_payment_events").select("*").in("line_id", lines.map((l) => l.id)).order("created_at"), "payment history")
     : [];
   const d = Object.fromEntries(dists.map((x) => [x.id, x]));
-  return lines.map((l) => ({ ...l, distribution: d[l.distribution_id] ?? null, history: history.filter((h) => h.line_id === l.id) }));
+  return lines.map((l) => ({ ...l, kind: "profit" as const, distribution: d[l.distribution_id] ?? null, history: history.filter((h) => h.line_id === l.id) }));
+}
+
+/** Approved capital repayments, read the same way (officer: approved only). */
+export async function listCapitalQueue(db: SupabaseClient): Promise<CapitalQueueItem[]> {
+  const lines = must<CapitalPaymentRow[]>(
+    await db.from("maalrise_capital_payments").select("*").in("status", ["payable", "paid"]).order("investor_name"),
+    "capital payments"
+  );
+  const ids = [...new Set(lines.map((l) => l.settlement_id))];
+  const sets = ids.length
+    ? must<CapitalSettlementRow[]>(await db.from("maalrise_capital_settlements").select("*").in("id", ids), "capital settlements")
+    : [];
+  const history = lines.length
+    ? must<PaymentEventRow[]>(await db.from("maalrise_capital_payment_events").select("*").in("line_id", lines.map((l) => l.id)).order("created_at"), "capital payment history")
+    : [];
+  const st = Object.fromEntries(sets.map((x) => [x.id, x]));
+  return lines.map((l) => ({ ...l, kind: "capital" as const, settlement: st[l.settlement_id] ?? null, history: history.filter((h) => h.line_id === l.id) }));
 }
 
 export async function listMyNotifications(db: SupabaseClient, limit = 50): Promise<NotificationRow[]> {

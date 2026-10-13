@@ -42,6 +42,8 @@ export type MonthPosition = {
   confirmedKobo: number;
   /** Recorded but not yet confirmed. */
   pendingKobo: number;
+  /** What may still be recorded: scheduled minus confirmed and unconfirmed entries. */
+  recordableKobo: number;
   /** Confirmed money beyond the schedule, held and not distributed. */
   heldKobo: number;
   outstandingKobo: number;
@@ -88,6 +90,7 @@ export function monthPositions(lines: Line[], receipts: Receipt[], todayIso: str
         confirmedKobo,
         pendingKobo,
         heldKobo,
+        recordableKobo: Math.max(l.counterparty_gross_kobo - confirmedKobo - pendingKobo, 0),
         outstandingKobo,
         daysLate,
         status,
@@ -108,3 +111,73 @@ export const PAYMENT_STATUS_LABEL = {
   payable: "Approved — to pay",
   paid: "Paid",
 } as const;
+
+export type CapitalStatus = "upcoming" | "due_today" | "awaiting" | "follow_up" | "part_received" | "received";
+
+export const CAPITAL_STATUS_LABEL: Record<CapitalStatus, string> = {
+  upcoming: "Not yet due",
+  due_today: "Due today",
+  awaiting: "Awaiting capital",
+  follow_up: "Follow up",
+  part_received: "Partly received",
+  received: "Received in full",
+};
+
+export const CAPITAL_STATUS_VARIANT: Record<CapitalStatus, "upcoming" | "warning" | "danger" | "info" | "approved"> = {
+  upcoming: "upcoming",
+  due_today: "warning",
+  awaiting: "warning",
+  follow_up: "danger",
+  part_received: "info",
+  received: "approved",
+};
+
+export type CapitalPosition = {
+  dueDate: string;
+  dueKobo: number;
+  confirmedKobo: number;
+  pendingKobo: number;
+  /** What may still be recorded: owed minus confirmed and unconfirmed entries. */
+  recordableKobo: number;
+  outstandingKobo: number;
+  daysLate: number;
+  status: CapitalStatus;
+  followUp: boolean;
+};
+
+/**
+ * The capital repayment against the maturity date. Investors are paid
+ * out only when the full capital is confirmed; until then a partly
+ * received capital is shown as such, never paid out in part.
+ */
+export function capitalPosition(
+  dueKobo: number,
+  dueDate: string,
+  receipts: { amount_kobo: number; status: string }[],
+  todayIso: string
+): CapitalPosition {
+  const confirmedKobo = receipts.filter((r) => r.status === "confirmed").reduce((s, r) => s + r.amount_kobo, 0);
+  const pendingKobo = receipts.filter((r) => r.status === "recorded").reduce((s, r) => s + r.amount_kobo, 0);
+  const today = parseIsoDate(todayIso);
+  const due = parseIsoDate(dueDate);
+  const daysLate = today && due ? differenceInCalendarDays(today, due) : 0;
+  const fullyRecorded = confirmedKobo + pendingKobo >= dueKobo;
+  let status: CapitalStatus;
+  if (confirmedKobo >= dueKobo) status = "received";
+  else if (confirmedKobo > 0) status = "part_received";
+  else if (daysLate < 0) status = "upcoming";
+  else if (daysLate === 0) status = "due_today";
+  else if (daysLate >= FOLLOW_UP_AFTER_DAYS && !fullyRecorded) status = "follow_up";
+  else status = "awaiting";
+  return {
+    dueDate,
+    dueKobo,
+    confirmedKobo,
+    pendingKobo,
+    recordableKobo: Math.max(dueKobo - confirmedKobo - pendingKobo, 0),
+    outstandingKobo: Math.max(dueKobo - confirmedKobo, 0),
+    daysLate,
+    status,
+    followUp: daysLate >= FOLLOW_UP_AFTER_DAYS && !fullyRecorded,
+  };
+}

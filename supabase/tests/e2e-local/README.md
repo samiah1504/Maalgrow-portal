@@ -35,6 +35,14 @@ node supabase/tests/e2e-local/ui-e2e.mjs /tmp/shots
   - Mark as Paid and super-admin reversal;
   - the dashboard and refusals.
 
+`ui-e2e-phase5.mjs` covers Phase 5:
+  - capital reminders at maturity;
+  - super-admin reversal of a confirmed entry;
+  - capital recorded in parts, never above what is owed, paid out only when complete;
+  - capital entry reversal;
+  - settlement approval and capital Mark as Paid;
+  - closing checks and closing, and a closed Cycle being final.
+
 `up.sh` also emulates Supabase storage on disk for the document routes.
 
 Rebuild the database (`up.sh`) before each run; each run creates records.

@@ -57,7 +57,7 @@ Where it is enforced:
   rest stays outstanding. Each part is applied once. One open
   distribution per Cycle and month; money confirmed after that month's
   distribution was approved creates a follow-on distribution of the
-  new money only. Money beyond a month's schedule is held (D6).
+  new money only. (Phase 5: entries above what is owed are refused.)
 - **Approval.** An administrator or super admin approves; the person
   who prepared it may approve. Approval is refused while an investor's
   bank details are unconfirmed or changed since preparation (refresh
@@ -79,6 +79,31 @@ Where it is enforced:
   (super admin, administrator) and the database's activation checklist,
   which re-runs on activation and refuses if any check fails.
 
+### Phase 5 — capital settlement and closing (confirmed 13 Oct 2026)
+
+- **A3 confirmed.** The cost (capital) is repaid in one sum at maturity;
+  the markup is paid monthly.
+- **Capital cannot be short at maturity.** Several capital entries are
+  allowed (a split bank transfer), never above the capital owed, and
+  investors are paid out **only once the full capital is confirmed** —
+  never in part. Each investor gets back exactly the capital they
+  funded, to their confirmed account. No fee or tax is taken from
+  capital; the service fee comes from profit only.
+- **No overpayment.** Payments are received outside the app and
+  recorded, so an entry above what is still owed (monthly or capital)
+  is refused as an entry error. Nothing is "held".
+- **Correcting mistakes.** A super admin can reverse a confirmed entry
+  (monthly or capital) with a reason, only until its distribution or
+  capital settlement is approved; the figures are recalculated exactly
+  and the entry's history is kept.
+- **Closing.** A Cycle closes only when every month's profit and the
+  capital have been received, distributed, approved and marked paid.
+  **No write-offs.** A closed Cycle's payments are final.
+- **No rollover.** Investors collect their money at maturity.
+- Reminders on the maturity date and a follow-up five days later while
+  the capital is not fully recorded; capital approval, Mark as Paid and
+  super-admin reversal work as for monthly profit.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;
@@ -94,8 +119,8 @@ Where it is enforced:
 - **D5 Approval** — whoever prepares or submits terms cannot approve
   them; approval freezes the version and its breakdown.
 - **D6 Shortfalls and excess** — partial distributions from confirmed
-  money; excess held, not distributed (Phase 4; assigning held money
-  to a later month or to capital is a later step).
+  monthly money; capital is paid out only in full. There is no excess:
+  entries above what is owed are refused (Phase 5).
 - **D7 Reversals** — super admin only, with a reason, history kept
   (built in Phase 4).
 - **D8 Permissions** — prepare: super admin, administrator, operations;
@@ -109,7 +134,6 @@ Where it is enforced:
 
 | | Question | Current handling |
 |---|---|---|
-| A3 | Is markup paid monthly and cost repaid at maturity? | Schedule spreads markup monthly; capital settled separately at maturity |
 | A4 | Payment dates (first due date, weekends/holidays) | First payment one month after start; no adjustment |
 | A11 | Unit definition | Whole units at a fixed naira price per Cycle |
 | A12 | Tax treatment | Not configured |

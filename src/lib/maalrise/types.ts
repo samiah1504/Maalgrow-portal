@@ -192,7 +192,7 @@ export type ReceiptRow = {
   received_on: string;
   reference: string | null;
   notes: string | null;
-  status: "recorded" | "confirmed" | "rejected";
+  status: "recorded" | "confirmed" | "rejected" | "reversed";
   applied_kobo: number | null;
   held_kobo: number | null;
   fee_kobo: number | null;
@@ -205,6 +205,9 @@ export type ReceiptRow = {
   rejected_by: string | null;
   rejected_at: string | null;
   reject_reason: string | null;
+  reversed_by: string | null;
+  reversed_at: string | null;
+  reverse_reason: string | null;
 };
 
 export type DistributionRow = {
@@ -273,4 +276,56 @@ export type NotificationRow = {
   link: string | null;
   read_at: string | null;
   created_at: string;
+};
+
+export type CapitalReceiptRow = {
+  id: string;
+  cycle_id: string;
+  amount_kobo: number;
+  received_on: string;
+  reference: string | null;
+  notes: string | null;
+  status: "recorded" | "confirmed" | "rejected" | "reversed";
+  recorded_by: string;
+  recorded_at: string;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  rejected_by: string | null;
+  reject_reason: string | null;
+  reversed_by: string | null;
+  reverse_reason: string | null;
+};
+
+export type CapitalSettlementRow = {
+  id: string;
+  cycle_id: string;
+  cycle_name: string;
+  counterparty_name: string;
+  maturity_date: string;
+  capital_kobo: number;
+  status: "prepared" | "approved" | "cancelled";
+  prepared_by: string;
+  prepared_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  cancel_reason: string | null;
+};
+
+export type CapitalPaymentRow = {
+  id: string;
+  settlement_id: string;
+  cycle_id: string;
+  maalrise_investor_id: string;
+  investor_name: string;
+  investor_code: string;
+  units: number;
+  amount_kobo: number;
+  bank_name: string | null;
+  account_name: string | null;
+  account_number: string | null;
+  status: PaymentStatus;
+  paid_on: string | null;
+  paid_reference: string | null;
+  paid_by: string | null;
+  paid_at: string | null;
 };

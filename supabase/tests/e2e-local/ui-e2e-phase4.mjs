@@ -217,19 +217,25 @@ check("admin records and confirms their own entry", await toast(/recorded and co
 await waitText("Part-paid");
 check("month 2 shows part-paid with the rest outstanding",
   sql(`select applied_kobo from maalrise_distributions where cycle_id='${C}' and period=2`) === String(part) && (await text()).includes("Part-paid"));
-// second part for month 2, more than outstanding → excess held, same open distribution
+// second part for month 2: more than is still owed is refused (Phase 5 rule)
 await page.select("#receipt-month", "2");
 await type("Amount received (₦)", String((L[2].gross - part + 500000) / 100));
 await setDate("Date received", TODAY);
-check("excess warning shown", await waitText("The excess will be held, not distributed"));
+check("an amount above what is still owed is flagged, and Record is disabled",
+  await waitText("still owed for month 2. Check the amount.") && !(await page.evaluate(() =>
+    [...document.querySelectorAll("button")].some((b) => b.textContent.includes("Record payment") && !b.disabled))));
+const over = await api("admin", "POST", `/api/admin/maalrise/cycles/${C}/receipts`,
+  { period: 2, amount_kobo: L[2].gross - part + 500000, received_on: TODAY });
+check("the database refuses it too", over.status === 400 && /still owed for month 2/.test(over.body.error ?? ""), JSON.stringify(over));
+// the exact remainder completes the month
+await type("Amount received (₦)", ((L[2].gross - part) / 100).toFixed(2));
 await page.evaluate(() => [...document.querySelectorAll("label")].find((l) => l.textContent.includes("Confirm now"))?.querySelector("input")?.click());
 await click("Record payment");
 await toast(/recorded and confirmed/i);
 await sleep(800);
-check("one distribution for month 2, totals exactly the scheduled month, excess held",
+check("one distribution for month 2, totals exactly the scheduled month",
   sql(`select count(*) from maalrise_distributions where cycle_id='${C}' and period=2`) === "1"
-  && sql(`select applied_kobo || ':' || fee_kobo from maalrise_distributions where cycle_id='${C}' and period=2`) === `${L[2].gross}:${L[2].fee}`
-  && sql(`select sum(held_kobo) from maalrise_receipts where cycle_id='${C}' and period=2`) === "500000");
+  && sql(`select applied_kobo || ':' || fee_kobo from maalrise_distributions where cycle_id='${C}' and period=2`) === `${L[2].gross}:${L[2].fee}`);
 await shot("p4-03-distributions");
 
 // ── 6. Approve month 1 (the preparer may approve) ─────────────────────────
@@ -237,7 +243,7 @@ check("finance cannot approve a distribution", (await api("fin", "POST", `/api/a
 check("payment officer cannot approve a distribution", (await api("officer", "POST", `/api/admin/maalrise/distributions/${d1[0]}`, { action: "approve" })).status === 403);
 await go(`/admin/maalrise/cycles/${C}#distributions`);
 await click("Approve distribution", { within: "Month 1 (scheduled" });
-check("administrator approves month 1", await toast(/Distribution approved/i));
+check("administrator approves month 1", await toast(/distribution is approved/i));
 await waitText("Approved — to pay");
 check("month-1 payments are payable; month 2 still awaits approval",
   sql(`select string_agg(distinct status, ',') from maalrise_distribution_lines where distribution_id='${d1[0]}'`) === "payable"
@@ -252,7 +258,7 @@ t = await text();
 check("officer sees the two approved month-1 payments, nothing awaiting approval",
   t.includes("To pay (2)") && t.includes("Both Products") && t.includes("Pending Kyc"));
 check("officer sees the bank account to pay", t.includes("0011223344"));
-check("officer sees which Cycle and month each payment is for", t.includes("E2E Phase 4 Cycle") && t.includes("Month 1"));
+check("officer sees which Cycle and month each payment is for", t.includes("E2E Phase 4 Cycle") && t.includes("Profit · month 1"));
 check("officer's sidebar shows MaalRise Payments, highlighted alone", await page.evaluate(() => {
   const links = [...document.querySelectorAll("aside a")];
   const mr = links.find((a) => a.textContent.includes("MaalRise Payments"));
@@ -303,7 +309,7 @@ check("dashboard shows received, distributions and investor payments",
 check("dashboard lists the months still owed (paid months drop off; month 3 due today, month 4 upcoming)",
   t.includes("Counterparty payments due") && !/Month 1\s/.test(t.split("Counterparty payments due (next")[1] ?? "") && (L[3].due !== TODAY || t.includes("Due today")) && t.includes("Upcoming"));
 check("dashboard money figures match the database",
-  t.includes("₦1,171,666.66") && t.includes("₦5,000.00 held"));
+  t.includes("₦1,166,666.66") && !t.includes("held"));
 await shot("p4-06-dashboard");
 await go(`/admin/maalrise/cycles/${C}#receipts`);
 await shot("p4-07-cycle");

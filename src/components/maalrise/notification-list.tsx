@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/utils";
 import { useMaalriseAction } from "@/components/maalrise/use-maalrise-action";
 import type { NotificationRow } from "@/lib/maalrise/types";
 
-const URGENT = new Set(["payment_followup"]);
+const URGENT = new Set(["payment_followup", "capital_followup"]);
 
 /** The signed-in person's MaalRise notifications, with mark-as-read. */
 export function NotificationList({ items, compact = false }: { items: NotificationRow[]; compact?: boolean }) {

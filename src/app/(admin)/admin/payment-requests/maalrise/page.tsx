@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Banknote } from "lucide-react";
 import { formatKobo } from "@/lib/maalrise/format";
-import { listMyNotifications, listPaymentQueue, mr } from "@/lib/maalrise/db";
+import { listCapitalQueue, listMyNotifications, listPaymentQueue, mr } from "@/lib/maalrise/db";
 import { requireMaalrisePaymentsPage } from "@/lib/maalrise/page-guard";
 import { lagosToday } from "@/lib/maalrise/receipts";
 import { EmptyState } from "@/components/maalrise/sample-notice";
@@ -20,7 +20,11 @@ export const metadata: Metadata = { title: "MaalRise Payments | Admin" };
 export default async function MaalRisePaymentsPage() {
   const { supabase, role } = await requireMaalrisePaymentsPage();
   const db = mr(supabase);
-  const [items, notes] = await Promise.all([listPaymentQueue(db), listMyNotifications(db, 10)]);
+  const [profit, capital, notes] = await Promise.all([listPaymentQueue(db), listCapitalQueue(db), listMyNotifications(db, 10)]);
+  const items = [
+    ...profit.map((i) => ({ ...i, cycleName: i.distribution?.cycle_name ?? null, label: `Profit · month ${i.period}` })),
+    ...capital.map((i) => ({ ...i, cycleName: i.settlement?.cycle_name ?? null, label: "Capital repayment" })),
+  ];
   const toPay = items.filter((i) => i.status === "payable");
   const paid = items.filter((i) => i.status === "paid");
   const unread = notes.filter((n) => !n.read_at);
@@ -30,7 +34,7 @@ export default async function MaalRisePaymentsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">MaalRise Payments</h1>
         <p className="text-sm text-muted mt-1">
-          Approved monthly profit payments to MaalRise investors. Make each transfer in the bank, then mark it paid here.
+          Approved monthly profit payments and capital repayments to MaalRise investors. Make each transfer in the bank, then mark it paid here.
           Nothing is paid automatically.
         </p>
       </div>
@@ -52,16 +56,17 @@ export default async function MaalRisePaymentsPage() {
 
       {items.length === 0 ? (
         <EmptyState icon={<Banknote className="h-5 w-5" />} title="No approved MaalRise payments">
-          Payments appear here once an administrator approves a monthly profit distribution.
+          Payments appear here once an administrator approves a monthly profit distribution or a capital settlement.
         </EmptyState>
       ) : (
         <PaymentQueue
           items={items.map((i) => ({
             id: i.id,
+            kind: i.kind,
+            label: i.label,
             investorName: i.investor_name,
             investorCode: i.investor_code,
-            cycleName: i.distribution?.cycle_name ?? null,
-            period: i.period,
+            cycleName: i.cycleName,
             amountKobo: i.amount_kobo,
             bankName: i.bank_name,
             accountName: i.account_name,
