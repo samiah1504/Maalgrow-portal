@@ -28,6 +28,7 @@ import {
 import { DetailSection, FieldGrid, SectionIndex } from "@/components/maalrise/section";
 import { EmptyState } from "@/components/maalrise/sample-notice";
 import { ActivationPanel, FundingPanel, TermsWorkflow, type FundingView } from "./_cycle-actions";
+import { BulkImportPanel, ConfirmAllFunding, CycleEmailPanel } from "./_bulk-actions";
 import {
   ClosePanel,
   DistributionActions,
@@ -326,6 +327,17 @@ export function CycleDetailView({
           </div>
         ) : (
           <p className="mb-4 text-sm text-muted">No confirmed funding yet.</p>
+        )}
+        {permissions.approve && fundingOpen && <div className="mb-4"><BulkImportPanel cycleId={cycle.id} /></div>}
+        {permissions.finance && fundingOpen && fundings.some((f) => f.status === "recorded") && (
+          <div className="mb-4">
+            <ConfirmAllFunding cycleId={cycle.id} isSuperAdmin={role === "super_admin"}
+              recorded={fundings.filter((f) => f.status === "recorded").length}
+              recordedByMe={fundings.filter((f) => f.status === "recorded" && f.recordedByMe).length} />
+          </div>
+        )}
+        {permissions.approve && d.allocations.length > 0 && !["cancelled", "closed"].includes(cycle.status) && (
+          <div className="mb-4"><CycleEmailPanel cycleId={cycle.id} investors={d.allocations.length} /></div>
         )}
         <FundingPanel
           cycleId={cycle.id}

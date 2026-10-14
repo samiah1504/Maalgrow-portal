@@ -42,6 +42,12 @@ http.createServer(async (req, res) => {
       verification_type: b.type || "invite", redirect_to: b.redirect_to || "" });
   }
   const delUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([0-9a-f-]{36})$/);
+  if (delUser && req.method === "GET") {
+    if (verify(bearer)?.role !== "service_role") return send(403, { msg: "service role required" });
+    const row = execFileSync("psql", ["-d", DB, "-Atq", "-c", `select json_build_object('id', id, 'email', email, 'last_sign_in_at', last_sign_in_at) from auth.users where id = '${delUser[1]}'`], { encoding: "utf8" }).trim();
+    if (!row) return send(404, { msg: "User not found" });
+    return send(200, { ...JSON.parse(row), aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {} });
+  }
   if (delUser && req.method === "DELETE") {
     if (verify(bearer)?.role !== "service_role") return send(403, { msg: "service role required" });
     execFileSync("psql", ["-d", DB, "-Atq", "-c", `delete from auth.users where id = '${delUser[1]}'`]);

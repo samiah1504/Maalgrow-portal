@@ -62,3 +62,8 @@ node supabase/tests/e2e-local/ui-e2e.mjs /tmp/shots
 `sent-emails.jsonl`, never sent; an address containing "bounce" is refused.
 
 Rebuild the database (`up.sh`) before each run; each run creates records.
+
+`ui-e2e-bulk.mjs` covers migration 057 and the bulk tools:
+  - importing a Cycle's investors and funding from a file: preview, refused rows, new logins with nothing sent, a repeat import adds nothing;
+  - Confirm all, including an administrator's own entry being left and a super admin's single reason;
+  - "Email all investors in this Cycle": counts first, invitations with a set-password link for people who never signed in, notifications for the rest, one email each, the failed one retried without duplicates.

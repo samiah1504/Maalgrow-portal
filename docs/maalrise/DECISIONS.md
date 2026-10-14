@@ -171,6 +171,28 @@ Where it is enforced:
 - **Guide.** An in-app MaalRise Guide: who does what, from adding
   investors to closing a Cycle.
 
+### Bulk import, Confirm all and Cycle emails (confirmed 14 Oct 2026, migration 057)
+
+- **Import.** On a Cycle, super admins and administrators can import
+  many investors' funding from a Google Sheet ("anyone with the link")
+  or a CSV/Excel file: Email, Full name, Phone, Units, Date received,
+  Bank reference, optional bank details. Every row is checked first
+  (staff refused, whole units, no future dates, not more units than
+  the Cycle still needs, no repeated references). Importing adds the
+  person (a new login if needed — **nothing sent**) and RECORDS the
+  funding. A reference already in the Cycle is skipped, so a repeat
+  import adds nothing.
+- **Confirm all.** One press confirms every recorded entry the person
+  may confirm, through the same database rule as one by one; a super
+  admin confirming their own entries gives one reason, kept on each.
+- **Email all investors in this Cycle.** Available once funding is
+  confirmed. A count is shown first (invitations for people who never
+  signed in, with a fresh set-password link; notifications for people
+  who already sign in), then one press sends. One email per investor
+  per Cycle, however often pressed; failures stay to retry. Emailing
+  all MaalRise investors at any time is the Communication Centre's
+  MaalRise option.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;

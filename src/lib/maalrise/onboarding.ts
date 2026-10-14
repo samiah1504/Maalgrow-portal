@@ -69,3 +69,67 @@ export async function ensureBaseInvestorRecord(
   if (insErr || !row) throw new Error(`Could not create the investor record: ${insErr?.message ?? "unknown error"}`);
   return { id: row.id as string, created: true };
 }
+
+export type NewMaalriseInvestor = {
+  email: string;
+  fullName: string;
+  phone: string | null;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+};
+
+/**
+ * Gives a person MaalRise access, as the add-investor page and the bulk
+ * import both do: a login if `loginId` is null (created WITHOUT sending
+ * anything), the MaalGrow investor record if they have none, then
+ * maalrise_add_investor() AS THE STAFF MEMBER (`db`, so the database
+ * checks their role). If any step fails, whatever this call made is
+ * removed again. Returns the MaalRise investor id.
+ */
+export async function addMaalriseInvestor(
+  db: SupabaseClient,
+  admin: SupabaseClient,
+  staffId: string,
+  loginId: string | null,
+  p: NewMaalriseInvestor & { loginName?: string | null }
+): Promise<{ id: string; createdLogin: boolean }> {
+  let profileId = loginId;
+  let createdLogin = false;
+  let createdRecord: string | null = null;
+  try {
+    if (!profileId) {
+      profileId = await createInvestorLogin(admin, p.email, p.fullName);
+      createdLogin = true;
+    }
+    const base = await ensureBaseInvestorRecord(admin, {
+      profileId,
+      email: p.email,
+      fullName: p.fullName || p.loginName?.trim() || p.email,
+      phone: p.phone,
+      createdBy: staffId,
+    });
+    if (base.created) createdRecord = base.id;
+  } catch (e) {
+    if (createdLogin && profileId) await admin.auth.admin.deleteUser(profileId);
+    throw e instanceof Error ? e : new Error("Could not create the investor.");
+  }
+
+  const res = await db.rpc("maalrise_add_investor", {
+    p_profile: profileId,
+    p: {
+      full_name: p.fullName,
+      phone: p.phone ?? "",
+      bank_name: p.bankName,
+      account_name: p.accountName,
+      account_number: p.accountNumber,
+    },
+  });
+  if (res.error) {
+    // Leave nothing half-made behind.
+    if (createdRecord) await admin.from("investors").delete().eq("id", createdRecord);
+    if (createdLogin && profileId) await admin.auth.admin.deleteUser(profileId);
+    throw new Error(res.error.message);
+  }
+  return { id: res.data as string, createdLogin };
+}

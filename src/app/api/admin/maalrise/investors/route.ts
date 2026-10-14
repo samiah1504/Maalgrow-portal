@@ -16,7 +16,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { MAALRISE_PREPARE_ROLES } from "@/lib/maalrise/permissions";
 import { dbError, findLoginByEmail, maalriseGate, readJson } from "@/lib/maalrise/api";
 import { mr } from "@/lib/maalrise/db";
-import { createInvestorLogin, ensureBaseInvestorRecord } from "@/lib/maalrise/onboarding";
+import { addMaalriseInvestor } from "@/lib/maalrise/onboarding";
 
 type Body = {
   email?: string;
@@ -56,42 +56,19 @@ export async function POST(request: Request) {
   if (!profile && !fullName) return NextResponse.json({ error: "Full name is required for a new login." }, { status: 400 });
 
   const admin = mr(await createAdminClient());
-  let profileId = profile?.id ?? null;
-  let createdLogin = false;
-  let createdRecord: string | null = null;
   try {
-    if (!profileId) {
-      profileId = await createInvestorLogin(admin, email, fullName);
-      createdLogin = true;
-    }
-    const base = await ensureBaseInvestorRecord(admin, {
-      profileId,
+    const r = await addMaalriseInvestor(gate.db, admin, gate.userId, profile?.id ?? null, {
       email,
-      fullName: fullName || profile?.full_name?.trim() || email,
+      fullName,
+      loginName: profile?.full_name,
       phone,
-      createdBy: gate.userId,
+      bankName: b?.bank_name ?? "",
+      accountName: b?.account_name ?? "",
+      accountNumber: b?.account_number ?? "",
     });
-    if (base.created) createdRecord = base.id;
+    return NextResponse.json({ id: r.id, created_login: r.createdLogin }, { status: 201 });
   } catch (e) {
-    if (createdLogin && profileId) await admin.auth.admin.deleteUser(profileId);
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not create the investor." }, { status: 400 });
+    const message = e instanceof Error ? e.message : "Could not create the investor.";
+    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 403 : 400 });
   }
-
-  const res = await gate.db.rpc("maalrise_add_investor", {
-    p_profile: profileId,
-    p: {
-      full_name: fullName,
-      phone: phone ?? "",
-      bank_name: b?.bank_name ?? "",
-      account_name: b?.account_name ?? "",
-      account_number: b?.account_number ?? "",
-    },
-  });
-  if (res.error) {
-    // Leave nothing half-made behind.
-    if (createdRecord) await admin.from("investors").delete().eq("id", createdRecord);
-    if (createdLogin && profileId) await admin.auth.admin.deleteUser(profileId);
-    return dbError(res.error);
-  }
-  return NextResponse.json({ id: res.data, created_login: createdLogin }, { status: 201 });
 }

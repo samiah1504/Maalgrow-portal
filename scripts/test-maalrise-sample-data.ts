@@ -226,9 +226,14 @@ for (const c of SAMPLE_CYCLES) {
     "src/app/api/admin/maalrise/investors/[id]/invitation/route.ts",
     "src/app/api/admin/maalrise/investors/route.ts", // creates a login; sends nothing
   ];
-  const mailers = /sendMail|from ["']resend["']|new Resend\(|nodemailer|inviteUserByEmail|auth\.admin|sendOutboxEmail\(|sendMaalriseInvitation\(/;
+  // The bulk import creates logins through the same onboarding helper
+  // (nothing sent); it is checked for that below, not allowed to mail.
+  const mailers = /sendMail|from ["']resend["']|new Resend\(|nodemailer|inviteUserByEmail|auth\.admin|sendOutboxEmail\(|sendMaalriseInvitation\(|sendCycleInvitation\(/;
   const mailing = [...files, ...apiFiles].filter((p) => mailers.test(read(p)) && !MAIL_OK.includes(p));
   check("only the outbox, invitation and onboarding code can send email or create logins", mailing.length === 0, mailing);
+  check("the bulk import and \"Email all investors\" routes send nothing themselves",
+    ["src/app/api/admin/maalrise/cycles/[id]/import/route.ts", "src/app/api/admin/maalrise/cycles/[id]/emails/route.ts"]
+      .every((p) => !/@\/lib\/maalrise\/emails|resend|generateLink/i.test(read(p))));
   check("email is sent only by super admins and administrators",
     ["src/app/api/admin/maalrise/emails/[id]/route.ts", "src/app/api/admin/maalrise/investors/[id]/invitation/route.ts"]
       .every((p) => read(p).includes("maalriseGate(MAALRISE_APPROVE_ROLES)")));
@@ -243,6 +248,8 @@ for (const c of SAMPLE_CYCLES) {
   const ONBOARDING_ROUTES = [
     "src/app/api/admin/maalrise/investors/route.ts",
     "src/app/api/admin/maalrise/investors/[id]/invitation/route.ts",
+    "src/app/api/admin/maalrise/cycles/[id]/import/route.ts", // bulk import: logins, nothing sent
+    "src/app/api/admin/maalrise/emails/[id]/route.ts", // a Cycle invitation's password link
   ];
   const serviceRole = /createAdminClient|SUPABASE_SERVICE_ROLE|\.storage\b/;
   const keyUsers = [...files, ...apiFiles].filter((p) => serviceRole.test(read(p)) && p !== "src/lib/maalrise/db.ts");
@@ -263,6 +270,7 @@ for (const c of SAMPLE_CYCLES) {
     "src/app/(admin)/admin/maalrise/cycles/[id]/_payment-actions.tsx",
     "src/app/(admin)/admin/maalrise/emails/_email-actions.tsx",
     "src/components/maalrise/comms-picker.tsx",
+    "src/app/(admin)/admin/maalrise/cycles/[id]/_bulk-actions.tsx",
   ];
   check("only the action hook, alerts badge, investor lookup, uploads, email sending and the comms picker call the network",
     fetchers.every((p) => FETCH_OK.includes(p)), fetchers);

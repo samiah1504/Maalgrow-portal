@@ -96,3 +96,24 @@ export function maalriseInvitationHtml(p: MaalriseInvitationParams): string {
 export function sendMaalriseInvitation(p: MaalriseInvitationParams): Promise<SendResult> {
   return send(p.to, `Welcome to MaalRise — your investor code is ${p.investorCode}`, maalriseInvitationHtml(p));
 }
+
+/**
+ * A Cycle invitation (migration 057): the prepared message, then the
+ * "Set your password" button for someone who has never signed in.
+ */
+export function cycleInvitationHtml(subject: string, body: string, passwordSetupLink: string): string {
+  const paras = body.split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;">${esc(p).replace(/\n/g, "<br />")}</p>`).join("");
+  return maalriseEmailHtml(
+    subject,
+    `${paras}
+     <p style="text-align:center;margin:8px 0 22px;">
+       <a href="${passwordSetupLink}" style="background:#3B1D6B;color:#fff;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:600;display:inline-block;">Set your password</a>
+     </p>
+     <p style="margin:0;font-size:13px;color:#6b7280;">The button works for 24 hours. If it has expired, ask us for a new invitation. Sign in later at
+       <a href="${SITE_URL}" style="color:#3B1D6B;">${SITE_URL.replace(/^https?:\/\//, "")}</a>.</p>`
+  );
+}
+
+export function sendCycleInvitation(to: string, subject: string, body: string, passwordSetupLink: string): Promise<SendResult> {
+  return send(to, subject, cycleInvitationHtml(subject, body, passwordSetupLink));
+}
