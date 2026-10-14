@@ -213,6 +213,7 @@ export function ReopenPanel({ cycleId }: { cycleId: string }) {
 
 export type FundingView = {
   id: string;
+  investorId: string;
   investorName: string;
   units: number;
   amountKobo: number;
@@ -234,6 +235,7 @@ export function FundingPanel({
   canFinance,
   open,
   isSuperAdmin = false,
+  canMove = false,
 }: {
   cycleId: string;
   investors: { id: string; label: string }[];
@@ -243,6 +245,8 @@ export function FundingPanel({
   open: boolean;
   /** A super admin may confirm funding they recorded, giving a reason (migration 056). */
   isSuperAdmin?: boolean;
+  /** Super admin and administrator may move confirmed units to the right investor before activation (061). */
+  canMove?: boolean;
 }) {
   const { run, busy } = useMaalriseAction();
   const [investorId, setInvestorId] = useState("");
@@ -253,6 +257,10 @@ export function FundingPanel({
   const [reason, setReason] = useState("");
   const [selfConfirming, setSelfConfirming] = useState<string | null>(null);
   const [selfReason, setSelfReason] = useState("");
+  const [moving, setMoving] = useState<string | null>(null);
+  const [moveTo, setMoveTo] = useState("");
+  const [moveUnits, setMoveUnits] = useState("");
+  const [moveWhy, setMoveWhy] = useState("");
   const n = /^\d+$/.test(units) ? Number(units) : 0;
 
   return (
@@ -341,6 +349,48 @@ export function FundingPanel({
                         </span>
                       )
                     )}
+                    {canMove && open && f.status === "confirmed" && moving !== f.id && (
+                      <Button size="xs" variant="outline"
+                        onClick={() => { setMoving(f.id); setMoveTo(""); setMoveUnits(String(f.units)); setMoveWhy(""); }}>
+                        Move to another investor
+                      </Button>
+                    )}
+                    {moving === f.id && (() => {
+                      const mu = /^\d+$/.test(moveUnits) ? Number(moveUnits) : 0;
+                      const target = investors.find((i) => i.id === moveTo)?.label ?? "";
+                      return (
+                        <div className="mt-2 space-y-2 text-left rounded-md border border-amber-200 bg-amber-50/60 p-2" data-testid="move-form">
+                          <p className="text-[11px] text-muted">
+                            Units credited to the wrong investor go to the right one. Moving part of this entry splits it; the date stays the same and the Cycle total does not change.
+                          </p>
+                          <div className="space-y-1">
+                            <label htmlFor={`move-to-${f.id}`} className="block text-xs font-medium">Investor the units belong to</label>
+                            <select id={`move-to-${f.id}`} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}
+                              className="flex h-9 w-full rounded-lg border border-border bg-white px-2 text-sm">
+                              <option value="">Select…</option>
+                              {investors.filter((i) => i.id !== f.investorId).map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+                            </select>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Input label={`Units to move (of ${f.units})`} inputMode="numeric" value={moveUnits}
+                              onChange={(e) => setMoveUnits(e.target.value.replace(/\D/g, ""))} />
+                            <Input label="Reason" value={moveWhy} onChange={(e) => setMoveWhy(e.target.value)} />
+                          </div>
+                          <div className="flex gap-1 justify-end">
+                            <Button size="xs" disabled={!moveTo || mu < 1 || mu > f.units || !moveWhy.trim()} loading={busy === `mv-${f.id}`}
+                              onClick={async () => {
+                                if (!window.confirm(`Move ${mu} unit(s) (${formatKobo(mu * unitPriceKobo)}) from ${f.investorName} to ${target}?`)) return;
+                                if (await run(`mv-${f.id}`, `/api/admin/maalrise/fundings/${f.id}`,
+                                  { action: "move", to_investor: moveTo, units: mu, reason: moveWhy },
+                                  { success: "Units moved to the right investor." })) setMoving(null);
+                              }}>
+                              Move units
+                            </Button>
+                            <Button size="xs" variant="outline" onClick={() => setMoving(null)}>Cancel</Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {selfConfirming === f.id && (
                       <div className="mt-2 flex flex-wrap items-end justify-end gap-2 text-left">
                         <div className="min-w-56"><Input label="Reason for confirming your own entry" value={selfReason} onChange={(e) => setSelfReason(e.target.value)} /></div>

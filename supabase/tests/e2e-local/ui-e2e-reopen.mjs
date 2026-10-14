@@ -91,6 +91,7 @@ const c = await must("ops", "POST", "/api/admin/maalrise/cycles", {
 await must("ops", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "submit", terms_id: c.terms_id });
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "approve", terms_id: c.terms_id });
 const both = (await must("ops", "POST", "/api/admin/maalrise/investors", { email: "both@test.local", full_name: "" })).id;
+const other = (await must("ops", "POST", "/api/admin/maalrise/investors", { email: "login.only@test.local", full_name: "Login Only" })).id;
 const f1 = (await must("fin", "POST", `/api/admin/maalrise/cycles/${c.id}/fundings`, { investor_id: both, units: 8, received_on: TODAY, reference: "RO-E2E-1" })).id;
 await must("admin", "POST", `/api/admin/maalrise/fundings/${f1}`, { action: "confirm" });
 await as("ops");
@@ -102,6 +103,10 @@ await click("Upload", { exact: true });
 await toast(/Contract uploaded/);
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "activate" });
 check("set-up: the Cycle is active at ₦400,000", sql(`select status from maalrise_cycles where id='${c.id}'`) === "active");
+
+// 061: no moving units while the Cycle is active
+const activeMove = await api("admin", "POST", `/api/admin/maalrise/fundings/${f1}`, { action: "move", to_investor: other, units: 2, reason: "x" });
+check("moving units on an active Cycle is refused (reopen first)", activeMove.status === 400 && /reopen it first/.test(activeMove.body.error ?? ""), JSON.stringify(activeMove));
 
 // Only a super admin sees and can use it
 await as("admin");
@@ -125,6 +130,37 @@ check("back to terms approved, activation cleared",
 check("the reason is in the Cycle's activity history", await waitText("Reopened the Cycle for correction (super admin)"));
 await shot("p60-01-reopened");
 
+// 061: 2 of the 8 units credited to Both Products were Login Only's — moved in the browser
+check("finance cannot move units", (await api("fin", "POST", `/api/admin/maalrise/fundings/${f1}`, { action: "move", to_investor: other, units: 2, reason: "x" })).status === 403);
+await as("admin");
+await go(`/admin/maalrise/cycles/${c.id}#allocations`);
+await click("Move to another investor", { within: "RO-E2E-1", rowOnly: true });
+await page.waitForSelector("[data-testid='move-form']");
+await page.select(`#move-to-${f1}`, other);
+await page.evaluate(() => {
+  const set = (label, v) => {
+    const l = [...document.querySelectorAll("[data-testid='move-form'] label")].find((x) => x.textContent.trim().startsWith(label));
+    const el = document.getElementById(l.htmlFor);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  set("Units to move", "2"); set("Reason", "2 units were Login Only's, credited to Both Products by mistake");
+});
+let moveDialog = "";
+page.once("dialog", (d) => { moveDialog = d.message(); d.accept(); });
+await click("Move units", { within: "RO-E2E-1", rowOnly: true });
+check("units moved", await toast(/Units moved to the right investor/i));
+check("the confirmation names both investors and the amount", moveDialog.includes("Move 2 unit(s) (₦100,000.00)") && moveDialog.includes("Login Only"), moveDialog);
+check("the entry is split: 6 stay, 2 go to Login Only on the same date",
+  sql(`select string_agg(i.full_name || '=' || f.units || ':' || f.reference || ':' || f.status, ',' order by f.reference)
+       from maalrise_investor_fundings f join maalrise_investors i on i.id = f.maalrise_investor_id where f.cycle_id='${c.id}'`)
+    === "Both Products=6:RO-E2E-1:confirmed,Login Only=2:RO-E2E-1/moved:confirmed");
+check("allocations follow, total unchanged",
+  sql(`select string_agg(i.full_name || '=' || a.units, ',' order by i.full_name) from maalrise_allocations a
+       join maalrise_investors i on i.id = a.maalrise_investor_id where a.cycle_id='${c.id}'`) === "Both Products=6,Login Only=2");
+check("the move is in the Cycle's activity history", await waitText("Moved funding to the right investor"));
+await shot("p61-01-moved");
+
 // The correction, through the usual screens and routes
 const v2 = (await must("ops", "PUT", `/api/admin/maalrise/cycles/${c.id}/terms`, { terms: termsAt(45_000_000) })).terms_id;
 await must("ops", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "submit", terms_id: v2 });
@@ -135,6 +171,7 @@ await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { acti
 check("active again at ₦450,000 with 9 units; the ₦400,000 terms kept as superseded",
   sql(`select c.status || ':' || t.cost_kobo || ':' || (select sum(units) from maalrise_allocations where cycle_id=c.id)
        from maalrise_cycles c join maalrise_cycle_terms t on t.id = c.approved_terms_id where c.id='${c.id}'`) === "active:45000000:9"
+  && sql(`select units from maalrise_allocations where cycle_id='${c.id}' and maalrise_investor_id='${other}'`) === "2"
   && sql(`select string_agg(version || status, ',' order by version) from maalrise_cycle_terms where cycle_id='${c.id}'`) === "1superseded,2approved");
 
 // Once money has moved, it is refused

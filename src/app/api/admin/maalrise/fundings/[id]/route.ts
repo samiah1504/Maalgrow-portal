@@ -2,9 +2,11 @@
  * Confirm or reject recorded funding. Finance roles; the database
  * refuses a confirmation by the person who recorded it, and refuses
  * any confirmation that would fund more units than the cost requires.
+ * Before activation, confirmed units credited to the wrong investor can
+ * be moved to the right one (061, super admin and administrator).
  */
 import { NextResponse } from "next/server";
-import { MAALRISE_FINANCE_ROLES } from "@/lib/maalrise/permissions";
+import { MAALRISE_APPROVE_ROLES, MAALRISE_FINANCE_ROLES } from "@/lib/maalrise/permissions";
 import { dbError, isUuid, maalriseGate, readJson } from "@/lib/maalrise/api";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +14,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!gate.ok) return gate.response;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Unknown funding record." }, { status: 404 });
-  const b = await readJson<{ action?: string; reason?: string; self_reason?: string }>(request);
+  const b = await readJson<{ action?: string; reason?: string; self_reason?: string; to_investor?: string; units?: number }>(request);
+
+  if (b?.action === "move") {
+    if (!(MAALRISE_APPROVE_ROLES as readonly string[]).includes(gate.role)) {
+      return NextResponse.json({ error: "Your role cannot do this" }, { status: 403 });
+    }
+    if (!isUuid(b.to_investor)) return NextResponse.json({ error: "Choose the investor the units belong to." }, { status: 400 });
+    if (!Number.isInteger(b.units)) return NextResponse.json({ error: "Units must be a whole number." }, { status: 400 });
+    const res = await gate.db.rpc("maalrise_move_funding", {
+      p_funding: id, p_to: b.to_investor, p_units: b.units, p_reason: b.reason ?? "",
+    });
+    if (res.error) return dbError(res.error);
+    return NextResponse.json({ ok: true, id: res.data });
+  }
 
   const res =
     b?.action === "confirm"

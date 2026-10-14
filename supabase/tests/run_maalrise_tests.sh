@@ -75,6 +75,10 @@ awk '/^-- >>> 060 BODY START/{f=1;next} /^-- <<< 060 BODY END/{f=0} f' supabase/
   | cmp -s - <(awk '/^BEGIN;$/{f=1;next} /^COMMIT;$/{f=0} f' supabase/migrations/060_maalrise_reopen_cycle.sql) \
   || { echo "FAIL: the 060 part differs from the migration"; exit 1; }
 echo "PASS: the 060 part is identical to the migration body"
+awk '/^-- >>> 061 BODY START/{f=1;next} /^-- <<< 061 BODY END/{f=0} f' supabase/checks/061_parts/061_part_1_of_1.sql \
+  | cmp -s - <(awk '/^BEGIN;$/{f=1;next} /^COMMIT;$/{f=0} f' supabase/migrations/061_maalrise_move_funding.sql) \
+  || { echo "FAIL: the 061 part differs from the migration"; exit 1; }
+echo "PASS: the 061 part is identical to the migration body"
 
 dropdb --if-exists "$DB"
 createdb "$DB"
@@ -90,7 +94,7 @@ CREATE SCHEMA IF NOT EXISTS storage;
 CREATE TABLE IF NOT EXISTS storage.buckets (id TEXT PRIMARY KEY, name TEXT, public BOOLEAN);
 SQL
 for f in supabase/migrations/0*.sql; do
-  [[ "$f" == *051_maalrise_core.sql || "$f" == *052_maalrise_distributions.sql || "$f" == *053_maalrise_capital_settlement.sql || "$f" == *054_maalrise_investor_portal.sql || "$f" == *055_maalrise_go_live.sql || "$f" == *056_maalrise_super_admin_self_approval.sql || "$f" == *057_maalrise_cycle_emails.sql || "$f" == *058_maalrise_activation_warnings.sql || "$f" == *059_maalrise_view_as_investor.sql || "$f" == *060_maalrise_reopen_cycle.sql ]] && continue
+  [[ "$f" == *051_maalrise_core.sql || "$f" == *052_maalrise_distributions.sql || "$f" == *053_maalrise_capital_settlement.sql || "$f" == *054_maalrise_investor_portal.sql || "$f" == *055_maalrise_go_live.sql || "$f" == *056_maalrise_super_admin_self_approval.sql || "$f" == *057_maalrise_cycle_emails.sql || "$f" == *058_maalrise_activation_warnings.sql || "$f" == *059_maalrise_view_as_investor.sql || "$f" == *060_maalrise_reopen_cycle.sql || "$f" == *061_maalrise_move_funding.sql ]] && continue
   q -q -f "$f" >/dev/null
 done
 echo "scratch database: stub + migrations 001–050"
@@ -342,6 +346,21 @@ if q -q -f supabase/checks/060_parts/060_part_1_of_1.sql >/dev/null 2>&1; then e
   || { echo "FAIL: 060 part"; exit 1; }
 echo "PASS: 060 preflight, post-apply, fingerprint, rollback and one SQL Editor part (repeat refused)"
 
+# 061 (move funding credited to the wrong investor)
+[ "$(summary_of supabase/checks/maalrise_061_preflight.sql ready_to_apply)" = "t" ] || { echo "FAIL: 061 preflight not ready"; exit 1; }
+M0=$(fingerprint_of supabase/checks/maalrise_061_preflight.sql)
+q -q -f supabase/migrations/061_maalrise_move_funding.sql
+[ "$(summary_of supabase/checks/maalrise_061_postapply.sql all_ok)" = "t" ] || { echo "FAIL: 061 post-apply"; q -f supabase/checks/maalrise_061_postapply.sql; exit 1; }
+[ "$(fingerprint_of supabase/checks/maalrise_061_postapply.sql)" = "$M0" ] || { echo "FAIL: 061 changed an object it should not touch"; exit 1; }
+q -q -f supabase/checks/maalrise_061_rollback.sql
+[ "$(fingerprint_of supabase/checks/maalrise_061_preflight.sql)" = "$M0" ] && [ "$(summary_of supabase/checks/maalrise_061_preflight.sql ready_to_apply)" = "t" ] \
+  || { echo "FAIL: 061 rollback"; exit 1; }
+q -q -f supabase/checks/061_parts/061_part_1_of_1.sql >/dev/null
+if q -q -f supabase/checks/061_parts/061_part_1_of_1.sql >/dev/null 2>&1; then echo "FAIL: the 061 part ran twice"; exit 1; fi
+[ "$(summary_of supabase/checks/maalrise_061_postapply.sql all_ok)" = "t" ] && [ "$(fingerprint_of supabase/checks/maalrise_061_postapply.sql)" = "$M0" ] \
+  || { echo "FAIL: 061 part"; exit 1; }
+echo "PASS: 061 preflight, post-apply, fingerprint, rollback and one SQL Editor part (repeat refused)"
+
 # 6. scenarios
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_core_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_distribution_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
@@ -352,6 +371,7 @@ psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_selfapproval_scenari
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_cycle_emails_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_view_as_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_reopen_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
+psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_move_funding_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 npx tsx scripts/test-maalrise-sql-contract.ts "$DB" | grep -E "PASS|FAIL"
 npx tsx scripts/check-unfiltered-writes.ts "$DB"
 
@@ -361,8 +381,8 @@ for t in supabase/tests/*_scenarios.sql; do
   [[ "$t" == *maalrise* ]] && continue
   s=$(basename "$t" .sql)
   dropdb --if-exists "mr_$s"; createdb -T "$DB" "mr_$s"
-  psql -d "mr_$s" -v ON_ERROR_STOP=1 -q -f "$t" >/dev/null 2>&1 || { echo "FAIL: MaalGrow $s with 051–060 applied"; exit 1; }
+  psql -d "mr_$s" -v ON_ERROR_STOP=1 -q -f "$t" >/dev/null 2>&1 || { echo "FAIL: MaalGrow $s with 051–061 applied"; exit 1; }
   dropdb "mr_$s"; n=$((n + 1))
 done
 psql -d postgres -qc "ALTER DATABASE $DB WITH is_template false"
-echo "PASS: all $n existing MaalGrow scenarios pass with 051–060 applied"
+echo "PASS: all $n existing MaalGrow scenarios pass with 051–061 applied"

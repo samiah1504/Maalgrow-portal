@@ -70,6 +70,7 @@ const ACTIVITY: Record<string, string> = {
   maalrise_record_funding: "Recorded funding",
   maalrise_confirm_funding: "Confirmed funding",
   maalrise_reject_funding: "Rejected funding",
+  maalrise_move_funding: "Moved funding to the right investor",
   maalrise_activate_cycle: "Activated the Cycle",
   maalrise_register_document: "Uploaded a document",
   maalrise_record_receipt: "Recorded a payment received",
@@ -141,6 +142,7 @@ export function CycleDetailView({
 
   const fundings: FundingView[] = d.fundings.map((f) => ({
     id: f.id,
+    investorId: f.maalrise_investor_id,
     investorName: f.investor ? `${f.investor.full_name} (${f.investor.investor_code})` : "—",
     units: f.units,
     amountKobo: f.amount_kobo,
@@ -350,6 +352,7 @@ export function CycleDetailView({
           canFinance={permissions.finance}
           open={fundingOpen}
           isSuperAdmin={role === "super_admin"}
+          canMove={permissions.approve}
         />
       </DetailSection>
 

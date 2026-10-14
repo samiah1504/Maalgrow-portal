@@ -229,6 +229,16 @@ Where it is enforced:
 - Refused once any money has moved on the Cycle: a payment or capital
   received, a distribution or a capital settlement, in any status.
 
+### Moving units credited to the wrong investor (confirmed 14 Oct 2026, migration 061)
+
+- Before activation (reopen an active Cycle first), super admins and
+  administrators can move confirmed units to the investor they belong
+  to, with a reason: the whole entry, or part of it (the entry is split;
+  the moved part keeps the date and confirmation, reference "/moved").
+- Allocations follow; the Cycle's total and terms are unchanged; each
+  move is in the audit log with before and after. (A separate refund
+  feature was considered and not wanted.)
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;
