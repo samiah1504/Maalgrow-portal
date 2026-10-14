@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireAdminPage } from "@/lib/admin-guard";
+import { maalriseOnlyInvestorIds } from "@/lib/maalrise/db";
 import Link from "next/link";
 import {
   Users,
@@ -27,6 +28,8 @@ export default async function AdminDashboardPage() {
   await requireAdminPage();
 
   const db = await createAdminClient();
+  // MaalRise-only people have an investor record but no MaalGrow investment; MaalGrow totals leave them out.
+  const maalriseOnly = await maalriseOnlyInvestorIds(db);
 
   type InvestmentRow = {
     id: string;
@@ -198,7 +201,7 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Total Investors"
-          value={String(totalInvestors ?? 0)}
+          value={String(Math.max(0, (totalInvestors ?? 0) - maalriseOnly.size))}
           subtitle="Registered investors"
           accentColor="primary"
           icon={<Users className="h-5 w-5" />}

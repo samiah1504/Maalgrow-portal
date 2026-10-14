@@ -23,3 +23,10 @@ ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role, full_name = EXCLUDED.full_n
 INSERT INTO investors (id, profile_id, investor_code, full_name, email, phone, bank_name, account_name, account_number, kyc_status) VALUES
  ('20000000-0000-0000-0000-0000000000c1','10000000-0000-0000-0000-0000000000c1','MGT001','Both Products','both@test.local','08010000001','GTB','Both Products','0123456701','approved'),
  ('20000000-0000-0000-0000-0000000000c2','10000000-0000-0000-0000-0000000000c2','MGT002','Pending Kyc','pending.kyc@test.local','08010000002','Zenith','Pending Kyc','0123456702','pending');
+-- "Both Products" holds a MaalGrow investment, as a real investor in both does.
+INSERT INTO cycles (id, series_id, cycle_number, cycle_label, start_date, end_date, status)
+SELECT '30000000-0000-0000-0000-0000000000c1', id, 1, 'A-E2E-1', '2026-07-01', '2027-01-01', 'active' FROM series WHERE name = 'A';
+INSERT INTO investments (investment_code, investor_id, series_id, cycle_id, units, price_per_unit, capital,
+                         investment_date, maturity_date, status)
+SELECT 'INV-E2E-BOTH', '20000000-0000-0000-0000-0000000000c1', series_id, id, 1, 1000000, 1000000, '2026-07-01', '2027-01-01', 'active'
+  FROM cycles WHERE id = '30000000-0000-0000-0000-0000000000c1';

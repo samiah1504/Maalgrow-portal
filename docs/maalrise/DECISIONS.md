@@ -137,8 +137,39 @@ Where it is enforced:
 - **Product switch**: investors in both products switch between
   MaalGrow and MaalRise in the sidebar; MaalRise-only investors see
   MaalRise only; MaalGrow-only investors see no change.
-- **New logins / invitations**: unchanged — MaalRise access is given
-  only to existing logins; no invitations are sent.
+- **New logins / invitations**: Phase 6 gave access to existing logins
+  only; Phase 7 adds new logins and invitations (see below).
+
+### Phase 7 — go-live readiness (confirmed 14 Oct 2026)
+
+- **One person, one investor record.** Every MaalRise investor also has
+  the MaalGrow investor record, so the login invitation, the **same KYC
+  form**, Chat with Manager and the Communication Centre work for them
+  unchanged. A MaalRise-only person's record has no MaalGrow
+  investments. MaalGrow totals (dashboard, Reports) leave them out and
+  the MaalGrow investor list tags them "MaalRise only". MaalGrow
+  tables are never changed by MaalRise.
+- **Onboarding.** Staff (super admin, administrator, operations) add a
+  person by email; with no login yet, a login and investor record are
+  created and **nothing is sent**. The invitation is sent only when a
+  super admin or administrator presses "Send invitation". On first
+  sign-in the investor fills the KYC form; staff review it in the
+  existing KYC Review, and the result is carried to MaalRise
+  (approved → verified; bank details, if MaalRise has none, carried
+  across unconfirmed). MaalRise's own verifications are never undone.
+- **Emails.** MaalRise emails (profit paid, capital repaid, bank-change
+  decisions; staff reminders) are drafts until a super admin or
+  administrator presses **Send** (or Discard) in MaalRise Emails. Each
+  is sent once, through the same service and sender as MaalGrow;
+  failures are kept to retry. Nothing is sent automatically.
+- **Communication Centre.** MaalRise investors are selectable in
+  Individual Investors (all, or one Cycle); campaigns are then built
+  and sent exactly as for MaalGrow.
+- **Reports.** Monthly payments register (for bank reconciliation),
+  each Cycle's printable report and CSVs (received, investors), and the
+  Cycle's full audit trail. Staff only.
+- **Guide.** An in-app MaalRise Guide: who does what, from adding
+  investors to closing a Cycle.
 
 ### Earlier decisions (Implementation Plan v2)
 
@@ -164,7 +195,8 @@ Where it is enforced:
   admin, administrator, finance; payment officer: payments only.
 - **D9 Product switching** — investors in both products can switch.
 - **D10 Staff emails** — staff accounts cannot be MaalRise investors.
-- **D11 MaalGrow investor creation** — unchanged for now.
+- **D11 MaalGrow investor creation** — unchanged; MaalRise creates the
+  same investor record for MaalRise-only people (Phase 7).
 
 ## Still open — configurable, not blocking
 

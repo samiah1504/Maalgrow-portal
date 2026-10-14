@@ -13,6 +13,7 @@ import {
   MAALRISE_PREPARE_ROLES,
 } from "@/lib/maalrise/permissions";
 import { dbError, isUuid, maalriseGate, readJson } from "@/lib/maalrise/api";
+import { syncFromMaalgrow } from "@/lib/maalrise/db";
 
 type Body = { action?: string; terms_id?: string; reason?: string };
 
@@ -50,6 +51,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           : await gate.db.rpc("maalrise_return_terms", { p_terms: body!.terms_id, p_reason: body?.reason ?? "" });
     if (res.error) return dbError(res.error);
     return NextResponse.json({ ok: true });
+  }
+
+  if (action === "check" || action === "activate") {
+    // MaalGrow KYC approved since the last look counts (Phase 7).
+    await syncFromMaalgrow(gate.db);
   }
 
   if (action === "check") {

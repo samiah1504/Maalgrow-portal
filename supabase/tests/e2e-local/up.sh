@@ -24,7 +24,8 @@ setsid nohup ${POSTGREST:-postgrest} $S/pgrst.conf > $S/pgrst.log 2>&1 < /dev/nu
 echo $! > $S/pgrst.pid
 EMAILS=$(psql -d mr_e2e -Atc "select json_object_agg(id, email) from auth.users")
 rm -rf "$S/storage"; mkdir -p "$S/storage"
-E2E_STORAGE="$S/storage" E2E_EMAILS="$EMAILS" setsid nohup node $S/gateway.mjs > $S/gateway.log 2>&1 < /dev/null &
+rm -f "$S/sent-emails.jsonl"
+E2E_STORAGE="$S/storage" E2E_EMAILS="$EMAILS" E2E_SENT="$S/sent-emails.jsonl" setsid nohup node $S/gateway.mjs > $S/gateway.log 2>&1 < /dev/null &
 echo $! > $S/gateway.pid
 sleep 2
 curl -s -o /dev/null -w "postgrest %{http_code}\n" http://127.0.0.1:3001/

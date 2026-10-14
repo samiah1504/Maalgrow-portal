@@ -344,3 +344,22 @@ export type CapitalPaymentRow = {
   paid_by: string | null;
   paid_at: string | null;
 };
+
+/** A MaalRise email (migration 052; send states from 055). */
+export type OutboxRow = {
+  id: string;
+  kind: string;
+  to_user_id: string | null;
+  to_email: string;
+  subject: string;
+  body: string;
+  status: "draft" | "queued" | "sent" | "failed" | "discarded";
+  attempts: number;
+  last_error: string | null;
+  sent_at: string | null;
+  created_at: string;
+  queued_at: string | null;
+  provider_id: string | null;
+  handled_by: string | null;
+  discarded_at: string | null;
+};

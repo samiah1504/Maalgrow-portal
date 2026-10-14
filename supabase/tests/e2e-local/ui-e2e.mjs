@@ -203,7 +203,7 @@ check("Add investor stays disabled for staff", !(await hasEnabledButton("Add inv
 await type("Email address", "nobody@test.local");
 await click("Check email");
 await settle();
-check("unknown email: explains new logins/invitations are not enabled", (await text()).includes("not enabled yet"));
+check("unknown email: a new login would be created, nothing sent", (await text()).includes("A new login and investor record will be created"));
 r = await api("ops", "POST", "/api/admin/maalrise/investors", { email: "nobody@test.local", full_name: "Nobody" });
 check("API refuses unknown email with NO_LOGIN (nothing created or sent)", r.status === 409 && r.body.code === "NO_LOGIN", JSON.stringify(r));
 r = await api("ops", "GET", "/api/admin/maalrise/investors/lookup?email=" + encodeURIComponent("b_th@test.local"));
@@ -238,7 +238,7 @@ await go("/admin/maalrise/investors/new");
 await type("Email address", "pending.kyc@test.local");
 await click("Check email");
 await settle();
-check("pending MaalGrow KYC: MaalRise KYC needed", (await text()).includes("MaalRise KYC will be needed"));
+check("pending MaalGrow KYC: MaalRise waits for KYC approval", (await text()).includes("once it is approved in KYC Review, MaalRise uses it"));
 await type("Bank name", "Access");
 await type("Account name", "Pending Kyc");
 await type("Account number", "0011223344");

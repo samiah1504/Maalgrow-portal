@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { smsUnits, TEMPLATE_VARIABLES } from "@/lib/comms/util";
+import { MaalriseRecipientPicker } from "@/components/maalrise/comms-picker";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -507,6 +508,13 @@ export function CommsCenter({
 
                 {group === "individual" && (
                   <div className="space-y-3">
+                    <MaalriseRecipientPicker<PreviewRecipient>
+                      forEmail={channel === "email"}
+                      onAdd={(rows) => {
+                        setRecips((prev) => [...prev, ...rows.filter((r) => !prev.some((p) => p.investor_id === r.investor_id))]);
+                        setSelected((prev) => new Set([...prev, ...rows.map((r) => r.investor_id)]));
+                      }}
+                    />
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex-1 min-w-[200px]">
                         <Input

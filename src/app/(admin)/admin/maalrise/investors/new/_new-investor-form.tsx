@@ -67,7 +67,8 @@ export function NewInvestorForm() {
     }
   }
 
-  const canAdd = found?.status === "can_add" && errors.length === 0;
+  const newLogin = found?.status === "no_login";
+  const canAdd = (found?.status === "can_add" || newLogin) && errors.length === 0;
 
   return (
     <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setChecked(true); }}>
@@ -78,7 +79,7 @@ export function NewInvestorForm() {
             <div className="flex-1 min-w-[240px]">
               <Input label="Email address" type="email" leftIcon={<Mail className="h-4 w-4" />} value={email}
                 onChange={(e) => setEmail(e.target.value)} onBlur={checkEmail} required
-                hint="MaalRise access is added to the existing MaalVest login with this email. Staff accounts cannot be investors." />
+                hint="If this email already has a MaalVest login, MaalRise access is added to it. Otherwise a new login is created. Staff accounts cannot be investors." />
             </div>
             <Button type="button" variant="outline" size="sm" onClick={checkEmail} loading={looking} disabled={!EMAIL_RE.test(normalized)}>
               <Search className="h-3.5 w-3.5" /> Check email
@@ -123,7 +124,8 @@ export function NewInvestorForm() {
         <CardContent>
           <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
             <li>Verified MaalGrow KYC is reused where appropriate and shown as &quot;Verified via MaalGrow&quot;.</li>
-            <li>MaalRise-only investors complete MaalRise verification before they can be allocated to an active Cycle.</li>
+            <li>Every investor completes the same KYC form as MaalGrow on first sign-in; staff review it in KYC Review and MaalRise uses the result.</li>
+            <li>A Cycle cannot be activated until every investor in it has verified KYC.</li>
             <li>Bank details alone never count as completed KYC.</li>
           </ul>
         </CardContent>
@@ -132,17 +134,19 @@ export function NewInvestorForm() {
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="outline"><CheckCircle2 className="h-4 w-4" /> Check details</Button>
         <Button type="button" disabled={!canAdd} loading={busy === "add"}
-          title={found?.status === "can_add" ? undefined : "Check the email first"}
+          title={canAdd ? undefined : "Check the email first"}
           onClick={() => run("add", "/api/admin/maalrise/investors",
-            { email: normalized, full_name: fullName, phone, bank_name: bankName, account_name: accountName, account_number: accountNumber },
-            { success: "MaalRise access added. No email or invitation was sent.",
+            { email: normalized, full_name: fullName, phone, bank_name: bankName, account_name: accountName, account_number: accountNumber,
+              create_login: newLogin },
+            { success: newLogin ? "Investor created. No email was sent — use “Send invitation” on their page when ready." : "MaalRise access added. No email or invitation was sent.",
               onDone: (d) => { if (typeof d.id === "string") router.push(`/admin/maalrise/investors/${d.id}`); } })}>
-          <UserPlus className="h-4 w-4" /> Add investor
+          <UserPlus className="h-4 w-4" /> {newLogin ? "Create login and add investor" : "Add investor"}
         </Button>
       </div>
       <PhaseNotice>
-        Only people who already have a MaalVest login can be added for now. No new login is created, the existing login
-        and its MaalGrow records are not changed, and no invitation or email is sent.
+        Nothing is emailed when you add an investor. A new person gets a login and an investor record (used for the
+        invitation, the KYC form and messages); send the invitation from their page when you are ready. An existing
+        login&apos;s MaalGrow investments are not changed.
       </PhaseNotice>
 
       {checked && (
@@ -167,8 +171,8 @@ function LookupResult({ r }: { r: Lookup }) {
     case "no_login":
       return (
         <p className={`${box} border-amber-200 bg-amber-50 text-amber-900`}>
-          No MaalVest login uses this email. Creating new logins and sending invitations is not enabled yet, so this person
-          cannot be added for now.
+          No MaalVest login uses this email. A new login and investor record will be created — nothing is sent. Send the
+          invitation from their page when you are ready; they set a password and complete the KYC form on first sign-in.
         </p>
       );
     case "staff":
@@ -189,10 +193,10 @@ function LookupResult({ r }: { r: Lookup }) {
               Also a MaalGrow investor.{" "}
               {r.maalgrow.kyc_approved
                 ? "Their verified MaalGrow KYC will be reused (shown as “Verified via MaalGrow”)."
-                : "Their MaalGrow KYC is not approved, so MaalRise KYC will be needed."}
+                : "Their KYC is not approved yet; once it is approved in KYC Review, MaalRise uses it."}
             </p>
           ) : (
-            <p>Not a MaalGrow investor; MaalRise KYC will be needed.</p>
+            <p>Not a MaalGrow investor yet. An investor record will be created for the KYC form; they complete it on first sign-in.</p>
           )}
         </div>
       );

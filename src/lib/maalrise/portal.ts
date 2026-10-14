@@ -8,6 +8,7 @@
  * reads "paid" only once staff recorded the transfer.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { nairaPlain, toCsv } from "./csv";
 
 export type MonthStatus = "scheduled" | "due" | "processing" | "approved" | "part_paid" | "paid";
 
@@ -186,25 +187,11 @@ export function cycleProfitTotals(c: MyCycle) {
   );
 }
 
-/** "1234567" kobo → "12345.67": plain, spreadsheet-safe naira. */
-function nairaPlain(kobo: number): string {
-  const sign = kobo < 0 ? "-" : "";
-  const k = Math.abs(kobo);
-  return `${sign}${Math.floor(k / 100)}.${String(k % 100).padStart(2, "0")}`;
-}
-
-function csvCell(v: string): string {
-  // A leading = + - @ would run as a formula in a spreadsheet.
-  const safe = /^[=+\-@]/.test(v) ? `'${v}` : v;
-  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
-
 /** Paid payments only: a statement lists money that actually reached the investor. */
 export function statementCsv(payments: MyPayment[]): string {
   const rows = payments
     .filter((p) => p.status === "paid")
     .map((p) => [p.paid_on ?? "", p.cycle_name, paymentLabel(p), nairaPlain(p.amount_kobo), p.reference ?? "", p.bank_name ?? "",
                  p.account_ending ? `****${p.account_ending}` : ""]);
-  const head = ["Date paid", "Cycle", "Payment", "Amount (NGN)", "Transfer reference", "Bank", "Account"];
-  return [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  return toCsv(["Date paid", "Cycle", "Payment", "Amount (NGN)", "Transfer reference", "Bank", "Account"], rows);
 }

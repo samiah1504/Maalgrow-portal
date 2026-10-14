@@ -28,6 +28,7 @@ import type {
   InvestorRow,
   KycSubmissionRow,
   NotificationRow,
+  OutboxRow,
   PaymentEventRow,
   ReceiptRow,
   ScheduleLineRow,
@@ -228,10 +229,18 @@ export async function listInvestors(db: SupabaseClient): Promise<InvestorListIte
     db.from("maalrise_allocations").select("maalrise_investor_id"),
   ]);
   const a = must<{ maalrise_investor_id: string }[]>(allocs, "allocations");
-  return must<InvestorRow[]>(invs, "investors").map((i) => ({
+  const rows = must<InvestorRow[]>(invs, "investors");
+  // Every MaalRise investor has the MaalGrow investor record (Phase 7);
+  // "also MaalGrow" means they hold a MaalGrow investment.
+  const linked = rows.map((i) => i.maalgrow_investor_id).filter((x): x is string => !!x);
+  const holding = linked.length
+    ? new Set(must<{ investor_id: string }[]>(await db.from("investments").select("investor_id").in("investor_id", linked), "MaalGrow investments")
+        .map((x) => x.investor_id))
+    : new Set<string>();
+  return rows.map((i) => ({
     ...i,
     cycles: a.filter((x) => x.maalrise_investor_id === i.id).length,
-    has_maalgrow: !!i.maalgrow_investor_id,
+    has_maalgrow: !!i.maalgrow_investor_id && holding.has(i.maalgrow_investor_id),
   }));
 }
 
@@ -240,6 +249,11 @@ export type InvestorDetail = {
   kyc: KycSubmissionRow[];
   bankHistory: BankHistoryRow[];
   bankChanges: BankChangeRequestRow[];
+  /** The person's MaalGrow investor record (invitation, KYC form), and whether they hold MaalGrow investments. */
+  maalgrow: {
+    id: string; investor_code: string; kyc_status: string; kyc_submitted_at: string | null;
+    invitation_status: string | null; invitation_sent_at: string | null; investments: number;
+  } | null;
   allocations: (AllocationRow & { cycle: Pick<CycleRow, "id" | "name" | "status" | "start_date" | "duration_months"> | null })[];
   fundings: FundingRow[];
   activity: AuditRow[];
@@ -274,12 +288,17 @@ export async function getInvestorDetail(db: SupabaseClient, id: string): Promise
   const bankRows = must<BankHistoryRow[]>(bank, "bank history");
   const activityRows = must<AuditRow[]>(activity, "activity");
   const changeRows = must<BankChangeRequestRow[]>(changes, "bank change requests");
+  const mgRes = await db.from("investors")
+    .select("id, investor_code, kyc_status, kyc_submitted_at, invitation_status, invitation_sent_at, investments(id)")
+    .eq("profile_id", investor.profile_id).maybeSingle();
+  const mgRow = (mgRes.data ?? null) as (Omit<NonNullable<InvestorDetail["maalgrow"]>, "investments"> & { investments: { id: string }[] | null }) | null;
 
   return {
     investor,
     kyc: kycRows,
     bankHistory: bankRows,
     bankChanges: changeRows,
+    maalgrow: mgRow ? { ...mgRow, investments: mgRow.investments?.length ?? 0 } : null,
     allocations: allocations.map((a) => ({ ...a, cycle: cyc[a.cycle_id] ?? null })),
     fundings: must<FundingRow[]>(funds, "funding"),
     activity: activityRows,
@@ -413,4 +432,96 @@ export async function listMyNotifications(db: SupabaseClient, limit = 50): Promi
       .order("created_at", { ascending: false }).limit(limit),
     "notifications"
   );
+}
+
+/**
+ * Carry MaalGrow KYC results (and bank details MaalRise does not yet
+ * have, unconfirmed) across to MaalRise — migration 055. Staff sync
+ * everyone, an investor themselves. Never blocks a page: on any error
+ * the page shows what is already recorded.
+ */
+export async function syncFromMaalgrow(db: SupabaseClient): Promise<void> {
+  try {
+    await db.rpc("maalrise_sync_from_maalgrow");
+  } catch {
+    // Shown as recorded; the next page load tries again.
+  }
+}
+
+/**
+ * MaalGrow investor records that exist only for MaalRise: linked to a
+ * MaalRise investor and holding no MaalGrow investment. MaalGrow totals
+ * leave these out, and the MaalGrow investor list tags them.
+ */
+export async function maalriseOnlyInvestorIds(client: unknown): Promise<Set<string>> {
+  const db = mr(client);
+  try {
+    const { data: links, error } = await db.from("maalrise_investors").select("maalgrow_investor_id");
+    if (error || !links) return new Set();
+    const ids = (links as { maalgrow_investor_id: string | null }[]).map((l) => l.maalgrow_investor_id).filter((x): x is string => !!x);
+    if (ids.length === 0) return new Set();
+    const { data: inv, error: invErr } = await db.from("investments").select("investor_id").in("investor_id", ids);
+    if (invErr) return new Set();
+    const holding = new Set((inv as { investor_id: string }[] | null ?? []).map((i) => i.investor_id));
+    return new Set(ids.filter((id) => !holding.has(id)));
+  } catch {
+    return new Set();
+  }
+}
+
+export type OutboxItem = OutboxRow & { audience: "investor" | "staff"; handled_by_name: string | null };
+
+/** MaalRise emails for the outbox screen, newest first; who each is for comes from the recipient's role. */
+export async function listOutbox(db: SupabaseClient, limit = 300): Promise<OutboxItem[]> {
+  const rows = must<OutboxRow[]>(
+    await db.from("maalrise_email_outbox").select("*").order("created_at", { ascending: false }).limit(limit),
+    "emails"
+  );
+  const userIds = [...new Set(rows.map((r) => r.to_user_id).filter((x): x is string => !!x))];
+  const roles = userIds.length
+    ? Object.fromEntries(must<{ id: string; role: string }[]>(await db.from("profiles").select("id, role").in("id", userIds), "recipients")
+        .map((p) => [p.id, p.role]))
+    : {};
+  const names = await peopleNames(db, rows.map((r) => r.handled_by));
+  return rows.map((r) => ({
+    ...r,
+    audience: r.to_user_id && roles[r.to_user_id] === "investor" ? "investor" : "staff",
+    handled_by_name: r.handled_by ? names[r.handled_by] ?? null : null,
+  }));
+}
+
+/** Every profit and capital payment marked paid between two dates (inclusive), for the payments register. */
+export async function loadRegister(db: SupabaseClient, from: string, to: string) {
+  const [lines, caps] = await Promise.all([
+    db.from("maalrise_distribution_lines").select("*, distribution:maalrise_distributions(cycle_name)")
+      .eq("status", "paid").gte("paid_on", from).lte("paid_on", to),
+    db.from("maalrise_capital_payments").select("*, settlement:maalrise_capital_settlements(cycle_name)")
+      .eq("status", "paid").gte("paid_on", from).lte("paid_on", to),
+  ]);
+  type L = DistributionLineRow & { distribution: { cycle_name: string } | null };
+  type C = CapitalPaymentRow & { settlement: { cycle_name: string } | null };
+  const profit = must<L[]>(lines, "payments").map((l) => ({ ...l, cycle_name: l.distribution?.cycle_name ?? "—" }));
+  const capital = must<C[]>(caps, "capital payments").map((p) => ({ ...p, cycle_name: p.settlement?.cycle_name ?? "—" }));
+  const names = await peopleNames(db, [...profit.map((l) => l.paid_by), ...capital.map((p) => p.paid_by)]);
+  return { profit, capital, names };
+}
+
+/** The Cycle's whole audit trail — every record it owns, payments included — oldest first. */
+export async function loadCycleAudit(db: SupabaseClient, d: CycleDetail): Promise<{ rows: AuditRow[]; names: Record<string, string> }> {
+  const ids = [
+    d.cycle.id, ...d.versions.map((v) => v.id), ...d.fundings.map((f) => f.id), ...d.receipts.map((r) => r.id),
+    ...d.distributions.map((x) => x.id), ...d.distributions.flatMap((x) => x.lines.map((l) => l.id)),
+    ...d.capitalReceipts.map((r) => r.id), ...d.capitalSettlements.map((s) => s.id),
+    ...d.capitalSettlements.flatMap((s) => s.payments.map((p) => p.id)), ...d.documents.map((x) => x.id),
+  ];
+  const rows: AuditRow[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    rows.push(...must<AuditRow[]>(
+      await db.from("audit_logs").select("id, user_id, action, entity_type, entity_id, new_values, created_at")
+        .like("action", "maalrise_%").in("entity_id", ids.slice(i, i + 200)).limit(5000),
+      "audit trail"
+    ));
+  }
+  rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return { rows, names: await peopleNames(db, rows.map((r) => r.user_id)) };
 }

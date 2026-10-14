@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KYC_STATUS_LABEL, KYC_STATUS_VARIANT } from "@/lib/maalrise/format";
 import { SAMPLE_ALLOCATIONS, SAMPLE_AS_OF, SAMPLE_INVESTORS } from "@/lib/maalrise/sample-data";
-import { listInvestors, mr } from "@/lib/maalrise/db";
+import { listInvestors, mr, syncFromMaalgrow } from "@/lib/maalrise/db";
 import { EmptyState, SampleDataBanner, SampleTag, SampleToggle } from "@/components/maalrise/sample-notice";
 
 export const metadata: Metadata = { title: "MaalRise Investors | Admin" };
@@ -21,6 +21,7 @@ export default async function MaalRiseInvestorsPage({
 }) {
   const { supabase } = await requireAdminPage();
   const showSample = (await searchParams).sample === "1";
+  if (!showSample) await syncFromMaalgrow(mr(supabase));
   // Real records and sample rows are never mixed: one or the other.
   const investors = showSample
     ? SAMPLE_INVESTORS.map((i) => ({

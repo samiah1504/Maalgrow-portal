@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { requireAdminPage } from "@/lib/admin-guard";
-import { getInvestorDetail, mr } from "@/lib/maalrise/db";
+import { getInvestorDetail, mr, syncFromMaalgrow } from "@/lib/maalrise/db";
 import { isSampleId } from "@/lib/maalrise/sample-data";
-import { canPrepare } from "@/lib/maalrise/permissions";
+import { canApprove, canPrepare } from "@/lib/maalrise/permissions";
 import { isUuid } from "@/lib/maalrise/api";
 import { SampleInvestorDetail } from "./_sample-investor-detail";
 import { InvestorDetailView } from "./_investor-detail";
@@ -17,7 +17,8 @@ export default async function MaalRiseInvestorDetailsPage({ params }: { params: 
   if (isSampleId(id)) return <SampleInvestorDetail id={id} />;
   if (!isUuid(id)) notFound();
 
+  await syncFromMaalgrow(mr(supabase));
   const d = await getInvestorDetail(mr(supabase), id);
   if (!d) notFound();
-  return <InvestorDetailView d={d} canPrepare={canPrepare(role)} />;
+  return <InvestorDetailView d={d} canPrepare={canPrepare(role)} canInvite={canApprove(role)} />;
 }

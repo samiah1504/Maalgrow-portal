@@ -20,6 +20,8 @@ import { koboInWords, parseNairaToKobo, parsePercentToBps } from "../src/lib/maa
 import { maturityDate, periodDueDate } from "../src/lib/maalrise/dates";
 import { capitalPosition, lagosToday, monthPositions, suggestedPeriod } from "../src/lib/maalrise/receipts";
 import { portfolioSummary, statementCsv, type MyCycle, type MyMonth, type MyPayment } from "../src/lib/maalrise/portal";
+import { monthRange, registerCsv, registerRows } from "../src/lib/maalrise/reports";
+import type { CapitalPaymentRow, DistributionLineRow } from "../src/lib/maalrise/types";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -346,6 +348,28 @@ const base: TermsInput = {
   check("statement: naira to the kobo, account masked", lines[1] === "2026-10-13,Kanziy 1,Profit · month 1,3219.11,TRF-1,GTB,****0001", lines[1]);
   check("statement: commas quoted; spreadsheet formulas neutralised",
     lines[2].includes('"A, B"') && lines[2].includes(`"'=HYPERLINK(""x"")"`) && lines[2].includes("Capital repayment,333000.00"), lines[2]);
+}
+
+// ------------------------------------------------------------------
+// Staff reports (Phase 7)
+// ------------------------------------------------------------------
+{
+  check("month range: October", JSON.stringify(monthRange("2026-10")) === JSON.stringify({ from: "2026-10-01", to: "2026-10-31" }));
+  check("month range: February in a leap year", monthRange("2028-02")?.to === "2028-02-29");
+  check("month range: nonsense refused", monthRange("2026-13") === null && monthRange("x") === null && monthRange("2026-1") === null);
+  const line = (o: Partial<DistributionLineRow>) => ({
+    id: "l", distribution_id: "d", cycle_id: "c", period: 1, maalrise_investor_id: "i", investor_name: "Bola", investor_code: "MR-AAAAAA",
+    units: 10, amount_kobo: 100_050, tax_kobo: 0, bank_name: "GTB", account_name: "Bola A", account_number: "0123456789",
+    status: "paid", paid_on: "2026-10-05", paid_reference: "TRF-9", paid_by: "u1", paid_at: "x", created_at: "x", updated_at: "x",
+    cycle_name: "Kanziy 1", ...o,
+  }) as DistributionLineRow & { cycle_name: string };
+  const cap = { ...line({}), settlement_id: "s", period: undefined, amount_kobo: 5_000_000, paid_on: "2026-10-02", investor_name: "Ade",
+    paid_reference: "CAP-1", cycle_name: "Alpha" } as unknown as CapitalPaymentRow & { cycle_name: string };
+  const rows = registerRows([line({}), line({ id: "m", status: "payable", paid_on: null })], [cap], { u1: "Officer One" });
+  check("register: paid only, oldest first, capital labelled", rows.length === 2 && rows[0].payment === "Capital repayment" && rows[1].payment === "Profit · month 1");
+  const csv = registerCsv(rows).trim().split("\r\n");
+  check("register CSV: full account for reconciliation, naira to the kobo, who marked it paid",
+    csv[2] === "2026-10-05,Kanziy 1,Profit · month 1,Bola,MR-AAAAAA,1000.50,GTB,Bola A,0123456789,TRF-9,Officer One", csv[2]);
 }
 
 if (failures) {

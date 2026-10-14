@@ -216,19 +216,39 @@ for (const c of SAMPLE_CYCLES) {
   check("sample data modules and pages never write or call an API", sampleModules.filter((p) => writers.test(read(p))).length === 0,
     sampleModules.filter((p) => writers.test(read(p))));
   const apiFiles = walk("src/app/api/admin/maalrise");
-  // Nothing emails or invites (email stays as unsent drafts in the database).
-  const mailers = /sendMail|resend|nodemailer|inviteUserByEmail|auth\.admin/i;
-  const mailing = [...files, ...apiFiles].filter((p) => mailers.test(read(p)));
-  check("no MaalRise code sends email or invites anyone", mailing.length === 0, mailing);
+  // Phase 7: email is sent only from these places, each because a person
+  // pressed Send — the outbox route and the invitation route — and logins
+  // are created only by the add-investor route. Everything else: nothing.
+  const MAIL_OK = [
+    "src/lib/maalrise/emails.ts",
+    "src/lib/maalrise/onboarding.ts",
+    "src/app/api/admin/maalrise/emails/[id]/route.ts",
+    "src/app/api/admin/maalrise/investors/[id]/invitation/route.ts",
+    "src/app/api/admin/maalrise/investors/route.ts", // creates a login; sends nothing
+  ];
+  const mailers = /sendMail|from ["']resend["']|new Resend\(|nodemailer|inviteUserByEmail|auth\.admin|sendOutboxEmail\(|sendMaalriseInvitation\(/;
+  const mailing = [...files, ...apiFiles].filter((p) => mailers.test(read(p)) && !MAIL_OK.includes(p));
+  check("only the outbox, invitation and onboarding code can send email or create logins", mailing.length === 0, mailing);
+  check("email is sent only by super admins and administrators",
+    ["src/app/api/admin/maalrise/emails/[id]/route.ts", "src/app/api/admin/maalrise/investors/[id]/invitation/route.ts"]
+      .every((p) => read(p).includes("maalriseGate(MAALRISE_APPROVE_ROLES)")));
   // The server storage key is used ONLY by the two document routes, for
   // the private contracts bucket, after the person's role is checked.
   const DOC_ROUTES = [
     "src/app/api/admin/maalrise/cycles/[id]/documents/route.ts",
     "src/app/api/admin/maalrise/documents/[id]/route.ts",
   ];
+  // Phase 7: creating a login and the investor record, as MaalGrow's own
+  // add-investor route does, needs the server key too.
+  const ONBOARDING_ROUTES = [
+    "src/app/api/admin/maalrise/investors/route.ts",
+    "src/app/api/admin/maalrise/investors/[id]/invitation/route.ts",
+  ];
   const serviceRole = /createAdminClient|SUPABASE_SERVICE_ROLE|\.storage\b/;
-  const keyUsers = [...files, ...apiFiles].filter((p) => serviceRole.test(read(p)));
-  check("only the two document routes use the server storage key", keyUsers.every((p) => DOC_ROUTES.includes(p)), keyUsers);
+  const keyUsers = [...files, ...apiFiles].filter((p) => serviceRole.test(read(p)) && p !== "src/lib/maalrise/db.ts");
+  check("only the document and onboarding routes use the server key", keyUsers.every((p) => [...DOC_ROUTES, ...ONBOARDING_ROUTES].includes(p)), keyUsers);
+  check("each onboarding route checks the role before using the server key",
+    ONBOARDING_ROUTES.every((p) => { const t = read(p); return t.indexOf("maalriseGate(") > -1 && t.indexOf("maalriseGate(") < t.indexOf("createAdminClient()"); }));
   check("each document route checks the role before touching storage",
     DOC_ROUTES.every((p) => { const t = read(p); return t.indexOf("maalriseGate(") > -1 && t.indexOf("maalriseGate(") < t.indexOf("createAdminClient()"); }));
   check("uploads are registered as the signed-in person (role re-checked by the database)",
@@ -241,10 +261,18 @@ for (const c of SAMPLE_CYCLES) {
     "src/components/maalrise/alerts-badge.tsx",
     "src/app/(admin)/admin/maalrise/investors/new/_new-investor-form.tsx",
     "src/app/(admin)/admin/maalrise/cycles/[id]/_payment-actions.tsx",
+    "src/app/(admin)/admin/maalrise/emails/_email-actions.tsx",
+    "src/components/maalrise/comms-picker.tsx",
   ];
-  check("only the action hook, alerts badge, investor lookup and document upload call the network", fetchers.every((p) => FETCH_OK.includes(p)), fetchers);
+  check("only the action hook, alerts badge, investor lookup, uploads, email sending and the comms picker call the network",
+    fetchers.every((p) => FETCH_OK.includes(p)), fetchers);
   const urls = files.flatMap((p) => [...read(p).matchAll(/["'`](\/api\/[^"'`$]*)/g)].map((m) => m[1]));
-  check("screens only call MaalRise API routes", urls.every((u) => u.startsWith("/api/admin/maalrise/")), urls);
+  // The Communication Centre picker previews recipients through the Centre's own route.
+  check("screens only call MaalRise API routes", urls.every((u) => u.startsWith("/api/admin/maalrise/") || u.startsWith("/api/maalrise/")
+    || u === "/api/admin/comms/recipients?"), urls);
+  const investorApi = walk("src/app/api/maalrise").filter((p) => p.endsWith("route.ts"));
+  check("every investor API route checks the session and the investor role",
+    investorApi.length > 0 && investorApi.every((p) => read(p).includes('maalriseGate(["investor"])')), investorApi);
 
   const pages = files.filter((p) => p.endsWith("page.tsx"));
   const showsSample = pages.filter((p) => /SAMPLE_|sample(Cycle|Investor|Dashboard)/.test(readFileSync(p, "utf8")));

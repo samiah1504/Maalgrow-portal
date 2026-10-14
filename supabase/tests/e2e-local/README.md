@@ -50,6 +50,15 @@ node supabase/tests/e2e-local/ui-e2e.mjs /tmp/shots
   - bank detail change requests: submit, withdraw, approve, reject with a reason;
   - investors reading nothing of a Cycle's terms directly; staff and investor routes kept apart.
 
-`up.sh` also emulates Supabase storage on disk for the document routes.
+`ui-e2e-phase7.mjs` covers Phase 7 (go-live readiness):
+  - creating a MaalRise-only investor (login and investor record, nothing sent); MaalGrow totals unchanged;
+  - the invitation, the KYC form on first sign-in, KYC approval carried to MaalRise;
+  - the email outbox: send, refused address kept as failed, discard, Send all; roles;
+  - the Communication Centre MaalRise selection; reports and CSVs; the guide.
+
+`up.sh` also emulates Supabase storage on disk for the document routes, account creation
+(`/auth/v1/admin`, never emails) and Resend's `POST /emails` (start the app with
+`RESEND_API_KEY=e2e-local RESEND_BASE_URL=http://127.0.0.1:54321`): emails are written to
+`sent-emails.jsonl`, never sent; an address containing "bounce" is refused.
 
 Rebuild the database (`up.sh`) before each run; each run creates records.

@@ -167,3 +167,17 @@ export function BankChangeReview({ requestId }: { requestId: string }) {
     </div>
   );
 }
+
+/** Send (or resend) the portal invitation: set a password, then the KYC form. */
+export function SendInvitation({ investorId, resend, email }: { investorId: string; resend: boolean; email: string }) {
+  const { run, busy } = useMaalriseAction();
+  return (
+    <Button size="sm" variant={resend ? "outline" : "default"} loading={busy === "invite"}
+      onClick={() => {
+        if (!window.confirm(`Send the MaalRise portal invitation to ${email} now? This sends a real email.`)) return;
+        void run("invite", `/api/admin/maalrise/investors/${investorId}/invitation`, {}, { success: "Invitation sent." });
+      }}>
+      {resend ? "Resend invitation" : "Send invitation"}
+    </Button>
+  );
+}

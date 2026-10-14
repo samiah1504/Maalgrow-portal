@@ -29,6 +29,8 @@ import {
   UserRound,
   Banknote,
   BellRing,
+  Mail,
+  FileBarChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -91,6 +93,9 @@ const navGroups: NavGroup[] = [
       { label: "MaalRise Investors", href: "/admin/maalrise/investors", icon: <UserRound className="h-4 w-4" /> },
       { label: "MaalRise Payments", href: "/admin/payment-requests/maalrise", icon: <Banknote className="h-4 w-4" /> },
       { label: "MaalRise Alerts", href: "/admin/maalrise/notifications", icon: <BellRing className="h-4 w-4" /> },
+      { label: "MaalRise Emails", href: "/admin/maalrise/emails", icon: <Mail className="h-4 w-4" /> },
+      { label: "MaalRise Reports", href: "/admin/maalrise/reports", icon: <FileBarChart className="h-4 w-4" /> },
+      { label: "MaalRise Guide", href: "/admin/maalrise/guide", icon: <BookOpen className="h-4 w-4" /> },
     ],
   },
   {

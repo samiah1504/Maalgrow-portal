@@ -3,3 +3,4 @@ pgrst.conf
 *.pid
 shots/
 storage/
+sent-emails.jsonl

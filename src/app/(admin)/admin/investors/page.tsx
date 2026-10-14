@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { maalriseOnlyInvestorIds } from "@/lib/maalrise/db";
 import { requireAdminPage } from "@/lib/admin-guard";
 import Link from "next/link";
 import { Users, ChevronRight, UserPlus, AlertTriangle } from "lucide-react";
@@ -92,6 +93,10 @@ export default async function InvestorsPage({
     })),
     { series, sort: sortOrder }
   );
+
+  // People with only MaalRise: an investor record (for the invitation,
+  // KYC form and messages) but no MaalGrow investment.
+  const maalriseOnly = await maalriseOnlyInvestorIds(adminClient);
 
   const totalActive = investors.filter((i) =>
     i.investments?.some((inv) => inv.status === "active")
@@ -203,7 +208,14 @@ export default async function InvestorsPage({
                               {inv.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <p className="font-semibold text-foreground">{inv.full_name}</p>
+                              <p className="font-semibold text-foreground">
+                                {inv.full_name}
+                                {maalriseOnly.has(inv.id) && (
+                                  <span className="ml-2 rounded-md bg-gold-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-gold-700">
+                                    MaalRise only
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-xs text-muted">{profile?.email}</p>
                             </div>
                           </div>

@@ -6,7 +6,15 @@ import { CYCLE_STATUS_LABEL, KYC_STATUS_LABEL, KYC_STATUS_VARIANT, formatKobo } 
 import type { InvestorDetail } from "@/lib/maalrise/db";
 import { DetailSection, FieldGrid, SectionIndex } from "@/components/maalrise/section";
 import { EmptyState } from "@/components/maalrise/sample-notice";
-import { BankActions, BankChangeReview, KycActions } from "./_investor-actions";
+import { BankActions, BankChangeReview, KycActions, SendInvitation } from "./_investor-actions";
+
+const INVITATION: Record<string, string> = {
+  not_sent: "Not sent",
+  sent: "Sent",
+  failed: "Failed to send",
+  activated: "Password set — can sign in",
+  expired: "Expired",
+};
 
 const SECTIONS = [
   { id: "contact", label: "Contact" },
@@ -42,7 +50,7 @@ export function kycDisplay(status: string, source: string | null) {
   return status === "verified" && source === "maalgrow" ? "verified_via_maalgrow" : status === "not_started" ? "not_started" : status;
 }
 
-export function InvestorDetailView({ d, canPrepare }: { d: InvestorDetail; canPrepare: boolean }) {
+export function InvestorDetailView({ d, canPrepare, canInvite = false }: { d: InvestorDetail; canPrepare: boolean; canInvite?: boolean }) {
   const inv = d.investor;
   const kyc = kycDisplay(inv.kyc_status, inv.kyc_source);
   const pending = d.kyc.some((k) => k.status === "pending_review");
@@ -65,14 +73,24 @@ export function InvestorDetailView({ d, canPrepare }: { d: InvestorDetail; canPr
 
       <SectionIndex items={SECTIONS} />
 
-      <DetailSection id="contact" title="1. Contact information">
+      <DetailSection id="contact" title="1. Contact information"
+        action={canInvite && d.maalgrow?.invitation_status !== "activated"
+          ? <SendInvitation investorId={inv.id} resend={d.maalgrow?.invitation_status === "sent" || d.maalgrow?.invitation_status === "failed"} email={inv.email} />
+          : undefined}>
         <FieldGrid
           rows={[
             { label: "Full name", value: inv.full_name },
             { label: "Email (login)", value: inv.email },
             { label: "Phone", value: inv.phone || "—" },
             { label: "Account status", value: <span className="capitalize">{inv.status}</span> },
-            { label: "Product access", value: inv.maalgrow_investor_id ? "MaalRise and MaalGrow (one login)" : "MaalRise only" },
+            { label: "Product access", value: d.maalgrow && d.maalgrow.investments > 0 ? "MaalRise and MaalGrow (one login)" : "MaalRise only" },
+            { label: "Investor record (invitation, KYC form, messages)", value: d.maalgrow ? <span className="font-mono">{d.maalgrow.investor_code}</span> : "Created when the invitation is sent" },
+            {
+              label: "Portal invitation",
+              value: d.maalgrow?.invitation_status
+                ? `${INVITATION[d.maalgrow.invitation_status] ?? d.maalgrow.invitation_status}${d.maalgrow.invitation_sent_at && d.maalgrow.invitation_status !== "activated" ? `, ${formatDateTime(d.maalgrow.invitation_sent_at)}` : ""}`
+                : "Not sent",
+            },
             { label: "Added", value: formatDate(inv.created_at) },
           ]}
         />
@@ -150,7 +168,15 @@ export function InvestorDetailView({ d, canPrepare }: { d: InvestorDetail; canPr
         )}
       </DetailSection>
 
-      <DetailSection id="kyc" title="3. KYC" description="Verified MaalGrow KYC is reused. Bank details alone never count as KYC.">
+      <DetailSection id="kyc" title="3. KYC"
+        description="Investors complete the same KYC form as MaalGrow when they first sign in; once approved in KYC Review, MaalRise uses it. Bank details alone never count as KYC.">
+        {d.maalgrow && inv.kyc_status !== "verified" && (
+          <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900" data-testid="maalgrow-kyc-note">
+            {d.maalgrow.kyc_submitted_at
+              ? <>The KYC form was submitted {formatDateTime(d.maalgrow.kyc_submitted_at)}. Review it in <Link href="/admin/kyc" className="font-medium underline">KYC Review</Link>; approval there is carried across to MaalRise.</>
+              : <>The investor has not completed the KYC form yet. They are asked for it when they first sign in.</>}
+          </p>
+        )}
         <FieldGrid
           rows={[
             { label: "Status", value: <Badge variant={KYC_STATUS_VARIANT[kyc] ?? "pending"}>{KYC_STATUS_LABEL[kyc] ?? kyc}</Badge> },

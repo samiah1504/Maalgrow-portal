@@ -119,6 +119,8 @@ const only = (await must("ops", "POST", "/api/admin/maalrise/investors",
   { email: "login.only@test.local", full_name: "Login Only", bank_name: "Kuda", account_name: "Login Only", account_number: "5566778899" })).id;
 await must("ops", "POST", `/api/admin/maalrise/investors/${only}`, { action: "record_kyc", details: { id_type: "NIN", id_number: "9", date_of_birth: "1990-01-01", address: "Abuja" } });
 await must("admin", "POST", `/api/admin/maalrise/investors/${only}`, { action: "review_kyc", decision: "verified", notes: "Staff-only note E2E" });
+// Since Phase 7 a MaalRise-only person has the investor record too, and fills the KYC form first.
+sql(`update investors set kyc_status = 'approved', kyc_submitted_at = now() where profile_id = '10000000-0000-0000-0000-0000000000c3'`);
 for (const i of [both, only]) await must("ops", "POST", `/api/admin/maalrise/investors/${i}`, { action: "confirm_bank" });
 for (const [inv, units, ref] of [[both, 60, "F6-1"], [only, 40, "F6-2"]]) {
   await must("fin", "POST", `/api/admin/maalrise/cycles/${C}/fundings`, { investor_id: inv, units, received_on: addDays(START, -2), reference: ref });

@@ -8,7 +8,7 @@
  */
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { mr } from "./db";
+import { mr, syncFromMaalgrow } from "./db";
 import { getMyProfile } from "./portal";
 
 export async function requireMaalriseInvestorPage() {
@@ -18,6 +18,8 @@ export async function requireMaalriseInvestorPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const db = mr(supabase);
+  // An approved MaalGrow KYC shows here straight away (Phase 7).
+  await syncFromMaalgrow(db);
   const profile = await getMyProfile(db).catch(() => null);
   if (!profile) redirect("/dashboard");
   return { db, profile };

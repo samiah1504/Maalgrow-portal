@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireAdminPage } from "@/lib/admin-guard";
+import { maalriseOnlyInvestorIds } from "@/lib/maalrise/db";
 import { BarChart3, TrendingUp, DollarSign, Users, Download } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,8 @@ export default async function AdminReportsPage() {
   await requireAdminPage();
 
   const db = await createAdminClient();
+  // MaalRise-only people have an investor record but no MaalGrow investment; MaalGrow totals leave them out.
+  const maalriseOnly = await maalriseOnlyInvestorIds(db);
 
   const [
     { count: totalInvestors },
@@ -63,7 +66,7 @@ export default async function AdminReportsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Total Investors"
-          value={String(totalInvestors ?? 0)}
+          value={String(Math.max(0, (totalInvestors ?? 0) - maalriseOnly.size))}
           accentColor="primary"
           icon={<Users className="h-5 w-5" />}
         />
