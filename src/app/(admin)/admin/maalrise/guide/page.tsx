@@ -14,6 +14,7 @@ const STAGES: { title: string; steps: Step[] }[] = [
       { who: "Super admin / Administrator", what: <>On the investor&apos;s page press <strong>Send invitation</strong>. They set a password and complete the same KYC form as MaalGrow.</> },
       { who: "KYC reviewer", what: <>Review the form in <Link href="/admin/kyc">KYC Review</Link>. Approval is carried to MaalRise automatically.</> },
       { who: "Operations / Administrator", what: "Confirm the investor's bank details on their MaalRise page. Payments only go to confirmed accounts." },
+      { who: "Any staff", what: <>To see exactly what an investor sees, open their MaalRise page and press <strong>View as investor</strong>. It is read only and each view is recorded.</> },
     ],
   },
   {

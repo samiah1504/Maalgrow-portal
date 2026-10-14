@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, CheckCircle2, Wallet } from "lucide-react";
+import { ArrowLeft, AlertCircle, CheckCircle2, Eye, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { CYCLE_STATUS_LABEL, KYC_STATUS_LABEL, KYC_STATUS_VARIANT, formatKobo } from "@/lib/maalrise/format";
@@ -69,6 +69,10 @@ export function InvestorDetailView({ d, canPrepare, canInvite = false }: { d: In
           </div>
           <p className="text-sm text-muted mt-0.5 font-mono">{inv.investor_code}</p>
         </div>
+        <Link href={`/admin/maalrise/investors/${inv.id}/view`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-primary-50">
+          <Eye className="h-4 w-4" /> View as investor
+        </Link>
       </div>
 
       <SectionIndex items={SECTIONS} />

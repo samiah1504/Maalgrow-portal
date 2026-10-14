@@ -67,3 +67,5 @@ Rebuild the database (`up.sh`) before each run; each run creates records.
   - importing a Cycle's investors and funding from a five-column file (no bank details): preview, refused rows, new logins with nothing sent, a repeat import adds nothing;
   - Confirm all, including an administrator's own entry being left and a super admin's single reason;
   - "Email all investors in this Cycle": counts first, invitations with a set-password link for people who never signed in, notifications for the rest, one email each, the failed one retried without duplicates.
+  - (058) activating with KYC and bank details outstanding shown as warnings, and their payments still held;
+  - (059) "View as investor" showing staff the same monthly figures as the investor's own page; refused to the payment officer and to investors.

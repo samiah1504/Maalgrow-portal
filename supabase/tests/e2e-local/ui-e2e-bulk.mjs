@@ -269,6 +269,34 @@ const appr = await api("sa", "POST", `/api/admin/maalrise/distributions/${dist}`
 check("payments to investors without confirmed bank details cannot be approved",
   appr.status === 400 && /Bank details are unconfirmed or have changed for/.test(appr.body.error ?? ""), JSON.stringify(appr));
 
+// 059: View as investor shows staff exactly what the investor sees.
+sql(`update investors set kyc_submitted_at = now() where email = 'both@test.local' and kyc_submitted_at is null`); // past the KYC form
+await as("both");
+await go(`/maalrise/cycles/${c.id}`);
+const theirMonths = await page.evaluate(() => document.querySelector("#months")?.innerText ?? "");
+const theirPage = await text();
+check("the investor sees their Cycle (50 units)", theirMonths.includes("Month 1") && theirPage.includes("50 × ₦100,000.00"), theirPage.slice(0, 300));
+await as("support");
+await go(`/admin/maalrise/investors/${both}`);
+check("the investor's admin page has a View as investor button", (await text()).includes("View as investor"));
+await click("View as investor");
+await page.waitForSelector("[data-testid='view-as-banner']", { timeout: 15000 }).catch(() => {});
+const staffMonths = await page.evaluate((id) => document.querySelector(`#cycle-${id} #months`)?.innerText ?? "", c.id);
+const staffPage = await text();
+check("the preview says it is read only", staffPage.includes("figure for figure") && staffPage.includes("read only"));
+check("the preview shows the same monthly figures as the investor's own page", staffMonths !== "" && staffMonths === theirMonths, `${staffMonths}\n---\n${theirMonths}`);
+check("the preview shows their holding, not other investors", staffPage.includes("50 × ₦100,000.00") && !staffPage.includes("Ngozi One"));
+check("each preview is recorded in the audit log",
+  sql(`select count(*) from audit_logs where action='maalrise_view_as_investor' and entity_id='${both}'`) === "1");
+await shot("p59-01-view-as-investor");
+await as("officer");
+const off = await page.goto(`${BASE}/admin/maalrise/investors/${both}/view`, { waitUntil: "networkidle0" });
+check("the payment officer cannot open it", !page.url().includes("/view") && !(await text()).includes("figure for figure"), page.url());
+await as("both");
+await page.goto(`${BASE}/admin/maalrise/investors/${one}/view`, { waitUntil: "networkidle0" });
+check("an investor cannot open another investor's view", !(await text()).includes("figure for figure"), page.url());
+void off;
+
 check("no browser errors", pageErrors.length === 0, pageErrors.join(" | "));
 console.log(`\n${pass} passed, ${fail} failed`);
 await browser.close();

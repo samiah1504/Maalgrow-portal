@@ -210,6 +210,15 @@ Where it is enforced:
   funding, no funding awaiting confirmation, allocations reconciling,
   no suspended investor, the contract uploaded, a consistent maturity.
 
+### View as investor (confirmed 14 Oct 2026, migration 059)
+
+- Staff can open a read-only preview of exactly what one MaalRise
+  investor sees: "View as investor" on the investor's MaalRise page.
+- The figures come from the same database functions as the investor's
+  own portal (059 makes them take the investor as a parameter), so the
+  preview cannot differ. Staff only (not the payment officer); each
+  view is recorded in the audit log; nothing can be changed or sent.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;

@@ -195,3 +195,20 @@ export function statementCsv(payments: MyPayment[]): string {
                  p.account_ending ? `****${p.account_ending}` : ""]);
   return toCsv(["Date paid", "Cycle", "Payment", "Amount (NGN)", "Transfer reference", "Bank", "Account"], rows);
 }
+
+export type InvestorView = { profile: MyProfile | null; cycles: MyCycle[]; payments: MyPayment[] };
+
+/**
+ * Staff only (migration 059): exactly what one investor sees — the same
+ * database functions their own portal uses. Each view is recorded in
+ * the audit log. Null if the investor does not exist.
+ */
+export async function viewAsInvestor(db: SupabaseClient, investorId: string): Promise<InvestorView | null> {
+  const res = await db.rpc("maalrise_view_as_investor", { p_inv: investorId });
+  if (res.error) {
+    if (res.error.message === "Investor not found") return null;
+    throw new Error(`Could not load the investor's view: ${res.error.message}`);
+  }
+  const v = res.data as InvestorView;
+  return { profile: v.profile, cycles: v.cycles ?? [], payments: v.payments ?? [] };
+}
