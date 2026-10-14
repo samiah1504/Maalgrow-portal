@@ -70,4 +70,4 @@ Rebuild the database (`up.sh`) before each run; each run creates records.
   - (058) activating with KYC and bank details outstanding shown as warnings, and their payments still held;
   - (059) "View as investor" showing staff the same monthly figures as the investor's own page; refused to the payment officer and to investors.
 
-`ui-e2e-reopen.mjs` covers migration 060: a super admin reopens a mistakenly activated Cycle with a reason, a new terms version and the missing funding are added, it is activated again; administrators cannot; refused once a payment is recorded. With 061: a refund recorded in the browser (date, reference, reason), refused while active and to finance.
+`ui-e2e-reopen.mjs` covers migration 060: a super admin reopens a mistakenly activated Cycle with a reason, a new terms version and the missing funding are added, it is activated again; administrators cannot; refused once a payment is recorded.

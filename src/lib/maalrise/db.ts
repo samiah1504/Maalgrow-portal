@@ -188,7 +188,7 @@ export async function getCycleDetail(db: SupabaseClient, id: string): Promise<Cy
 
   const names = await peopleNames(db, [
     ...versions.flatMap((v) => [v.prepared_by, v.submitted_by, v.approved_by, v.returned_by]),
-    ...fundings.flatMap((f) => [f.recorded_by, f.confirmed_by, f.rejected_by, f.refunded_by ?? null]),
+    ...fundings.flatMap((f) => [f.recorded_by, f.confirmed_by, f.rejected_by]),
     ...receipts.flatMap((r) => [r.recorded_by, r.confirmed_by, r.rejected_by, r.reversed_by]),
     ...capitalReceipts.flatMap((r) => [r.recorded_by, r.confirmed_by, r.rejected_by, r.reversed_by]),
     ...settlementRows.flatMap((x) => [x.prepared_by, x.approved_by]),

@@ -218,9 +218,7 @@ export type FundingView = {
   amountKobo: number;
   receivedOn: string;
   reference: string;
-  status: "recorded" | "confirmed" | "rejected" | "refunded";
-  /** Migration 061: when, which reference, who and why. */
-  refund?: string | null;
+  status: "recorded" | "confirmed" | "rejected";
   recordedBy: string;
   recordedByMe: boolean;
   decidedBy: string | null;
@@ -236,7 +234,6 @@ export function FundingPanel({
   canFinance,
   open,
   isSuperAdmin = false,
-  canRefund = false,
 }: {
   cycleId: string;
   investors: { id: string; label: string }[];
@@ -246,8 +243,6 @@ export function FundingPanel({
   open: boolean;
   /** A super admin may confirm funding they recorded, giving a reason (migration 056). */
   isSuperAdmin?: boolean;
-  /** Super admin and administrator may record a refund of confirmed funding before activation (061). */
-  canRefund?: boolean;
 }) {
   const { run, busy } = useMaalriseAction();
   const [investorId, setInvestorId] = useState("");
@@ -258,10 +253,6 @@ export function FundingPanel({
   const [reason, setReason] = useState("");
   const [selfConfirming, setSelfConfirming] = useState<string | null>(null);
   const [selfReason, setSelfReason] = useState("");
-  const [refunding, setRefunding] = useState<string | null>(null);
-  const [refundOn, setRefundOn] = useState("");
-  const [refundRef, setRefundRef] = useState("");
-  const [refundWhy, setRefundWhy] = useState("");
   const n = /^\d+$/.test(units) ? Number(units) : 0;
 
   return (
@@ -323,14 +314,13 @@ export function FundingPanel({
                   <td className="px-3 py-2 text-muted whitespace-nowrap">{formatDate(f.receivedOn)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{f.reference}</td>
                   <td className="px-3 py-2">
-                    <Badge variant={f.status === "confirmed" ? "approved" : f.status === "rejected" || f.status === "refunded" ? "rejected" : "pending"} className="capitalize">
+                    <Badge variant={f.status === "confirmed" ? "approved" : f.status === "rejected" ? "rejected" : "pending"} className="capitalize">
                       {f.status === "recorded" ? "Awaiting confirmation" : f.status}
                     </Badge>
                     <p className="text-[11px] text-muted mt-0.5">
-                      Recorded by {f.recordedBy}{f.decidedBy ? ` · ${f.status === "refunded" ? "confirmed" : f.status} by ${f.decidedBy}` : ""}
+                      Recorded by {f.recordedBy}{f.decidedBy ? ` · ${f.status} by ${f.decidedBy}` : ""}
                     </p>
                     {f.rejectReason && <p className="text-[11px] text-red-700">{f.rejectReason}</p>}
-                    {f.refund && <p className="text-[11px] text-red-700">{f.refund}</p>}
                   </td>
                   <td className="py-2 pl-3 text-right whitespace-nowrap">
                     {canFinance && open && f.status === "recorded" && (
@@ -350,35 +340,6 @@ export function FundingPanel({
                           <Button size="xs" variant="outline" onClick={() => setRejecting(f.id)}>Reject</Button>
                         </span>
                       )
-                    )}
-                    {canRefund && open && f.status === "confirmed" && refunding !== f.id && (
-                      <Button size="xs" variant="outline" onClick={() => { setRefunding(f.id); setRefundOn(""); setRefundRef(""); setRefundWhy(""); }}>
-                        Record refund
-                      </Button>
-                    )}
-                    {refunding === f.id && (
-                      <div className="mt-2 space-y-2 text-left rounded-md border border-red-200 bg-red-50/50 p-2" data-testid="refund-form">
-                        <p className="text-[11px] text-muted">
-                          The money has already been sent back. This entry is kept, marked Refunded, and its {f.units} unit(s) leave the Cycle.
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <Input label="Date refunded" type="date" value={refundOn} onChange={(e) => setRefundOn(e.target.value)} />
-                          <Input label="Refund bank reference" value={refundRef} onChange={(e) => setRefundRef(e.target.value)} />
-                        </div>
-                        <Input label="Reason for the refund" value={refundWhy} onChange={(e) => setRefundWhy(e.target.value)} />
-                        <div className="flex gap-1 justify-end">
-                          <Button size="xs" variant="destructive" disabled={!refundOn || !refundRef.trim() || !refundWhy.trim()} loading={busy === `rf-${f.id}`}
-                            onClick={async () => {
-                              if (!window.confirm(`Record that ${formatKobo(f.amountKobo)} was refunded to ${f.investorName}? Their ${f.units} unit(s) leave this Cycle.`)) return;
-                              if (await run(`rf-${f.id}`, `/api/admin/maalrise/fundings/${f.id}`,
-                                { action: "refund", refunded_on: refundOn, reference: refundRef, reason: refundWhy },
-                                { success: "Refund recorded. Their units have left the Cycle." })) setRefunding(null);
-                            }}>
-                            Record refund
-                          </Button>
-                          <Button size="xs" variant="outline" onClick={() => setRefunding(null)}>Cancel</Button>
-                        </div>
-                      </div>
                     )}
                     {selfConfirming === f.id && (
                       <div className="mt-2 flex flex-wrap items-end justify-end gap-2 text-left">

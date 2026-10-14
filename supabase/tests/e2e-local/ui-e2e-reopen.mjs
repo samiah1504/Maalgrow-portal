@@ -91,11 +91,8 @@ const c = await must("ops", "POST", "/api/admin/maalrise/cycles", {
 await must("ops", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "submit", terms_id: c.terms_id });
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "approve", terms_id: c.terms_id });
 const both = (await must("ops", "POST", "/api/admin/maalrise/investors", { email: "both@test.local", full_name: "" })).id;
-const leaver = (await must("ops", "POST", "/api/admin/maalrise/investors", { email: "login.only@test.local", full_name: "Login Only" })).id;
-const f1 = (await must("fin", "POST", `/api/admin/maalrise/cycles/${c.id}/fundings`, { investor_id: both, units: 6, received_on: TODAY, reference: "RO-E2E-1" })).id;
+const f1 = (await must("fin", "POST", `/api/admin/maalrise/cycles/${c.id}/fundings`, { investor_id: both, units: 8, received_on: TODAY, reference: "RO-E2E-1" })).id;
 await must("admin", "POST", `/api/admin/maalrise/fundings/${f1}`, { action: "confirm" });
-const fL = (await must("fin", "POST", `/api/admin/maalrise/cycles/${c.id}/fundings`, { investor_id: leaver, units: 2, received_on: TODAY, reference: "RO-E2E-L" })).id;
-await must("admin", "POST", `/api/admin/maalrise/fundings/${fL}`, { action: "confirm" });
 await as("ops");
 await go(`/admin/maalrise/cycles/${c.id}`);
 const pdf = path.join(os.tmpdir(), "maalrise-reopen-contract.pdf");
@@ -105,10 +102,6 @@ await click("Upload", { exact: true });
 await toast(/Contract uploaded/);
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "activate" });
 check("set-up: the Cycle is active at ₦400,000", sql(`select status from maalrise_cycles where id='${c.id}'`) === "active");
-
-// 061: no refund while the Cycle is active
-const activeRefund = await api("admin", "POST", `/api/admin/maalrise/fundings/${fL}`, { action: "refund", refunded_on: TODAY, reference: "X", reason: "x" });
-check("a refund on an active Cycle is refused (reopen first)", activeRefund.status === 400 && /reopen it first/.test(activeRefund.body.error ?? ""), JSON.stringify(activeRefund));
 
 // Only a super admin sees and can use it
 await as("admin");
@@ -132,36 +125,11 @@ check("back to terms approved, activation cleared",
 check("the reason is in the Cycle's activity history", await waitText("Reopened the Cycle for correction (super admin)"));
 await shot("p60-01-reopened");
 
-// 061: Login Only asked for a refund — recorded in the browser
-check("finance cannot record a refund", (await api("fin", "POST", `/api/admin/maalrise/fundings/${fL}`, { action: "refund", refunded_on: TODAY, reference: "X", reason: "x" })).status === 403);
-await as("admin");
-await go(`/admin/maalrise/cycles/${c.id}#allocations`);
-await click("Record refund", { within: "RO-E2E-L", rowOnly: true });
-await page.waitForSelector("[data-testid='refund-form']");
-await page.evaluate((d) => {
-  const set = (label, v) => {
-    const l = [...document.querySelectorAll("[data-testid='refund-form'] label")].find((x) => x.textContent.trim().startsWith(label));
-    const el = document.getElementById(l.htmlFor);
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  };
-  set("Date refunded", d); set("Refund bank reference", "TRF-REFUND-L"); set("Reason for the refund", "Asked for a refund before the start");
-}, TODAY);
-page.once("dialog", (d) => d.accept());
-await click("Record refund", { within: "RO-E2E-L", rowOnly: true, exact: true });
-check("refund recorded", await toast(/Refund recorded/i));
-check("the entry is kept, marked refunded with the date, reference and reason",
-  sql(`select status || ':' || refund_reference || ':' || refund_reason from maalrise_investor_fundings where id='${fL}'`)
-    === "refunded:TRF-REFUND-L:Asked for a refund before the start");
-check("their units have left the Cycle", sql(`select count(*) from maalrise_allocations where cycle_id='${c.id}' and maalrise_investor_id='${leaver}'`) === "0");
-check("the page shows it as refunded", await waitText("Refunded") && (await page.evaluate(() => document.body.innerText)).includes("TRF-REFUND-L"));
-await shot("p61-01-refunded");
-
 // The correction, through the usual screens and routes
 const v2 = (await must("ops", "PUT", `/api/admin/maalrise/cycles/${c.id}/terms`, { terms: termsAt(45_000_000) })).terms_id;
 await must("ops", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "submit", terms_id: v2 });
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "approve", terms_id: v2 });
-const f2 = (await must("fin", "POST", `/api/admin/maalrise/cycles/${c.id}/fundings`, { investor_id: both, units: 3, received_on: TODAY, reference: "RO-E2E-2" })).id;
+const f2 = (await must("fin", "POST", `/api/admin/maalrise/cycles/${c.id}/fundings`, { investor_id: both, units: 1, received_on: TODAY, reference: "RO-E2E-2" })).id;
 await must("admin", "POST", `/api/admin/maalrise/fundings/${f2}`, { action: "confirm" });
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/actions`, { action: "activate" });
 check("active again at ₦450,000 with 9 units; the ₦400,000 terms kept as superseded",

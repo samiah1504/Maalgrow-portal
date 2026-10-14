@@ -229,17 +229,6 @@ Where it is enforced:
 - Refused once any money has moved on the Cycle: a payment or capital
   received, a distribution or a capital settlement, in any status.
 
-### Refunds before the start (confirmed 14 Oct 2026, migration 061)
-
-- Super admins and administrators record a refund of an investor's
-  confirmed funding once the money has gone back: date, bank reference
-  and reason. Only before activation (reopen an active Cycle first).
-- The entry is kept, marked Refunded; its units leave the Cycle's
-  allocations; its reference stays used, so a repeat import does not
-  bring the investor back.
-- The resulting gap is closed by a new terms version at the lower cost
-  (agreed) — a shortfall still blocks activation.
-
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;
