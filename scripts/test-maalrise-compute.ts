@@ -23,7 +23,7 @@ import { portfolioSummary, statementCsv, type MyCycle, type MyMonth, type MyPaym
 import { monthRange, registerCsv, registerRows } from "../src/lib/maalrise/reports";
 import type { CapitalPaymentRow, DistributionLineRow } from "../src/lib/maalrise/types";
 import * as XLSX from "xlsx";
-import { checkImportRows, importTemplateCsv, parseImportSheet, sanitizeImportRows } from "../src/lib/maalrise/bulk-import";
+import { checkImportRows, importReference, importTemplateCsv, parseImportSheet, sanitizeImportRows } from "../src/lib/maalrise/bulk-import";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail?: unknown) {
@@ -379,27 +379,36 @@ const base: TermsInput = {
 // ------------------------------------------------------------------
 {
   const csv = [
-    "Email,Full name,Phone,Units,Date received,Bank reference,Bank name,Account name,Account number",
-    `"investor@email.com","EXAMPLE - delete this row","0803","10","15/10/2026","TRF-00123","","",""`,
-    "New@Person.com ,Ngozi Eze,0803 111 2222,10,05/10/2026,REF-1,Access Bank,Ngozi Eze,0123456789",
-    "old@login.com,,,\"1,000\",2026-10-01,ref-2,,,",
-    ",,,,,,,,",
-    "staff@maalvest.com,Staff,,1,01/10/2026,REF-3,,,",
+    "Full name,Email,Phone,Units,Date received",
+    `"EXAMPLE - delete this row","investor@email.com","0803","10","15/10/2026"`,
+    "Ngozi Eze,New@Person.com ,0803 111 2222,10,05/10/2026",
+    ",old@login.com,,\"1,000\",2026-10-01",
+    ",,,,",
+    "Staff,staff@maalvest.com,,1,01/10/2026",
   ].join("\r\n");
   const p = parseImportSheet(Buffer.from(csv));
   check("import: template row and blank rows skipped; email lower-cased; DD/MM/YYYY read as day first; 1,000 units",
     p.error === null && p.rows.length === 3 && p.rows[0].email === "new@person.com" && p.rows[0].received_on === "2026-10-05"
       && p.rows[1].units === 1000 && p.rows[0].row === 3, p);
-  check("import: the template has the required columns", parseImportSheet(Buffer.from(importTemplateCsv())).error === "No investor rows were found below the header row.");
+  check("import: a reference is made from email, units and date — the same row always gets the same one",
+    /^IMPORT-[0-9A-F]{12}$/.test(p.rows[0].reference) && p.rows[0].reference === importReference("new@person.com", 10, "2026-10-05")
+      && p.rows[0].reference !== importReference("new@person.com", 10, "2026-10-06")
+      && parseImportSheet(Buffer.from(csv)).rows.map((r) => r.reference).join() === p.rows.map((r) => r.reference).join());
+  check("import: a sheet's own Bank reference column is still used",
+    parseImportSheet(Buffer.from("Email,Units,Date received,Bank reference\r\na@b.com,1,01/10/2026,TRF-9")).rows[0]?.reference === "TRF-9");
+  check("import: the template is Full name, Email, Phone, Units, Date received — no bank details",
+    importTemplateCsv().split("\r\n")[0] === "Full name,Email,Phone,Units,Date received"
+      && parseImportSheet(Buffer.from(importTemplateCsv())).error === "No investor rows were found below the header row.");
+  check("import: bank columns in a sheet are ignored",
+    !("account_number" in (parseImportSheet(Buffer.from("Email,Units,Date received,Account number\r\na@b.com,1,01/10/2026,0123456789")).rows[0] ?? {})));
   check("import: a sheet without Units is refused with the column named",
-    parseImportSheet(Buffer.from("Email,Date received,Bank reference\r\na@b.com,01/10/2026,R")).error?.startsWith("Missing column: Units") === true);
+    parseImportSheet(Buffer.from("Email,Date received\r\na@b.com,01/10/2026")).error?.startsWith("Missing column: Units") === true);
 
-  // Excel: a numeric account number keeps its leading zero, a real date cell is read
-  const ws = XLSX.utils.aoa_to_sheet([["Email", "Units", "Date received", "Bank reference", "Bank name", "Account name", "Account number"],
-    ["x@y.com", 3, new Date(2026, 9, 2), "X-1", "GTB", "X Y", 123456789]]);
+  // Excel: a real date cell is read
+  const ws = XLSX.utils.aoa_to_sheet([["Full name", "Email", "Phone", "Units", "Date received"], ["X Y", "x@y.com", "0803", 3, new Date(2026, 9, 2)]]);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
   const x = parseImportSheet(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer);
-  check("import: Excel date cell and account number with its leading zero", x.rows[0]?.received_on === "2026-10-02" && x.rows[0]?.account_number === "0123456789", x);
+  check("import: Excel date cell", x.rows[0]?.received_on === "2026-10-02" && x.rows[0]?.units === 3, x);
 
   const ctx = {
     today: "2026-10-14", unitPriceKobo: 100_000_00, unitsAvailable: 15,
@@ -408,8 +417,7 @@ const base: TermsInput = {
               "mr@x.com": { kind: "maalrise" as const, name: "Mr" } },
   };
   const row = (o: Partial<ReturnType<typeof sanitizeImportRows> extends (infer R)[] | null ? R : never>) => ({
-    row: 2, email: "a@b.com", full_name: "A B", phone: "", units: 1, received_on: "2026-10-01", reference: "R", bank_name: "",
-    account_name: "", account_number: "", ...o });
+    row: 2, email: "a@b.com", full_name: "A B", phone: "", units: 1, received_on: "2026-10-01", reference: "R", ...o });
   const c = checkImportRows([
     row({ row: 2, email: "new@p.com", units: 10, reference: "A" }),
     row({ row: 3, email: "old@login.com", full_name: "", units: 10, reference: "B" }), // only 5 left
@@ -417,7 +425,7 @@ const base: TermsInput = {
     row({ row: 5, email: "mr@x.com", units: 2, reference: "REF-OLD" }),             // already imported
     row({ row: 6, email: "z@z.com", units: 1.5, reference: "D" }),
     row({ row: 7, email: "y@y.com", received_on: "2026-10-20", reference: "E" }),
-    row({ row: 8, email: "w@w.com", reference: "F", bank_name: "GTB" }),
+    row({ row: 8, email: "w@w.com", reference: "IMPORT-X" }), row({ row: 12, email: "t@t.com", reference: "IMPORT-X" }),
     row({ row: 9, email: "v@v.com", reference: "G" }), row({ row: 10, email: "u@u.com", reference: "g" }),
     row({ row: 11, email: "v@v.com", reference: "H" }),
   ], ctx);
@@ -427,17 +435,17 @@ const base: TermsInput = {
   check("import: more units than the Cycle still needs is refused", st[3] === "error" && iss(3).includes("Only 5 units still needed"), iss(3));
   check("import: staff refused", st[4] === "error" && iss(4).includes("staff"));
   check("import: a reference already in this Cycle is skipped (case-insensitive), not an error", st[5] === "already_imported" && iss(5) === "");
-  check("import: whole units only; no future dates; bank details all or none",
-    st[6] === "error" && st[7] === "error" && iss(7).includes("future") && st[8] === "error" && iss(8).includes("10-digit"));
+  check("import: whole units only; no future dates",
+    st[6] === "error" && st[7] === "error" && iss(7).includes("future"));
+  check("import: the same email, units and date on two rows is refused", st[8] === "error" && iss(8).includes("same email, units and date"));
   check("import: the same reference twice in the sheet, and the same email twice, are refused",
     st[9] === "error" && st[10] === "error" && iss(9).includes("bank reference") && iss(11).includes("more than once"));
   check("import: an existing login needs no name (only units refused)", !iss(3).includes("name"), iss(3));
   check("import: summary counts", c.summary.ready === c.rows.filter((r) => r.status === "ready").length && c.summary.alreadyImported === 1
     && c.summary.newPeople === c.rows.filter((r) => r.status === "ready" && r.person === "new").length, c.summary);
   check("import: rows sent back by the browser are re-shaped (no extra fields, dates must be ISO)",
-    JSON.stringify(sanitizeImportRows([{ row: 2, email: " A@B.com ", units: 2, received_on: "05/10/2026", reference: "R", evil: 1 }]))
-      === JSON.stringify([{ row: 2, email: "a@b.com", full_name: "", phone: "", units: 2, received_on: null, reference: "R", bank_name: "",
-        account_name: "", account_number: "" }]));
+    JSON.stringify(sanitizeImportRows([{ row: 2, email: " A@B.com ", units: 2, received_on: "05/10/2026", reference: "R", evil: 1, account_number: "1" }]))
+      === JSON.stringify([{ row: 2, email: "a@b.com", full_name: "", phone: "", units: 2, received_on: null, reference: "R" }]));
   check("import: empty or oversized row lists are refused", sanitizeImportRows([]) === null && sanitizeImportRows(new Array(501).fill({})) === null);
 }
 

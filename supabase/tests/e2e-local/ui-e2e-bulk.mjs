@@ -106,7 +106,8 @@ sql(`update auth.users set last_sign_in_at = now() where email = 'both@test.loca
 
 // Template, refusals
 const tpl = await fetch(`${BASE}/api/admin/maalrise/cycles/${c.id}/import`, { headers: { Cookie: `sb-127-auth-token=${cookieFor("sa")}` } });
-check("the template downloads as CSV with the columns", tpl.status === 200 && (await tpl.text()).startsWith("Email,Full name,Phone,Units,Date received,Bank reference"));
+check("the template is Full name, Email, Phone, Units, Date received — no bank details",
+  tpl.status === 200 && (await tpl.text()).split("\r\n")[0] === "Full name,Email,Phone,Units,Date received");
 check("operations cannot import (needs both roles)", (await api("ops", "POST", `/api/admin/maalrise/cycles/${c.id}/import`, { sheet_url: "x" })).status === 403);
 const badLink = await api("sa", "POST", `/api/admin/maalrise/cycles/${c.id}/import`, { sheet_url: "https://example.com/sheet" });
 check("a link that is not a Google Sheet is explained", badLink.status === 400 && /does not look like a Google Sheets link/.test(badLink.body.error ?? ""));
@@ -117,13 +118,13 @@ check("emails cannot be prepared before any funding is confirmed", early.status 
 
 // The sheet: 4 good rows (80 units), a staff row and a future-dated row.
 const csv = [
-  "Email,Full name,Phone,Units,Date received,Bank reference,Bank name,Account name,Account number",
-  `both@test.local,,,40,${dd(TODAY)},BULK-1,,,`,
-  `New.One@bulk.local,Ngozi One,0803 000 0001,20,${dd(TODAY)},BULK-2,Access Bank,Ngozi One,0123456789`,
-  `new.two@bulk.local,Tunde Two,,10,${TODAY},BULK-3,,,`,
-  `bounce.three@bulk.local,Bisi Bounce,,10,${dd(TODAY)},BULK-4,,,`,
-  `sa@test.local,Staff Person,,1,${dd(TODAY)},BULK-5,,,`,
-  `later@bulk.local,Later Person,,1,${dd(FUTURE)},BULK-6,,,`,
+  "Full name,Email,Phone,Units,Date received",
+  `,both@test.local,,40,${dd(TODAY)}`,
+  `Ngozi One,New.One@bulk.local,0803 000 0001,20,${dd(TODAY)}`,
+  `Tunde Two,new.two@bulk.local,,10,${TODAY}`,
+  `Bisi Bounce,bounce.three@bulk.local,,10,${dd(TODAY)}`,
+  `Staff Person,sa@test.local,,1,${dd(TODAY)}`,
+  `Later Person,later@bulk.local,,1,${dd(FUTURE)}`,
 ].join("\r\n");
 const file = path.join(os.tmpdir(), "maalrise-bulk-e2e.csv");
 fs.writeFileSync(file, csv);
@@ -148,12 +149,14 @@ await click("Import 4 rows");
 check("import done", await toast(/4 row\(s\) imported/i));
 check("4 funding entries recorded, none confirmed",
   sql(`select count(*) || ':' || sum(units) || ':' || bool_and(status = 'recorded') from maalrise_investor_fundings where cycle_id='${c.id}'`) === "4:80:true");
-check("amounts are units × unit price", sql(`select amount_kobo from maalrise_investor_fundings where reference='BULK-2'`) === "200000000");
+check("amounts are units × unit price", sql(`select f.amount_kobo from maalrise_investor_fundings f join maalrise_investors m on m.id = f.maalrise_investor_id
+  where m.email='new.one@bulk.local'`) === "200000000");
+check("each entry has a reference made from the row", sql(`select bool_and(reference ~ '^IMPORT-[0-9A-F]{12}$') from maalrise_investor_fundings where cycle_id='${c.id}'`) === "t");
 check("3 new logins created, each with an investor record and MaalRise access, invitation not sent",
   sql(`select count(*) from auth.users u join investors i on i.profile_id = u.id join maalrise_investors m on m.profile_id = u.id
        where u.email like '%@bulk.local' and i.invitation_status = 'not_sent'`) === "3");
-check("bank details from the sheet are saved unconfirmed",
-  sql(`select bank_name || ':' || account_number || ':' || (bank_confirmed_at is null) from maalrise_investors where email='new.one@bulk.local'`) === "Access Bank:0123456789:true");
+check("no bank details are set by the import (they come from KYC)",
+  sql(`select count(*) from maalrise_investors where email like '%@bulk.local' and coalesce(account_number, '') <> ''`) === "0");
 check("no email sent by the import", sent().length === sentBefore);
 check("the refused rows were not imported", sql(`select count(*) from auth.users where email = 'later@bulk.local'`) === "0");
 

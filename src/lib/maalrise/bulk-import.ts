@@ -11,20 +11,38 @@
 import * as XLSX from "xlsx";
 import { normalizeEmail, parseDateValue } from "@/lib/migration-parse";
 
-export const IMPORT_COLUMNS = [
-  "Email", "Full name", "Phone", "Units", "Date received", "Bank reference",
-  "Bank name", "Account name", "Account number",
-] as const;
+/**
+ * Bank details are NOT imported: the investor gives them on the KYC
+ * form, and staff confirm them as usual. A "Bank reference" column is
+ * not in the template; if a sheet has one it is used, otherwise a
+ * reference is made from the row (see importReference).
+ */
+export const IMPORT_COLUMNS = ["Full name", "Email", "Phone", "Units", "Date received"] as const;
 
 export function importTemplateCsv(): string {
   return [
     IMPORT_COLUMNS.join(","),
     // The importer skips any row whose name starts with EXAMPLE.
-    `"investor@email.com","EXAMPLE - delete this row","0803 123 4567","10","15/10/2026","TRF-00123","Access Bank","Amina Bello","0123456789"`,
+    `"EXAMPLE - delete this row","investor@email.com","0803 123 4567","10","15/10/2026"`,
   ].join("\r\n");
 }
 
-type Field = "email" | "full_name" | "phone" | "units" | "received_on" | "reference" | "bank_name" | "account_name" | "account_number";
+/**
+ * The funding reference for a row with none: the same row always gets
+ * the same reference, so importing the same sheet again is recognised
+ * and skipped. FNV-1a, twice, for 12 hex characters.
+ */
+export function importReference(email: string, units: number, receivedOn: string): string {
+  const fnv = (str: string, seed: number) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16).padStart(8, "0");
+  };
+  const key = `${email}|${units}|${receivedOn}`;
+  return `IMPORT-${(fnv(key, 0x811c9dc5) + fnv(key, 0x050c5d1f)).slice(0, 12).toUpperCase()}`;
+}
+
+type Field = "email" | "full_name" | "phone" | "units" | "received_on" | "reference";
 
 const HEADERS: Record<string, Field> = {
   email: "email", emailaddress: "email",
@@ -33,9 +51,6 @@ const HEADERS: Record<string, Field> = {
   units: "units", numberofunits: "units", unit: "units",
   datereceived: "received_on", date: "received_on", paymentdate: "received_on", datepaid: "received_on",
   bankreference: "reference", reference: "reference", paymentreference: "reference", ref: "reference",
-  bankname: "bank_name", bank: "bank_name",
-  accountname: "account_name",
-  accountnumber: "account_number", accountno: "account_number",
 };
 
 export type ImportRow = {
@@ -46,18 +61,9 @@ export type ImportRow = {
   units: number | null;
   received_on: string | null;
   reference: string;
-  bank_name: string;
-  account_name: string;
-  account_number: string;
 };
 
 const text = (v: unknown) => (v === null || v === undefined ? "" : v instanceof Date ? "" : String(v)).trim();
-
-/** A spreadsheet number loses an account number's leading zero; put it back. */
-function accountNumber(v: unknown): string {
-  if (typeof v === "number" && Number.isInteger(v) && v >= 0) return String(v).padStart(10, "0");
-  return text(v).replace(/\s/g, "");
-}
 
 function units(v: unknown): number | null {
   if (typeof v === "number") return v;
@@ -82,9 +88,9 @@ export function parseImportSheet(buffer: Buffer): { rows: ImportRow[]; error: st
   if (raw.length === 0) return { rows: [], error: "The sheet is empty." };
 
   const cols = raw[0].map((h) => HEADERS[String(h ?? "").toLowerCase().replace(/[^a-z]/g, "")] ?? null);
-  const missing = (["email", "units", "received_on", "reference"] as Field[]).filter((f) => !cols.includes(f));
+  const missing = (["email", "units", "received_on"] as Field[]).filter((f) => !cols.includes(f));
   if (missing.length) {
-    const label: Record<string, string> = { email: "Email", units: "Units", received_on: "Date received", reference: "Bank reference" };
+    const label: Record<string, string> = { email: "Email", units: "Units", received_on: "Date received" };
     return { rows: [], error: `Missing column${missing.length > 1 ? "s" : ""}: ${missing.map((m) => label[m]).join(", ")}. Download the template to see the format.` };
   }
 
@@ -101,11 +107,11 @@ export function parseImportSheet(buffer: Buffer): { rows: ImportRow[]; error: st
       units: units(get("units")),
       received_on: parseDateValue(get("received_on")),
       reference: text(get("reference")),
-      bank_name: text(get("bank_name")),
-      account_name: text(get("account_name")),
-      account_number: accountNumber(get("account_number")),
     };
     if (!row.email && !row.full_name && row.units === null && !row.reference) continue;
+    if (!row.reference && row.email && row.units !== null && row.received_on) {
+      row.reference = importReference(row.email, row.units, row.received_on);
+    }
     rows.push(row);
   }
   if (rows.length === 0) return { rows: [], error: "No investor rows were found below the header row." };
@@ -163,11 +169,10 @@ export function checkImportRows(rows: ImportRow[], ctx: ImportContext): { rows: 
     else if (!Number.isInteger(r.units) || r.units <= 0) issues.push("Units must be a whole number greater than zero");
     if (!r.received_on) issues.push("Date received is required (DD/MM/YYYY or YYYY-MM-DD)");
     else if (r.received_on > ctx.today) issues.push("Date received cannot be in the future");
-    if (!r.reference) issues.push("Bank reference is required");
-    else if (!ctx.usedReferences.has(ref) && (seenRef.get(ref) ?? 0) > 1) issues.push("This bank reference appears more than once");
-    const anyBank = !!(r.bank_name || r.account_name || r.account_number);
-    if (anyBank && person.kind !== "maalrise" && (!r.bank_name || !r.account_name || !/^\d{10}$/.test(r.account_number))) {
-      issues.push("Bank details need a bank name, an account name and a 10-digit account number (or leave all three empty)");
+    if (r.reference && !ctx.usedReferences.has(ref) && (seenRef.get(ref) ?? 0) > 1) {
+      issues.push(r.reference.startsWith("IMPORT-")
+        ? "The same email, units and date appear on another row"
+        : "This bank reference appears more than once");
     }
 
     const already = !!r.reference && ctx.usedReferences.has(ref);
@@ -226,9 +231,6 @@ export function sanitizeImportRows(input: unknown): ImportRow[] | null {
       units: typeof o.units === "number" && Number.isFinite(o.units) ? o.units : null,
       received_on: typeof o.received_on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.received_on) ? o.received_on : null,
       reference: s(o.reference, 120),
-      bank_name: s(o.bank_name, 120),
-      account_name: s(o.account_name, 120),
-      account_number: s(o.account_number, 20),
     };
   });
 }

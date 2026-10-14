@@ -84,9 +84,9 @@ export function BulkImportPanel({ cycleId }: { cycleId: string }) {
         <a href={url} className="text-xs text-primary-700 hover:underline inline-flex items-center gap-1"><Download className="h-3 w-3" /> Download the template</a>
       </div>
       <p className="text-xs text-muted">
-        One row per investor: Email, Full name, Phone, Units, Date received (DD/MM/YYYY), Bank reference, and optionally Bank name,
-        Account name and Account number. People without a login get one, but nothing is sent. Rows whose bank reference is already
-        recorded in this Cycle are skipped, so importing the same sheet again adds nothing.
+        One row per investor: Full name, Email, Phone, Units and Date received (DD/MM/YYYY). People without a login get one, but
+        nothing is sent. Bank details are not imported: investors give them on the KYC form. Each row gets a reference made from its
+        email, units and date, so importing the same sheet again adds nothing.
       </p>
       <div className="flex gap-4 text-sm">
         <label className="inline-flex items-center gap-1.5"><input type="radio" checked={source === "sheet"} onChange={() => setSource("sheet")} /> Google Sheet link</label>
@@ -141,7 +141,7 @@ export function BulkImportPanel({ cycleId }: { cycleId: string }) {
                     <td className="px-2 py-1.5 text-right">{r.units ?? "—"}</td>
                     <td className="px-2 py-1.5 text-right">{r.amount_kobo ? formatKobo(r.amount_kobo) : "—"}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap">{r.received_on ? formatDate(r.received_on) : "—"}</td>
-                    <td className="px-2 py-1.5 font-mono">{r.reference || "—"}</td>
+                    <td className="px-2 py-1.5 font-mono whitespace-nowrap">{r.reference || "—"}</td>
                     <td className="py-1.5 pl-2">
                       {r.status === "ready" ? <span className="text-green-700">Ready</span>
                         : r.status === "already_imported" ? <span className="text-muted">Already imported — skipped</span>

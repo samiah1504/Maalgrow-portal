@@ -198,9 +198,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           fullName: r.full_name,
           loginName: login?.name,
           phone: r.phone || null,
-          bankName: r.bank_name,
-          accountName: r.account_name,
-          accountNumber: r.account_number,
+          // Bank details come from the investor's KYC form, not the sheet.
+          bankName: "",
+          accountName: "",
+          accountNumber: "",
         });
         investorId = added.id;
         if (login) known[login.id] = added.id;

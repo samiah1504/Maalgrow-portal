@@ -175,8 +175,12 @@ Where it is enforced:
 
 - **Import.** On a Cycle, super admins and administrators can import
   many investors' funding from a Google Sheet ("anyone with the link")
-  or a CSV/Excel file: Email, Full name, Phone, Units, Date received,
-  Bank reference, optional bank details. Every row is checked first
+  or a CSV/Excel file with five columns: Full name, Email, Phone, Units,
+  Date received (simplified 14 Oct 2026). **No bank details**: the
+  investor gives them on the KYC form and staff confirm them as usual.
+  No bank reference column either: each row gets a reference made from
+  its email, units and date (a sheet's own "Bank reference" column is
+  used if present). Every row is checked first
   (staff refused, whole units, no future dates, not more units than
   the Cycle still needs, no repeated references). Importing adds the
   person (a new login if needed — **nothing sent**) and RECORDS the
