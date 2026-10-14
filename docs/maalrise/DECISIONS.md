@@ -219,6 +219,16 @@ Where it is enforced:
   preview cannot differ. Staff only (not the payment officer); each
   view is recorded in the audit log; nothing can be changed or sent.
 
+### Reopening a mistaken activation (confirmed 14 Oct 2026, migration 060)
+
+- A super admin can put an active Cycle back to "terms approved",
+  giving a reason (recorded with who activated it before), to correct
+  the terms or add missed funding, then activate it again through the
+  normal steps. Nothing is deleted; the earlier terms stay as
+  superseded. Investors do not see the Cycle while it is reopened.
+- Refused once any money has moved on the Cycle: a payment or capital
+  received, a distribution or a capital settlement, in any status.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;

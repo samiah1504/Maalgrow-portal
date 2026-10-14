@@ -1,6 +1,7 @@
 /**
  * Cycle workflow: submit, approve or return terms; activation checks;
- * activation; closing checks and closing (Phase 5).
+ * activation; closing checks and closing (Phase 5); reopening a
+ * mistakenly activated Cycle for correction (060, super admin).
  *
  * Approval is the database's decision as well as ours: it refuses an
  * approver who prepared or submitted the terms (D5). Activation is for
@@ -11,6 +12,7 @@ import { NextResponse } from "next/server";
 import {
   MAALRISE_APPROVE_ROLES,
   MAALRISE_PREPARE_ROLES,
+  MAALRISE_REVERSE_ROLES,
 } from "@/lib/maalrise/permissions";
 import { dbError, isUuid, maalriseGate, readJson } from "@/lib/maalrise/api";
 import { syncFromMaalgrow } from "@/lib/maalrise/db";
@@ -25,6 +27,8 @@ const ROLES: Record<string, readonly string[]> = {
   activate: MAALRISE_APPROVE_ROLES,
   close_check: [...MAALRISE_PREPARE_ROLES, "finance", "customer_support"],
   close: MAALRISE_APPROVE_ROLES,
+  // Migration 060: put a mistakenly activated Cycle back to "terms approved".
+  reopen: MAALRISE_REVERSE_ROLES,
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +57,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               p_self_reason: typeof body?.self_reason === "string" && body.self_reason.trim() ? body.self_reason.trim() : null,
             })
           : await gate.db.rpc("maalrise_return_terms", { p_terms: body!.terms_id, p_reason: body?.reason ?? "" });
+    if (res.error) return dbError(res.error);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "reopen") {
+    // Super admin only, with a reason; the database refuses once money has moved.
+    const res = await gate.db.rpc("maalrise_reopen_cycle", { p_cycle: id, p_reason: body?.reason ?? "" });
     if (res.error) return dbError(res.error);
     return NextResponse.json({ ok: true });
   }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, XCircle, ShieldCheck, Send, Undo2, Pencil, Play } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, ShieldCheck, Send, Undo2, Pencil, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +165,47 @@ export function ActivationPanel({
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Migration 060: a super admin puts a mistakenly activated Cycle back to
+ * "terms approved" — before any money has moved on it — to correct the
+ * terms or add missing funding, then activates it again.
+ */
+export function ReopenPanel({ cycleId }: { cycleId: string }) {
+  const { run, busy } = useMaalriseAction();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  return (
+    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2" data-testid="reopen-panel">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-amber-900">
+          Activated by mistake (wrong cost, missing funding)? A super admin can reopen it before any payment is recorded.
+        </p>
+        <Button size="xs" variant="outline" onClick={() => setOpen(!open)}><RotateCcw className="h-3 w-3" /> Reopen for correction</Button>
+      </div>
+      {open && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted">
+            The Cycle goes back to &quot;terms approved&quot; and is hidden from its investors until activated again. Nothing is deleted.
+            Then: prepare a new terms version, approve it, record and confirm the missing funding, and activate again.
+          </p>
+          <textarea className={textarea} placeholder="Reason (required) — e.g. cost is ₦45m, not ₦40m; one investor's funding was missed"
+            aria-label="Reason for reopening" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Button size="sm" variant="destructive" disabled={!reason.trim()} loading={busy === "reopen"}
+            onClick={async () => {
+              if (!window.confirm("Reopen this Cycle? It stops being active and investors will not see it until you activate it again.")) return;
+              if (await run("reopen", `/api/admin/maalrise/cycles/${cycleId}/actions`, { action: "reopen", reason },
+                { success: "Cycle reopened. Prepare the new terms version, add the missing funding, then activate again." })) {
+                setOpen(false); setReason("");
+              }
+            }}>
+            Reopen this Cycle
+          </Button>
+        </div>
       )}
     </div>
   );

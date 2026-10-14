@@ -27,7 +27,7 @@ import {
 } from "@/lib/maalrise/receipts";
 import { DetailSection, FieldGrid, SectionIndex } from "@/components/maalrise/section";
 import { EmptyState } from "@/components/maalrise/sample-notice";
-import { ActivationPanel, FundingPanel, TermsWorkflow, type FundingView } from "./_cycle-actions";
+import { ActivationPanel, FundingPanel, ReopenPanel, TermsWorkflow, type FundingView } from "./_cycle-actions";
 import { BulkImportPanel, ConfirmAllFunding, CycleEmailPanel } from "./_bulk-actions";
 import {
   ClosePanel,
@@ -85,6 +85,7 @@ const ACTIVITY: Record<string, string> = {
   maalrise_approve_capital_settlement: "Approved the capital settlement",
   maalrise_refresh_capital_settlement: "Refreshed the capital settlement's bank details",
   maalrise_close_cycle: "Closed the Cycle",
+  maalrise_reopen_cycle: "Reopened the Cycle for correction (super admin)",
 };
 
 const PAY_VARIANT = { pending_approval: "upcoming", payable: "warning", paid: "approved" } as const;
@@ -245,6 +246,8 @@ export function CycleDetailView({
         <div className="mt-6 border-t border-border pt-4">
           <p className="text-xs font-medium text-muted mb-2">Activation</p>
           <ActivationPanel cycleId={cycle.id} cycleStatus={cycle.status} canApprove={permissions.approve} />
+          {permissions.superAdmin && active && d.receipts.length === 0 && d.capitalReceipts.length === 0
+            && d.distributions.length === 0 && d.capitalSettlements.length === 0 && <ReopenPanel cycleId={cycle.id} />}
         </div>
       </DetailSection>
 
