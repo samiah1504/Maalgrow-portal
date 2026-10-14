@@ -31,7 +31,10 @@ export function useMaalriseAction() {
       });
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
-        toast.error(typeof data.error === "string" ? koboInWords(data.error) : "That did not work. Please try again.");
+        // No message from the server means it failed before answering
+        // (a crash or a time-out): show the code so it can be traced.
+        toast.error(typeof data.error === "string" ? koboInWords(data.error)
+          : `That did not work (error ${res.status}${res.status === 504 ? ", the server took too long" : ""}). Please try again.`);
         return false;
       }
       if (typeof data.warning === "string") toast.warning(data.warning);
