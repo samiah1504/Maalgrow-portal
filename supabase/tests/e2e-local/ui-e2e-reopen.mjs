@@ -56,19 +56,12 @@ async function as(who) {
   await page.setCookie({ name: "sb-127-auth-token", value: cookieFor(who), domain: "localhost", path: "/" });
 }
 async function go(path) { const r = await page.goto(BASE + path, { waitUntil: "networkidle0" }); return r?.status(); }
-const text = () => page.evaluate(() => document.body.innerText);
 const waitText = (s, ms = 15000) => page.waitForFunction((s) => document.body.innerText.includes(s), { timeout: ms }, s).then(() => true).catch(() => false);
 async function toast(re) {
   const ok = await page.waitForFunction((src) => [...document.querySelectorAll("[data-sonner-toast]")].some((x) => new RegExp(src, "i").test(x.innerText)),
     { timeout: 15000 }, re.source).then(() => true).catch(() => false);
   if (!ok) console.log("   toasts:", await page.evaluate(() => [...document.querySelectorAll("[data-sonner-toast]")].map((x) => x.innerText).join(" | ")));
   return ok;
-}
-async function type(label, v, scope = "body") {
-  const id = await page.evaluate((label, scope) => [...document.querySelector(scope).querySelectorAll("label")].find((l) => l.textContent.trim().startsWith(label))?.htmlFor, label, scope);
-  if (!id) throw new Error(`No input labelled ${label}`);
-  await page.click(`[id="${id}"]`, { count: 3 });
-  await page.type(`[id="${id}"]`, v);
 }
 async function click(label, { exact = false, within = null, rowOnly = false } = {}) {
   const handle = await page.evaluateHandle((label, exact, within, rowOnly) => {
