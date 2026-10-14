@@ -200,7 +200,8 @@ export type AuditRow = {
   created_at: string;
 };
 
-export type ActivationCheck = { key: string; ok: boolean; detail: string };
+/** blocking: false (migration 058) = a warning; activation may go ahead. Missing on older rows = blocking. */
+export type ActivationCheck = { key: string; ok: boolean; detail: string; blocking?: boolean };
 
 export type ReceiptRow = {
   id: string;

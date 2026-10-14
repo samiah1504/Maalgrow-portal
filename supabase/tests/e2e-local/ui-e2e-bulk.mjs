@@ -235,6 +235,40 @@ check("investors see the in-portal notification too",
   sql(`select count(*) from maalrise_notifications where dedupe_key like 'cycle_welcome:${c.id}:%'`) === "4");
 await shot("p57-04-sent");
 
+// 058: activation goes ahead while KYC and bank details are outstanding (warnings),
+// but their payments still cannot be approved.
+await as("ops");
+await go(`/admin/maalrise/cycles/${c.id}`);
+const pdf = path.join(os.tmpdir(), "maalrise-bulk-contract.pdf");
+fs.writeFileSync(pdf, "%PDF-1.4\n% E2E bulk contract\n");
+await (await page.$("#doc-file")).uploadFile(pdf);
+await click("Upload", { exact: true });
+check("contract uploaded", await toast(/Contract uploaded/));
+await as("admin");
+await go(`/admin/maalrise/cycles/${c.id}`);
+await click("Run activation checks");
+check("KYC and bank details listed as warnings with counts",
+  await waitText("investor(s) have not completed KYC yet (does not block activation)")
+  && (await text()).includes("without confirmed bank details (does not block activation"));
+check("Activate is available despite the warnings", await page.evaluate(() =>
+  [...document.querySelectorAll("button")].find((b) => b.textContent.includes("Activate Cycle"))?.disabled === false));
+let dialogText = "";
+page.once("dialog", (d) => { dialogText = d.message(); d.accept(); });
+await click("Activate Cycle");
+check("Cycle activated", await toast(/Cycle activated/i));
+check("the confirmation lists what is still outstanding", dialogText.includes("Still outstanding") && dialogText.includes("KYC"), dialogText);
+check("the Cycle is active", sql(`select status from maalrise_cycles where id='${c.id}'`) === "active");
+check("the warnings are kept in the activation's audit entry",
+  sql(`select count(*) from audit_logs where action='maalrise_activate_cycle' and entity_id='${c.id}' and new_values::text like '%does not block activation%'`) === "1");
+await shot("p58-01-activated-with-warnings");
+const gross = Number(sql(`select l.counterparty_gross_kobo from maalrise_schedule_lines l join maalrise_cycles c on c.approved_terms_id = l.terms_id
+  where c.id='${c.id}' and l.period=1`));
+await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/receipts`, { period: 1, amount_kobo: gross, received_on: TODAY, reference: "CP-1", confirm_now: true });
+const dist = sql(`select id from maalrise_distributions where cycle_id='${c.id}' and period=1`);
+const appr = await api("sa", "POST", `/api/admin/maalrise/distributions/${dist}`, { action: "approve" });
+check("payments to investors without confirmed bank details cannot be approved",
+  appr.status === 400 && /Bank details are unconfirmed or have changed for/.test(appr.body.error ?? ""), JSON.stringify(appr));
+
 check("no browser errors", pageErrors.length === 0, pageErrors.join(" | "));
 console.log(`\n${pass} passed, ${fail} failed`);
 await browser.close();

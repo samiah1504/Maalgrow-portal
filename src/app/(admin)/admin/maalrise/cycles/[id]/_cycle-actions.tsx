@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, XCircle, ShieldCheck, Send, Undo2, Pencil, Play } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, ShieldCheck, Send, Undo2, Pencil, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -127,6 +127,7 @@ export function ActivationPanel({
   const { run, busy } = useMaalriseAction();
   const [checks, setChecks] = useState<{ all_ok: boolean; checks: ActivationCheck[] } | null>(null);
   const url = `/api/admin/maalrise/cycles/${cycleId}/actions`;
+  const warnings = (checks?.checks ?? []).filter((c) => !c.ok && c.blocking === false);
 
   return (
     <div className="space-y-3">
@@ -138,15 +139,18 @@ export function ActivationPanel({
         {canApprove && cycleStatus === "terms_approved" && (
           <>
             <Button size="sm" disabled={!checks?.all_ok} loading={busy === "activate"}
-              title={checks?.all_ok ? undefined : "Run the activation checks; every one must pass"}
+              title={checks?.all_ok ? undefined : "Run the activation checks; every required one must pass"}
               onClick={() => {
-                if (window.confirm("Activate this Cycle? Its terms, allocations and monthly schedule become live and its investors can see it.")) {
+                const note = warnings.length
+                  ? `\n\nStill outstanding (does not stop activation):\n${warnings.map((w) => `• ${w.detail}`).join("\n")}`
+                  : "";
+                if (window.confirm(`Activate this Cycle? Its terms, allocations and monthly schedule become live and its investors can see it.${note}`)) {
                   run("activate", url, { action: "activate" }, { success: "Cycle activated." });
                 }
               }}>
               <Play className="h-3.5 w-3.5" /> Activate Cycle
             </Button>
-            {!checks?.all_ok && <span className="text-xs text-muted">Activate becomes available when every check passes.</span>}
+            {!checks?.all_ok && <span className="text-xs text-muted">Activate becomes available when every required check passes. Amber items are warnings only.</span>}
           </>
         )}
       </div>
@@ -154,8 +158,10 @@ export function ActivationPanel({
         <ul className="grid gap-1.5 sm:grid-cols-2">
           {checks.checks.map((c) => (
             <li key={c.key} className="flex items-start gap-2 text-sm">
-              {c.ok ? <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-600" /> : <XCircle className="h-4 w-4 mt-0.5 text-red-500" />}
-              <span className={c.ok ? "text-foreground" : "text-red-700"}>{koboInWords(c.detail)}</span>
+              {c.ok ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600" />
+                : c.blocking === false ? <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+                : <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />}
+              <span className={c.ok ? "text-foreground" : c.blocking === false ? "text-amber-800" : "text-red-700"}>{koboInWords(c.detail)}</span>
             </li>
           ))}
         </ul>

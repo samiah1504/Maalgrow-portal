@@ -347,8 +347,19 @@ BEGIN
   BEGIN PERFORM maalrise_activate_cycle(v_cycle); v_ok := TRUE;
   EXCEPTION WHEN OTHERS THEN v_ok := FALSE; v_msg := SQLERRM; END;
   IF v_ok THEN RAISE EXCEPTION 'TEST FAIL R8: a Cycle with failing checks was activated'; END IF;
-  IF v_msg NOT LIKE '%KYC%' OR v_msg NOT LIKE '%bank details%' OR v_msg NOT LIKE '%contract%' OR v_msg NOT LIKE '%awaiting confirmation%' THEN
-    RAISE EXCEPTION 'TEST FAIL R8: the refusal should name every failing check — got: %', v_msg;
+  IF v_msg NOT LIKE '%contract%' OR v_msg NOT LIKE '%awaiting confirmation%' THEN
+    RAISE EXCEPTION 'TEST FAIL R8: the refusal should name every failing blocking check — got: %', v_msg;
+  END IF;
+  -- 058: KYC and bank confirmation are warnings, not reasons to refuse
+  IF v_msg LIKE '%KYC%' OR v_msg LIKE '%bank details%' THEN
+    RAISE EXCEPTION 'TEST FAIL R8: KYC / bank details should not block activation (058) — got: %', v_msg;
+  END IF;
+  v_checks := maalrise_activation_checks(v_cycle);
+  IF (v_checks->>'warnings')::INT <> 2
+     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_checks->'checks') c
+                     WHERE c->>'key' = 'kyc_complete' AND NOT (c->>'blocking')::BOOLEAN AND NOT (c->>'ok')::BOOLEAN
+                       AND c->>'detail' LIKE '1 investor(s) have not completed KYC%') THEN
+    RAISE EXCEPTION 'TEST FAIL R8: KYC and bank should be listed as 2 warnings — got: %', v_checks;
   END IF;
 
   -- Put everything right
@@ -382,7 +393,7 @@ BEGIN
   BEGIN PERFORM maalrise_record_funding(v_cycle, (SELECT v FROM ids WHERE k = 'inv_rise'), 1, 10000000, '2026-07-02', 'LATE');
         v_ok := TRUE; EXCEPTION WHEN OTHERS THEN v_ok := FALSE; END;
   IF v_ok THEN RAISE EXCEPTION 'TEST FAIL R8: funding was recorded on an active Cycle'; END IF;
-  RAISE NOTICE 'PASS R8: activation refused with every failing check named, then allowed once all pass';
+  RAISE NOTICE 'PASS R8: activation refused with every failing blocking check named (KYC and bank are warnings), then allowed once they pass';
 END $$;
 
 -- ------------------------------------------------------------

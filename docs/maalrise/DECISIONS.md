@@ -197,6 +197,19 @@ Where it is enforced:
   all MaalRise investors at any time is the Communication Centre's
   MaalRise option.
 
+### Activation without complete KYC and bank details (confirmed 14 Oct 2026, migration 058)
+
+- A Cycle can be activated while some of its investors have not
+  finished KYC or had their bank details confirmed. Both are listed as
+  **warnings** with the number of investors affected, and kept in the
+  activation's audit entry.
+- Money is still protected where it moves: a profit distribution or a
+  capital settlement cannot be approved while any investor in it has
+  unconfirmed bank details (unchanged from 052/053).
+- Every other check still blocks activation: approved terms, full
+  funding, no funding awaiting confirmation, allocations reconciling,
+  no suspended investor, the contract uploaded, a consistent maturity.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;
