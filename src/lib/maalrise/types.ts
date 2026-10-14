@@ -160,8 +160,13 @@ export type FundingRow = {
   amount_kobo: number;
   received_on: string;
   reference: string;
-  status: "recorded" | "confirmed" | "rejected";
+  status: "recorded" | "confirmed" | "rejected" | "refunded";
   recorded_by: string;
+  /** Migration 061: money sent back before the Cycle started. */
+  refunded_by?: string | null;
+  refunded_on?: string | null;
+  refund_reference?: string | null;
+  refund_reason?: string | null;
   confirmed_by: string | null;
   confirmed_at: string | null;
   rejected_by: string | null;

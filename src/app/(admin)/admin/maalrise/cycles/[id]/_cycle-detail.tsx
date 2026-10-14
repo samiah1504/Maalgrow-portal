@@ -70,6 +70,7 @@ const ACTIVITY: Record<string, string> = {
   maalrise_record_funding: "Recorded funding",
   maalrise_confirm_funding: "Confirmed funding",
   maalrise_reject_funding: "Rejected funding",
+  maalrise_refund_funding: "Recorded a refund — funding removed from the Cycle",
   maalrise_activate_cycle: "Activated the Cycle",
   maalrise_register_document: "Uploaded a document",
   maalrise_record_receipt: "Recorded a payment received",
@@ -150,6 +151,9 @@ export function CycleDetailView({
     recordedBy: d.names[f.recorded_by] ?? "—",
     recordedByMe: f.recorded_by === me,
     decidedBy: f.confirmed_by ? d.names[f.confirmed_by] ?? "—" : f.rejected_by ? d.names[f.rejected_by] ?? "—" : null,
+    refund: f.status === "refunded"
+      ? `Refunded ${formatDate(f.refunded_on ?? "")} · Ref ${f.refund_reference ?? ""} · by ${f.refunded_by ? d.names[f.refunded_by] ?? "—" : "—"} — ${f.refund_reason ?? ""}`
+      : null,
     rejectReason: f.reject_reason ?? (f.self_confirm_reason ? `Self-confirmed by a super admin: ${f.self_confirm_reason}` : null),
   }));
 
@@ -350,6 +354,7 @@ export function CycleDetailView({
           canFinance={permissions.finance}
           open={fundingOpen}
           isSuperAdmin={role === "super_admin"}
+          canRefund={permissions.approve}
         />
       </DetailSection>
 

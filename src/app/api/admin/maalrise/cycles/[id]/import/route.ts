@@ -60,7 +60,8 @@ async function loadContext(db: SupabaseClient, cycleId: string, rows: ImportRow[
   ]);
   const t = [...(terms ?? [])].sort((a, b) => Number(b.status === "approved") - Number(a.status === "approved") || b.version - a.version)[0];
   const required = t ? Math.ceil(t.cost_kobo / cycle.unit_price_kobo) : Number.MAX_SAFE_INTEGER;
-  const taken = (fundings ?? []).reduce((s, f) => s + f.units, 0);
+  // Refunded money is no longer in the Cycle; its reference stays used (061).
+  const taken = (fundings ?? []).filter((f) => f.status !== "refunded").reduce((s, f) => s + f.units, 0);
 
   const emails = [...new Set(rows.map((r) => r.email).filter(Boolean))];
   const logins: Logins = {};
