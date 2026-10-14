@@ -20,9 +20,9 @@ const STAGES: { title: string; steps: Step[] }[] = [
     title: "2. Set up and activate a Cycle",
     steps: [
       { who: "Operations / Administrator", what: <><Link href="/admin/maalrise/cycles/new">New Cycle</Link>: counterparty, dates, unit price and terms (total markup for the whole Cycle, service fee). Submit the terms.</> },
-      { who: "A second Administrator / Super admin", what: "Approve the terms. The person who prepared or submitted them cannot approve." },
+      { who: "A second Administrator / Super admin", what: "Approve the terms. The person who prepared or submitted them cannot approve — except a super admin, who may approve their own terms by giving a reason (kept in the audit log)." },
       { who: "Finance", what: "Record each investor's funding (units, amount, date, reference)." },
-      { who: "Super admin / Administrator", what: "Confirm the funding; upload the signed contract; run the activation checks; Activate." },
+      { who: "Finance / Super admin / Administrator", what: "Confirm the funding (someone other than the person who recorded it — or a super admin, giving a reason); upload the signed contract; run the activation checks; Activate." },
     ],
   },
   {

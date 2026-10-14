@@ -146,8 +146,9 @@ check("preparer/submitter cannot approve their own terms (database refuses)", r.
 await as("sa");
 await go(`/admin/maalrise/cycles/${own.body.id}`);
 t = await text();
-check("UI: preparer sees 'a different authorised person must approve' and no Approve button",
-  t.includes("different authorised person") && !(await hasButton("Approve terms")));
+// Since 056 a super admin who prepared the terms may approve them only with a reason.
+check("UI: super admin preparer gets a reason box, not a plain Approve button",
+  t.includes("As a super admin you may approve them yourself") && !(await hasButton("Approve terms")));
 const ownTerms = await page.evaluate(() => document.body.innerText.match(/₦3,500,000\.00/g)?.length ?? 0);
 check("12-month Cycle page shows ₦3,500,000 markup", ownTerms > 0);
 

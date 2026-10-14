@@ -148,7 +148,7 @@ export function CycleDetailView({
     recordedBy: d.names[f.recorded_by] ?? "—",
     recordedByMe: f.recorded_by === me,
     decidedBy: f.confirmed_by ? d.names[f.confirmed_by] ?? "—" : f.rejected_by ? d.names[f.rejected_by] ?? "—" : null,
-    rejectReason: f.reject_reason,
+    rejectReason: f.reject_reason ?? (f.self_confirm_reason ? `Self-confirmed by a super admin: ${f.self_confirm_reason}` : null),
   }));
 
   return (
@@ -189,7 +189,7 @@ export function CycleDetailView({
       <DetailSection
         id="terms"
         title="2. Financial terms"
-        description="Terms are versioned. Whoever prepares or submits a version cannot approve it; approval freezes the version and its breakdown."
+        description="Terms are versioned. Whoever prepares or submits a version cannot approve it (a super admin may, giving a reason); approval freezes the version and its breakdown."
       >
         {d.versions.length === 0 ? (
           <EmptyState icon={<FileText className="h-5 w-5" />} title="No terms yet">
@@ -221,6 +221,7 @@ export function CycleDetailView({
                     </td>
                     <td className="py-2 pl-3 text-xs text-muted">
                       {v.approved_by ? `${d.names[v.approved_by] ?? "—"}, ${formatDateTime(v.approved_at!)}` : ""}
+                      {v.self_approval_reason && <span className="block text-amber-800">Self-approved by a super admin: {v.self_approval_reason}</span>}
                       {v.return_reason && <span className="block text-red-700">Returned by {d.names[v.returned_by ?? ""] ?? "—"}: {v.return_reason}</span>}
                     </td>
                   </tr>
@@ -236,6 +237,7 @@ export function CycleDetailView({
             canPrepare={permissions.prepare}
             canApprove={permissions.approve}
             isOwnTerms={!!workflowTerms && (workflowTerms.prepared_by === me || workflowTerms.submitted_by === me)}
+            isSuperAdmin={role === "super_admin"}
             cycleStatus={cycle.status}
           />
         </div>
@@ -332,6 +334,7 @@ export function CycleDetailView({
           unitPriceKobo={cycle.unit_price_kobo}
           canFinance={permissions.finance}
           open={fundingOpen}
+          isSuperAdmin={role === "super_admin"}
         />
       </DetailSection>
 

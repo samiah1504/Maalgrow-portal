@@ -15,7 +15,7 @@ import {
 import { dbError, isUuid, maalriseGate, readJson } from "@/lib/maalrise/api";
 import { syncFromMaalgrow } from "@/lib/maalrise/db";
 
-type Body = { action?: string; terms_id?: string; reason?: string };
+type Body = { action?: string; terms_id?: string; reason?: string; self_reason?: string };
 
 const ROLES: Record<string, readonly string[]> = {
   submit: MAALRISE_PREPARE_ROLES,
@@ -47,7 +47,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       action === "submit"
         ? await gate.db.rpc("maalrise_submit_terms", { p_terms: body!.terms_id })
         : action === "approve"
-          ? await gate.db.rpc("maalrise_approve_terms", { p_terms: body!.terms_id })
+          ? await gate.db.rpc("maalrise_approve_terms", {
+              p_terms: body!.terms_id,
+              // Only a super admin's own terms need (and accept) a reason; the database decides.
+              p_self_reason: typeof body?.self_reason === "string" && body.self_reason.trim() ? body.self_reason.trim() : null,
+            })
           : await gate.db.rpc("maalrise_return_terms", { p_terms: body!.terms_id, p_reason: body?.reason ?? "" });
     if (res.error) return dbError(res.error);
     return NextResponse.json({ ok: true });

@@ -184,7 +184,11 @@ Where it is enforced:
 - **D4 Tax** — not configured; no withholding until the Nigerian
   treatment is confirmed.
 - **D5 Approval** — whoever prepares or submits terms cannot approve
-  them; approval freezes the version and its breakdown.
+  them; approval freezes the version and its breakdown. *Changed 14 Oct
+  2026 (migration 056):* a **super admin** may approve terms they
+  prepared or submitted, and confirm funding they recorded, only by
+  giving a reason, which is stored on the record and in the audit log.
+  Everyone else still needs a different authorised person.
 - **D6 Shortfalls and excess** — partial distributions from confirmed
   monthly money; capital is paid out only in full. There is no excess:
   entries above what is owed are refused (Phase 5).

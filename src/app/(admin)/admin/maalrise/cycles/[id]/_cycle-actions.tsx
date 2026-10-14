@@ -25,6 +25,7 @@ export function TermsWorkflow({
   canPrepare,
   canApprove,
   isOwnTerms,
+  isSuperAdmin = false,
   cycleStatus,
 }: {
   cycleId: string;
@@ -32,11 +33,14 @@ export function TermsWorkflow({
   canPrepare: boolean;
   canApprove: boolean;
   isOwnTerms: boolean;
+  /** A super admin may approve their own terms, giving a reason (migration 056). */
+  isSuperAdmin?: boolean;
   cycleStatus: string;
 }) {
   const { run, busy } = useMaalriseAction();
   const [returning, setReturning] = useState(false);
   const [reason, setReason] = useState("");
+  const [selfReason, setSelfReason] = useState("");
   const url = `/api/admin/maalrise/cycles/${cycleId}/actions`;
   const editable = ["draft", "terms_approved"].includes(cycleStatus);
 
@@ -56,10 +60,28 @@ export function TermsWorkflow({
         </Button>
       )}
       {canApprove && terms?.status === "submitted" && (
-        isOwnTerms ? (
+        isOwnTerms && !isSuperAdmin ? (
           <p className="text-xs text-amber-800 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
             You prepared or submitted these terms, so a different authorised person must approve them.
           </p>
+        ) : isOwnTerms ? (
+          <div className="w-full space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="self-approve-terms">
+            <p className="text-xs text-amber-900">
+              You prepared or submitted these terms. As a super admin you may approve them yourself — give a reason; it is
+              kept with the terms and in the audit log.
+            </p>
+            <Input label="Reason for approving your own terms" value={selfReason} onChange={(e) => setSelfReason(e.target.value)} />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" disabled={!selfReason.trim()} loading={busy === "approve"}
+                onClick={() => run("approve", url, { action: "approve", terms_id: terms.id, self_reason: selfReason },
+                  { success: "Terms approved and frozen. Your reason is recorded." })}>
+                <ShieldCheck className="h-3.5 w-3.5" /> Approve my own terms
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setReturning((v) => !v)}>
+                <Undo2 className="h-3.5 w-3.5" /> Return for changes
+              </Button>
+            </div>
+          </div>
         ) : (
           <>
             <Button size="sm" loading={busy === "approve"}
@@ -164,6 +186,7 @@ export function FundingPanel({
   unitPriceKobo,
   canFinance,
   open,
+  isSuperAdmin = false,
 }: {
   cycleId: string;
   investors: { id: string; label: string }[];
@@ -171,6 +194,8 @@ export function FundingPanel({
   unitPriceKobo: number;
   canFinance: boolean;
   open: boolean;
+  /** A super admin may confirm funding they recorded, giving a reason (migration 056). */
+  isSuperAdmin?: boolean;
 }) {
   const { run, busy } = useMaalriseAction();
   const [investorId, setInvestorId] = useState("");
@@ -179,6 +204,8 @@ export function FundingPanel({
   const [reference, setReference] = useState("");
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [selfConfirming, setSelfConfirming] = useState<string | null>(null);
+  const [selfReason, setSelfReason] = useState("");
   const n = /^\d+$/.test(units) ? Number(units) : 0;
 
   return (
@@ -250,8 +277,13 @@ export function FundingPanel({
                   </td>
                   <td className="py-2 pl-3 text-right whitespace-nowrap">
                     {canFinance && open && f.status === "recorded" && (
-                      f.recordedByMe ? (
+                      f.recordedByMe && !isSuperAdmin ? (
                         <span className="text-[11px] text-muted">Another finance person must confirm</span>
+                      ) : f.recordedByMe ? (
+                        <span className="inline-flex gap-1">
+                          <Button size="xs" onClick={() => setSelfConfirming(selfConfirming === f.id ? null : f.id)}>Confirm (recorded by you)</Button>
+                          <Button size="xs" variant="outline" onClick={() => setRejecting(f.id)}>Reject</Button>
+                        </span>
                       ) : (
                         <span className="inline-flex gap-1">
                           <Button size="xs" loading={busy === `c-${f.id}`}
@@ -261,6 +293,18 @@ export function FundingPanel({
                           <Button size="xs" variant="outline" onClick={() => setRejecting(f.id)}>Reject</Button>
                         </span>
                       )
+                    )}
+                    {selfConfirming === f.id && (
+                      <div className="mt-2 flex flex-wrap items-end justify-end gap-2 text-left">
+                        <div className="min-w-56"><Input label="Reason for confirming your own entry" value={selfReason} onChange={(e) => setSelfReason(e.target.value)} /></div>
+                        <Button size="xs" disabled={!selfReason.trim()} loading={busy === `c-${f.id}`}
+                          onClick={async () => {
+                            if (await run(`c-${f.id}`, `/api/admin/maalrise/fundings/${f.id}`, { action: "confirm", self_reason: selfReason },
+                              { success: "Funding confirmed and allocated. Your reason is recorded." })) { setSelfConfirming(null); setSelfReason(""); }
+                          }}>
+                          Confirm with this reason
+                        </Button>
+                      </div>
                     )}
                     {rejecting === f.id && (
                       <div className="mt-2 flex gap-1">

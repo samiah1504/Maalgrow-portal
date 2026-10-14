@@ -12,11 +12,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!gate.ok) return gate.response;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Unknown funding record." }, { status: 404 });
-  const b = await readJson<{ action?: string; reason?: string }>(request);
+  const b = await readJson<{ action?: string; reason?: string; self_reason?: string }>(request);
 
   const res =
     b?.action === "confirm"
-      ? await gate.db.rpc("maalrise_confirm_funding", { p_funding: id })
+      ? await gate.db.rpc("maalrise_confirm_funding", { p_funding: id, p_self_reason: b.self_reason?.trim() || null })
       : b?.action === "reject"
         ? await gate.db.rpc("maalrise_reject_funding", { p_funding: id, p_reason: b.reason ?? "" })
         : null;

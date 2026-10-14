@@ -44,6 +44,8 @@ export type CycleRow = {
 };
 
 export type TermsRow = {
+  /** Set when a super admin approved their own terms (056). */
+  self_approval_reason?: string | null;
   id: string;
   cycle_id: string;
   version: number;
@@ -149,6 +151,8 @@ export type BankChangeRequestRow = {
 };
 
 export type FundingRow = {
+  /** Set when a super admin confirmed funding they recorded (056). */
+  self_confirm_reason?: string | null;
   id: string;
   cycle_id: string;
   maalrise_investor_id: string;
