@@ -31,6 +31,7 @@ import {
   BellRing,
   Mail,
   FileBarChart,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -42,6 +43,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  /** Shown only to these roles (the page checks again). */
+  roles?: readonly string[];
 }
 
 interface NavGroup {
@@ -79,6 +82,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Payment Requests", href: "/admin/payment-requests", icon: <CreditCard className="h-4 w-4" /> },
       { label: "Reports", href: "/admin/reports", icon: <BarChart3 className="h-4 w-4" /> },
+      { label: "Export Investors", href: "/admin/reports/export", icon: <Download className="h-4 w-4" />, roles: ["super_admin", "administrator"] },
       { label: "Withholding Tax", href: "/admin/wht", icon: <Receipt className="h-4 w-4" /> },
     ],
   },
@@ -220,7 +224,7 @@ export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, role }: Adm
                 {group.label}
               </p>
               <div className="space-y-0.5">
-                {group.items.map((item) => {
+                {group.items.filter((item) => !item.roles || item.roles.includes(role ?? "")).map((item) => {
                   const active = isActive(item.href);
                   return (
                     <Link

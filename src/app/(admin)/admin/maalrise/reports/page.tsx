@@ -8,6 +8,8 @@ import { CYCLE_STATUS_LABEL, formatKobo } from "@/lib/maalrise/format";
 import { lagosToday } from "@/lib/maalrise/receipts";
 import { listCycles, loadRegister, mr } from "@/lib/maalrise/db";
 import { monthRange, registerRows } from "@/lib/maalrise/reports";
+import { EXPORT_ROLES, MR_FIELDS, fieldOptions } from "@/lib/export/investor-export";
+import { ExportPanel } from "@/components/export/export-panel";
 
 export const metadata: Metadata = { title: "MaalRise Reports | Admin" };
 
@@ -18,7 +20,7 @@ const linkBtn = "inline-flex items-center gap-1 rounded-md border border-border 
  * statement) and each Cycle's report for the accountant.
  */
 export default async function MaalRiseReportsPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
-  const { supabase } = await requireAdminPage();
+  const { supabase, role } = await requireAdminPage();
   const db = mr(supabase);
   const asked = (await searchParams).month ?? "";
   const month = monthRange(asked) ? asked : lagosToday().slice(0, 7);
@@ -91,6 +93,25 @@ export default async function MaalRiseReportsPage({ searchParams }: { searchPara
           )}
         </CardContent>
       </Card>
+
+      {EXPORT_ROLES.includes(role) && (
+        <Card id="export">
+          <CardHeader>
+            <CardTitle className="text-base">Export investors</CardTitle>
+            <p className="text-xs text-muted mt-1">
+              Everyone holding units in a Cycle (confirmed funding only): a phone list for communication, or their figures for reporting.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ExportPanel
+              product="maalrise"
+              cycles={cycles.filter((c) => c.status !== "cancelled").map((c) => ({ id: c.id, label: `${c.name} (${CYCLE_STATUS_LABEL[c.status] ?? c.status})` }))}
+              fields={fieldOptions(MR_FIELDS)}
+              canUnmask={role === "super_admin"}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card id="cycles">
         <CardHeader>

@@ -60,6 +60,7 @@ const STAGES: { title: string; steps: Step[] }[] = [
   {
     title: "6. Reporting and messages",
     steps: [
+      { who: "Super admin / Administrator", what: <>Export investors: on <Link href="/admin/maalrise/reports#export">MaalRise Reports</Link> pick a Cycle, tick the details (a <strong>Phone list</strong> in one press, or the investment figures) and download Excel or CSV. For MaalGrow, <Link href="/admin/reports/export">Reports → Export investors</Link> does the same by series. Account numbers are masked unless a super admin chooses otherwise; every export is recorded.</> },
       { who: "Finance / Accountant", what: <><Link href="/admin/maalrise/reports">MaalRise Reports</Link>: the month&apos;s payments register (reconcile with the bank statement), and each Cycle&apos;s report, investor CSV and audit trail.</> },
       { who: "Super admin / Administrator", what: <>To message MaalRise investors, use the <Link href="/admin/comms">Communication Centre</Link> → Individual Investors → MaalRise investors (all, or one Cycle).</> },
     ],

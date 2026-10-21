@@ -239,6 +239,22 @@ Where it is enforced:
   move is in the audit log with before and after. (A separate refund
   feature was considered and not wanted.)
 
+### Investor Data Export (approved 21 Oct 2026; no database change)
+
+- MaalGrow (Reports → Export investors): everyone with an investment in
+  a chosen series, optionally one cycle, filtered by investment status
+  (cancelled left out unless ticked). MaalRise (MaalRise Reports):
+  everyone holding units in a chosen Cycle — confirmed funding only.
+- Staff tick the details (contact, profile, next of kin, investment,
+  bank) and choose Excel or CSV; a one-press Phone list preset.
+- MaalGrow contact lists: one row per person (no duplicates for people
+  who rolled over); investment reports: one row per investment, so the
+  totals match the series. MaalRise: one row per investor.
+- Super admin and administrator only. Account numbers masked unless a
+  super admin unmasks them. NIN, TIN and login data never exported.
+  Built on the server as the signed-in person (database rules apply),
+  never stored; every export recorded in the audit log.
+
 ### Earlier decisions (Implementation Plan v2)
 
 - **D1 Service fee** — per Cycle; basis cost, markup or fixed;

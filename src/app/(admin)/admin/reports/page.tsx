@@ -6,6 +6,8 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import type { Metadata } from "next";
+import Link from "next/link";
+import { EXPORT_ROLES } from "@/lib/export/investor-export";
 
 export const metadata: Metadata = { title: "Reports | Admin" };
 
@@ -24,7 +26,7 @@ type PaymentSummary = {
 export default async function AdminReportsPage() {
   // Role checked HERE, not only in the middleware. This page reads
   // with the service-role client, so there is no RLS behind it.
-  await requireAdminPage();
+  const { role } = await requireAdminPage();
 
   const db = await createAdminClient();
   // MaalRise-only people have an investor record but no MaalGrow investment; MaalGrow totals leave them out.
@@ -57,10 +59,18 @@ export default async function AdminReportsPage() {
           <h1 className="text-2xl font-bold text-foreground">Reports</h1>
           <p className="text-sm text-muted mt-1">Financial overview and performance analytics</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        {EXPORT_ROLES.includes(role) && (
+          <Link href="/admin/reports/export" className="flex items-center gap-2 rounded-lg border border-primary-300 bg-surface px-4 py-2 text-sm font-medium text-primary-700 hover:bg-surface-2 transition-colors">
+            <Users className="h-4 w-4" />
+            Export investors
+          </Link>
+        )}
         <button className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:bg-surface-2 transition-colors">
           <Download className="h-4 w-4" />
           Export CSV
         </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

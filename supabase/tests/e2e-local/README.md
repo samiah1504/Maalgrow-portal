@@ -71,3 +71,5 @@ Rebuild the database (`up.sh`) before each run; each run creates records.
   - (059) "View as investor" showing staff the same monthly figures as the investor's own page; refused to the payment officer and to investors.
 
 `ui-e2e-reopen.mjs` covers migration 060: a super admin reopens a mistakenly activated Cycle with a reason, a new terms version and the missing funding are added, it is activated again; administrators cannot; refused once a payment is recorded. With 061: 2 units moved in the browser from one investor to another (entry split, allocations follow), refused while active and to finance.
+
+`ui-e2e-export.mjs` covers the Investor Data Export: Series A/B and a MaalRise Cycle with overlapping investors, cancelled and unconfirmed entries and a rejected payment; exactly the right people, one row per person in contact lists, figures equal to the database, masking and super-admin unmasking, roles refused, the audit log, and downloads from both screens.
