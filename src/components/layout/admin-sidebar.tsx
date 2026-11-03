@@ -130,6 +130,8 @@ interface AdminSidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   pendingPayments?: number;
+  /** Unread investor chat messages this person can see. */
+  chatUnread?: number;
   role?: string | null;
 }
 
@@ -160,7 +162,7 @@ const PAYMENT_OFFICER_NAV: NavGroup[] = [
   },
 ];
 
-export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, role }: AdminSidebarProps) {
+export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, chatUnread = 0, role }: AdminSidebarProps) {
   const pathname = usePathname();
   const groups = role === "payment_officer" ? PAYMENT_OFFICER_NAV : navGroups;
   const router = useRouter();
@@ -245,6 +247,12 @@ export function AdminSidebar({ isOpen, onClose, pendingPayments = 0, role }: Adm
                       {item.label === "Payment Requests" && pendingPayments > 0 && (
                         <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-500 px-1 text-[10px] font-bold text-primary-900">
                           {pendingPayments}
+                        </span>
+                      )}
+                      {item.href === "/admin/chats" && chatUnread > 0 && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white"
+                          data-testid="chat-unread-badge" aria-label={`${chatUnread} unread investor messages`}>
+                          {chatUnread > 99 ? "99+" : chatUnread}
                         </span>
                       )}
                       {(item.href === "/admin/maalrise/notifications" ||

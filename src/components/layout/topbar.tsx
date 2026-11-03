@@ -11,6 +11,8 @@ interface TopbarProps {
   userName?: string;
   userAvatar?: string;
   notificationHref?: string;
+  /** Replaces the default bell (the admin shell passes its own). */
+  bell?: React.ReactNode;
   className?: string;
 }
 
@@ -20,6 +22,7 @@ export function Topbar({
   onMenuClick,
   unreadNotifications = 0,
   userName,
+  bell,
   className,
 }: TopbarProps) {
   return (
@@ -50,7 +53,7 @@ export function Topbar({
       {/* Right side */}
       <div className="flex items-center gap-2">
         {/* Notification Bell */}
-        <a
+        {bell ?? <a
           href="/notifications"
           className="relative rounded-lg p-2 text-muted hover:bg-primary-50 hover:text-primary-700 transition-colors"
         >
@@ -64,7 +67,7 @@ export function Topbar({
               {unreadNotifications > 9 ? "9+" : unreadNotifications}
             </span>
           )}
-        </a>
+        </a>}
 
         {/* Avatar */}
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">

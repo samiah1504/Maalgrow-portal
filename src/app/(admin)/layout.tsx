@@ -4,12 +4,16 @@ import { useState, useEffect } from "react";
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { createClient } from "@/lib/supabase/client";
+import { AdminBell } from "@/components/admin/admin-bell";
+import { useAdminAlerts } from "@/components/admin/use-admin-alerts";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userName, setUserName] = useState<string>("");
   const [role, setRole] = useState<string | null>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
+  // Unread investor messages and the staff member's own alerts.
+  const { chatUnread, notifUnread, refreshNotifs } = useAdminAlerts(role);
 
   useEffect(() => {
     const supabase = createClient();
@@ -52,12 +56,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         pendingPayments={pendingPayments}
+        chatUnread={chatUnread}
         role={role}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar
           onMenuClick={() => setSidebarOpen(true)}
           userName={userName}
+          bell={role && role !== "payment_officer" ? <AdminBell unread={notifUnread} onChange={() => void refreshNotifs()} /> : undefined}
         />
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {children}
