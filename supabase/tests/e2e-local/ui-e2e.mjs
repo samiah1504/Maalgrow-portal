@@ -215,7 +215,7 @@ await click("Check email");
 await settle();
 t = await text();
 check("MaalGrow investor found: KYC reuse and bank prefill previewed",
-  t.includes("verified MaalGrow KYC will be reused") && t.includes("0123456701") && t.includes("unconfirmed"));
+  t.includes("verified MaalGrow KYC will be reused") && t.includes("0123456701") && t.includes("count as confirmed"));
 await shot("05-add-investor-lookup");
 await click("Add investor");
 await page.waitForFunction(() => /\/investors\/[0-9a-f-]{36}/.test(location.pathname), { timeout: 15000 }).catch(() => {});
@@ -225,12 +225,9 @@ t = await text();
 check("investor added and opened", !!bothId);
 check("name taken from MaalGrow (profile name was blank)", t.includes("Both Products"));
 check("KYC shows Verified via MaalGrow", /Verified via MaalGrow/i.test(t) && t.includes("Reused from verified MaalGrow KYC"));
-check("bank pre-filled but awaiting confirmation", t.includes("0123456701") && t.includes("Awaiting admin confirmation") && t.includes("Pre-filled from MaalGrow"));
+check("bank from approved MaalGrow KYC counts as confirmed (062)", t.includes("0123456701") && !t.includes("Awaiting admin confirmation"));
 check("no KYC record/review buttons for MaalGrow-verified KYC", !(await hasButton("Record KYC details")));
-await click("Confirm these bank details");
-check("ops confirms bank details", await toast(/confirmed/i));
-await settle();
-t = await text();
+check("no confirm button needed for MaalGrow-verified bank details", !(await hasButton("Confirm these bank details")));
 check("bank confirmation shows who and when", await waitText("Confirmed by Test Operations"));
 await shot("06-investor-maalgrow");
 

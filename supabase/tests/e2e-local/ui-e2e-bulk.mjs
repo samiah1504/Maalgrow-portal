@@ -236,7 +236,7 @@ check("investors see the in-portal notification too",
 await shot("p57-04-sent");
 
 // 058: activation goes ahead while KYC and bank details are outstanding (warnings),
-// but their payments still cannot be approved.
+// 062: approving still works; their payments go on hold until bank details are confirmed.
 await as("ops");
 await go(`/admin/maalrise/cycles/${c.id}`);
 const pdf = path.join(os.tmpdir(), "maalrise-bulk-contract.pdf");
@@ -266,8 +266,11 @@ const gross = Number(sql(`select l.counterparty_gross_kobo from maalrise_schedul
 await must("admin", "POST", `/api/admin/maalrise/cycles/${c.id}/receipts`, { period: 1, amount_kobo: gross, received_on: TODAY, reference: "CP-1", confirm_now: true });
 const dist = sql(`select id from maalrise_distributions where cycle_id='${c.id}' and period=1`);
 const appr = await api("sa", "POST", `/api/admin/maalrise/distributions/${dist}`, { action: "approve" });
-check("payments to investors without confirmed bank details cannot be approved",
-  appr.status === 400 && /Bank details are unconfirmed or have changed for/.test(appr.body.error ?? ""), JSON.stringify(appr));
+check("approval goes ahead; investors without confirmed bank details are named as on hold",
+  appr.status === 200 && /on hold until bank details are confirmed/.test(appr.body.warning ?? "")
+  && ["Tunde Two", "Bisi Bounce", "Ngozi One"].every((n) => appr.body.warning.includes(n)), JSON.stringify(appr));
+check("their lines are on hold with no account recorded",
+  sql(`select count(*) from maalrise_distribution_lines where distribution_id='${dist}' and status='on_hold' and account_number is null`) === "3");
 
 // 059: View as investor shows staff exactly what the investor sees.
 sql(`update investors set kyc_submitted_at = now() where email = 'both@test.local' and kyc_submitted_at is null`); // past the KYC form

@@ -98,8 +98,8 @@ export function NewInvestorForm() {
         <CardHeader className="pb-4">
           <CardTitle className="text-base">2. Bank details</CardTitle>
           <p className="text-xs text-muted">
-            Bank details stay unconfirmed until an admin confirms them on the investor&apos;s page, and each payment records
-            the exact account it was sent to.
+            Bank details from an approved MaalGrow KYC count as confirmed. Any other details stay unconfirmed until an admin
+            confirms them on the investor&apos;s page. Each payment records the exact account it was sent to.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -107,7 +107,11 @@ export function NewInvestorForm() {
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
               <p className="font-medium">MaalGrow bank details on file — used if you leave the fields below empty:</p>
               <p className="mt-1">{mgBank.bank_name} · {mgBank.account_name} · <span className="font-mono">{mgBank.account_number}</span></p>
-              <p className="mt-1">They are copied as <strong>unconfirmed</strong> and must be confirmed before any payment.</p>
+              <p className="mt-1">
+                {mg?.kyc_approved
+                  ? <>Their MaalGrow KYC is approved, so these details are used and count as <strong>confirmed</strong>.</>
+                  : <>They are copied as <strong>unconfirmed</strong>. They count as confirmed once the MaalGrow KYC is approved, or when an admin confirms them.</>}
+              </p>
             </div>
           )}
           <Input label="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} />

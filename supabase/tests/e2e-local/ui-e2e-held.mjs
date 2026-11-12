@@ -59,7 +59,6 @@ async function as(who) {
 }
 async function go(path) { const r = await page.goto(BASE + path, { waitUntil: "networkidle0" }); return r?.status(); }
 const text = () => page.evaluate(() => document.body.innerText);
-const waitText = (s, ms = 15000) => page.waitForFunction((s) => document.body.innerText.includes(s), { timeout: ms }, s).then(() => true).catch(() => false);
 async function toast(re) {
   const ok = await page.waitForFunction((src) => [...document.querySelectorAll("[data-sonner-toast]")].some((x) => new RegExp(src, "i").test(x.innerText)),
     { timeout: 15000 }, re.source).then(() => true).catch(() => false);
