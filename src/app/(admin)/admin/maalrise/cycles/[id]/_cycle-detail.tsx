@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Download, FileText, History, Receipt } from "lucide-react";
+import { ArrowLeft, Download, FileText, History, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { allocateCycle } from "@/lib/maalrise/compute";
@@ -89,7 +89,7 @@ const ACTIVITY: Record<string, string> = {
   maalrise_reopen_cycle: "Reopened the Cycle for correction (super admin)",
 };
 
-const PAY_VARIANT = { pending_approval: "upcoming", payable: "warning", paid: "approved" } as const;
+const PAY_VARIANT = { pending_approval: "upcoming", on_hold: "danger", payable: "warning", paid: "approved" } as const;
 const RECEIPT_LABEL = { recorded: "Awaiting confirmation", confirmed: "Confirmed", rejected: "Rejected", reversed: "Reversed" } as const;
 const RECEIPT_VARIANT = { recorded: "warning", confirmed: "approved", rejected: "rejected", reversed: "rejected" } as const;
 
@@ -531,7 +531,8 @@ export function CycleDetailView({
         ) : (
           <div className="space-y-6">
             {d.distributions.map((dist) => {
-              const missing = dist.lines.filter((l) => !l.account_number || currentBank[l.maalrise_investor_id] !== l.account_number);
+              // Approval pays each investor's CURRENT confirmed account; without one, the payment is held (062).
+              const missing = dist.lines.filter((l) => !currentBank[l.maalrise_investor_id]);
               return (
                 <div key={dist.id} className="rounded-lg border border-border p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -594,17 +595,11 @@ export function CycleDetailView({
                     {`Prepared by ${d.names[dist.prepared_by] ?? "—"}, ${formatDateTime(dist.prepared_at)}`}
                     {dist.approved_by ? ` · approved by ${d.names[dist.approved_by] ?? "—"}, ${formatDateTime(dist.approved_at!)}` : ""}
                   </p>
-                  {dist.status === "prepared" && missing.length > 0 && (
-                    <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      {`Bank details are unconfirmed or have changed for ${missing.map((l) => l.investor_name).join(", ")}. Confirm them on the investor's page, then refresh this distribution.`}
-                    </p>
-                  )}
                   {dist.status === "prepared" && dist.net_kobo === 0 && (
                     <p className="text-xs text-muted">Empty — its entries were reversed. The next confirmed payment for this month fills it.</p>
                   )}
                   {dist.status === "prepared" && dist.net_kobo > 0 && permissions.approve && (
-                    <DistributionActions distributionId={dist.id} blocked={missing.length > 0} />
+                    <DistributionActions distributionId={dist.id} onHold={missing.map((l) => l.investor_name)} />
                   )}
                   {dist.status === "approved" && dist.lines.some((l) => l.status === "payable") && (
                     <p className="text-xs text-muted">
@@ -742,7 +737,7 @@ export function CycleDetailView({
                 </p>
                 {liveSettlement.status === "prepared" && permissions.approve && (
                   <DistributionActions distributionId={liveSettlement.id} base="capital-settlements"
-                    blocked={liveSettlement.payments.some((l) => !l.account_number || currentBank[l.maalrise_investor_id] !== l.account_number)} />
+                    onHold={liveSettlement.payments.filter((l) => !currentBank[l.maalrise_investor_id]).map((l) => l.investor_name)} />
                 )}
                 {liveSettlement.status === "approved" && liveSettlement.payments.some((l) => l.status === "payable") && (
                   <p className="text-xs text-muted">

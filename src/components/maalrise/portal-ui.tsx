@@ -178,6 +178,11 @@ export function CycleDetailBody({ c }: { c: MyCycle }) {
                   <td className="py-2 pl-4 text-xs text-muted">
                     {m.paid_on && <span className="block">Paid {formatDate(m.paid_on)}{m.references?.length ? ` · Ref ${m.references.join(", ")}` : ""}</span>}
                     {m.approved_kobo > 0 && <span className="block">{formatKobo(m.approved_kobo)} approved, being transferred</span>}
+                    {(m.on_hold_kobo ?? 0) > 0 && (
+                      <span className="block text-amber-800" data-testid="waiting-bank">
+                        {formatKobo(m.on_hold_kobo ?? 0)} approved — waiting for your bank details. Complete them in your KYC form or contact us.
+                      </span>
+                    )}
                     {m.processing_kobo > 0 && <span className="block">{formatKobo(m.processing_kobo)} being processed</span>}
                   </td>
                 </tr>
@@ -202,7 +207,9 @@ export function CycleDetailBody({ c }: { c: MyCycle }) {
               <dd className="text-xs text-muted">
                 {c.capital.status === "paid"
                   ? `Paid ${formatDate(c.capital.paid_on!)}${c.capital.reference ? ` · Ref ${c.capital.reference}` : ""}${c.capital.account_ending ? ` · account ····${c.capital.account_ending}` : ""}`
-                  : MONTH_STATUS_HELP[c.capital.status]}
+                  : c.capital.on_hold
+                    ? "Approved — waiting for your bank details. Complete them in your KYC form or contact us."
+                    : MONTH_STATUS_HELP[c.capital.status]}
               </dd>
             </div>
           </dl>

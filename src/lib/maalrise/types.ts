@@ -253,7 +253,8 @@ export type DistributionRow = {
   approved_at: string | null;
 };
 
-export type PaymentStatus = "pending_approval" | "payable" | "paid";
+/** on_hold (062): approved, but waiting for the investor's confirmed bank details. */
+export type PaymentStatus = "pending_approval" | "on_hold" | "payable" | "paid";
 
 export type DistributionLineRow = {
   id: string;

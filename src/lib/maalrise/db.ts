@@ -393,7 +393,8 @@ export type CapitalQueueItem = CapitalPaymentRow & {
  */
 export async function listPaymentQueue(db: SupabaseClient): Promise<PaymentQueueItem[]> {
   const lines = must<DistributionLineRow[]>(
-    await db.from("maalrise_distribution_lines").select("*").in("status", ["payable", "paid"])
+    // on_hold (062): approved, waiting for the investor's confirmed bank details.
+    await db.from("maalrise_distribution_lines").select("*").in("status", ["on_hold", "payable", "paid"])
       .order("status").order("period").order("investor_name"),
     "payments"
   );
@@ -412,7 +413,7 @@ export async function listPaymentQueue(db: SupabaseClient): Promise<PaymentQueue
 /** Approved capital repayments, read the same way (officer: approved only). */
 export async function listCapitalQueue(db: SupabaseClient): Promise<CapitalQueueItem[]> {
   const lines = must<CapitalPaymentRow[]>(
-    await db.from("maalrise_capital_payments").select("*").in("status", ["payable", "paid"]).order("investor_name"),
+    await db.from("maalrise_capital_payments").select("*").in("status", ["on_hold", "payable", "paid"]).order("investor_name"),
     "capital payments"
   );
   const ids = [...new Set(lines.map((l) => l.settlement_id))];

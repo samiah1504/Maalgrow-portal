@@ -138,30 +138,45 @@ export function ReceiptActions({ receiptId, base = "receipts" }: { receiptId: st
   );
 }
 
-/** Approve a prepared distribution or capital settlement, or refresh its bank snapshots first. */
+/**
+ * Approve a prepared distribution or capital settlement, or refresh its bank snapshots first.
+ * 062: investors without confirmed bank details no longer block approval — their payments go
+ * on hold and are released automatically once their details are confirmed.
+ */
 export function DistributionActions({
   distributionId,
-  blocked,
+  onHold = [],
   base = "distributions",
 }: {
   distributionId: string;
-  blocked: boolean;
+  /** Investors with no confirmed bank details: their payments will be on hold. */
+  onHold?: string[];
   base?: "distributions" | "capital-settlements";
 }) {
   const { run, busy } = useMaalriseAction();
   const url = `/api/admin/maalrise/${base}/${distributionId}`;
   const what = base === "distributions" ? "distribution" : "capital settlement";
   return (
+    <div className="space-y-2">
+    {onHold.length > 0 && (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="will-hold">
+        {`No confirmed bank details yet for ${onHold.join(", ")}. You can still approve: everyone else is paid as usual, and their `
+          + `payment${onHold.length === 1 ? " is" : "s are"} held, then released automatically once their bank details are confirmed.`}
+      </p>
+    )}
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" disabled={blocked} loading={busy === "approve"}
-        title={blocked ? "Every investor needs confirmed bank details first" : undefined}
-        onClick={() => run("approve", url, { action: "approve" }, { success: `The ${what} is approved. The payments are ready to be made and marked paid.` })}>
+      <Button size="sm" loading={busy === "approve"}
+        onClick={() => {
+          if (onHold.length && !window.confirm(`Approve now? ${onHold.length} payment(s) will be on hold until bank details are confirmed: ${onHold.join(", ")}.`)) return;
+          void run("approve", url, { action: "approve" }, { success: `The ${what} is approved. The payments are ready to be made and marked paid.` });
+        }}>
         <ShieldCheck className="h-3.5 w-3.5" /> {`Approve ${what}`}
       </Button>
       <Button size="sm" variant="outline" loading={busy === "refresh"}
         onClick={() => run("refresh", url, { action: "refresh" }, { success: "Recalculated with each investor's current confirmed bank details." })}>
         <RefreshCw className="h-3.5 w-3.5" /> Refresh bank details
       </Button>
+    </div>
     </div>
   );
 }

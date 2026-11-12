@@ -361,28 +361,40 @@ BEGIN
   IF NOT pg_temp.fails(format('SELECT maalrise_approve_distribution(%L)', (SELECT v FROM ids WHERE k = 'd1'))) THEN
     RAISE EXCEPTION 'TEST FAIL R17: approved twice'; END IF;
 
-  -- investor two changes bank: unconfirmed → approval refused
+  -- investor two changes bank (unconfirmed): 062 — approval goes ahead; the others are payable,
+  -- investor two is ON HOLD with no account and is told what is needed
   PERFORM pg_temp.as_user('ops');
   PERFORM maalrise_set_bank_details(i2, 'Kuda', 'Investor Two', '2000000002');
   PERFORM pg_temp.as_user('sa');
-  v_err := pg_temp.err(format('SELECT maalrise_approve_distribution(%L)', d2));
-  IF v_err IS NULL OR v_err NOT LIKE '%Investor Two%' THEN RAISE EXCEPTION 'TEST FAIL R17: approved with an unconfirmed account (%)', v_err; END IF;
-  -- confirmed, but the snapshot is the OLD account → still refused until refreshed
+  PERFORM maalrise_refresh_distribution(d2);  -- still allowed while prepared
+  PERFORM maalrise_approve_distribution(d2);
+  IF (SELECT status FROM maalrise_distributions WHERE id = d2) <> 'approved'
+     OR (SELECT status || ':' || COALESCE(account_number, '-') FROM maalrise_distribution_lines WHERE distribution_id = d2 AND maalrise_investor_id = i2) <> 'on_hold:-'
+     OR EXISTS (SELECT 1 FROM maalrise_distribution_lines WHERE distribution_id = d2 AND maalrise_investor_id <> i2 AND status <> 'payable') THEN
+    RAISE EXCEPTION 'TEST FAIL R17: one unconfirmed account should hold only that payment'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM maalrise_notifications n JOIN maalrise_investors i ON i.profile_id = n.user_id
+                  WHERE i.id = i2 AND n.kind = 'bank_details_needed') THEN
+    RAISE EXCEPTION 'TEST FAIL R17: the investor on hold was not told'; END IF;
+  -- a payment on hold cannot be marked paid
+  PERFORM pg_temp.as_user('officer');
+  IF NOT pg_temp.fails(format('SELECT maalrise_mark_line_paid(%L, maalrise_today(), %L)',
+       (SELECT id FROM maalrise_distribution_lines WHERE distribution_id = d2 AND maalrise_investor_id = i2), 'X')) THEN
+    RAISE EXCEPTION 'TEST FAIL R17: a payment on hold was marked paid'; END IF;
+  -- confirming the bank details releases it, to the confirmed account
   PERFORM pg_temp.as_user('ops');
   PERFORM maalrise_confirm_bank_details(i2);
+  IF (SELECT status || ':' || account_number FROM maalrise_distribution_lines WHERE distribution_id = d2 AND maalrise_investor_id = i2)
+     <> 'payable:2000000002' THEN
+    RAISE EXCEPTION 'TEST FAIL R17: confirming the bank details did not release the payment'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM audit_logs WHERE action = 'maalrise_release_held_payments' AND entity_id = i2::TEXT) THEN
+    RAISE EXCEPTION 'TEST FAIL R17: the release was not recorded'; END IF;
   PERFORM pg_temp.as_user('sa');
-  IF NOT pg_temp.fails(format('SELECT maalrise_approve_distribution(%L)', d2)) THEN
-    RAISE EXCEPTION 'TEST FAIL R17: approved against an outdated account snapshot'; END IF;
-  PERFORM maalrise_refresh_distribution(d2);
-  PERFORM maalrise_approve_distribution(d2);
-  IF (SELECT account_number FROM maalrise_distribution_lines WHERE distribution_id = d2 AND maalrise_investor_id = i2) <> '2000000002' THEN
-    RAISE EXCEPTION 'TEST FAIL R17: refreshed snapshot not used'; END IF;
   -- month 1 (approved earlier) keeps the account it was approved for
   IF (SELECT account_number FROM maalrise_distribution_lines WHERE distribution_id = (SELECT v FROM ids WHERE k = 'd1') AND maalrise_investor_id = i2) <> '1000000002' THEN
     RAISE EXCEPTION 'TEST FAIL R17: an approved payment''s account changed'; END IF;
   IF NOT pg_temp.fails(format('SELECT maalrise_refresh_distribution(%L)', d2)) THEN
     RAISE EXCEPTION 'TEST FAIL R17: an approved distribution was recalculated'; END IF;
-  RAISE NOTICE 'PASS R17: admins approve (preparer allowed); unconfirmed/changed accounts block approval; approved accounts frozen';
+  RAISE NOTICE 'PASS R17: admins approve (preparer allowed); an unconfirmed account holds only its own payment, released on confirmation; approved accounts frozen';
 END $$;
 
 -- ------------------------------------------------------------

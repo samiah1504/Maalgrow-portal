@@ -19,5 +19,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!fn) return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   const res = await gate.db.rpc(fn, { p_dist: id });
   if (res.error) return dbError(res.error);
+  if (b?.action === "approve") {
+    // 062: say who is on hold, waiting for confirmed bank details.
+    const { data: held } = await gate.db.from("maalrise_distribution_lines").select("investor_name")
+      .eq("distribution_id", id).eq("status", "on_hold");
+    if (held?.length) {
+      return NextResponse.json({ ok: true, warning: `Approved. ${held.length} payment(s) on hold until bank details are confirmed: `
+        + `${held.map((h) => h.investor_name).join(", ")}. They are released automatically once confirmed.` });
+    }
+  }
   return NextResponse.json({ ok: true });
 }

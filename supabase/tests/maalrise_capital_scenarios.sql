@@ -262,19 +262,26 @@ BEGIN
   PERFORM pg_temp.as_user('ops');
   PERFORM maalrise_set_bank_details((SELECT v FROM ids WHERE k = 'i3'), 'Kuda', 'Capital Three', '4000000003');
   PERFORM maalrise_confirm_bank_details((SELECT v FROM ids WHERE k = 'i3'));
+  -- 062: Capital Two's new details are not yet confirmed — only that repayment waits
+  PERFORM maalrise_set_bank_details((SELECT v FROM ids WHERE k = 'i2'), 'Opay', 'Capital Two', '5000000002');
   PERFORM pg_temp.as_user('admin');
-  v_err := pg_temp.err(format('SELECT maalrise_approve_capital_settlement(%L)', s));
-  IF v_err IS NULL OR v_err NOT LIKE '%Capital Three%' THEN RAISE EXCEPTION 'TEST FAIL R28: approved against an outdated account (%)', v_err; END IF;
-  PERFORM maalrise_refresh_capital_settlement(s);
+  PERFORM maalrise_refresh_capital_settlement(s);  -- still allowed while prepared
   PERFORM maalrise_approve_capital_settlement(s);
   IF (SELECT account_number FROM maalrise_capital_payments WHERE settlement_id = s AND investor_name = 'Capital Three') <> '4000000003'
-     OR EXISTS (SELECT 1 FROM maalrise_capital_payments WHERE settlement_id = s AND status <> 'payable') THEN
-    RAISE EXCEPTION 'TEST FAIL R28: approval did not make the refreshed payments payable'; END IF;
+     OR (SELECT status FROM maalrise_capital_payments WHERE settlement_id = s AND investor_name = 'Capital One') <> 'payable'
+     OR (SELECT status || ':' || COALESCE(account_number, '-') FROM maalrise_capital_payments WHERE settlement_id = s AND investor_name = 'Capital Two') <> 'on_hold:-' THEN
+    RAISE EXCEPTION 'TEST FAIL R28: approval should pay confirmed accounts (the current one) and hold the unconfirmed'; END IF;
+  PERFORM pg_temp.as_user('ops');
+  PERFORM maalrise_confirm_bank_details((SELECT v FROM ids WHERE k = 'i2'));
+  IF EXISTS (SELECT 1 FROM maalrise_capital_payments WHERE settlement_id = s AND status <> 'payable')
+     OR (SELECT account_number FROM maalrise_capital_payments WHERE settlement_id = s AND investor_name = 'Capital Two') <> '5000000002' THEN
+    RAISE EXCEPTION 'TEST FAIL R28: confirming the bank details did not release the repayment'; END IF;
+  PERFORM pg_temp.as_user('admin');
   IF NOT pg_temp.fails(format('SELECT maalrise_refresh_capital_settlement(%L)', s)) THEN RAISE EXCEPTION 'TEST FAIL R28: approved settlement recalculated'; END IF;
   PERFORM pg_temp.as_user('sa');
   v_err := pg_temp.err(format('SELECT maalrise_reverse_capital(%L, %L)', (SELECT v FROM ids WHERE k = 'cap1'), 'late'));
   IF v_err IS NULL OR v_err NOT LIKE '%already approved%' THEN RAISE EXCEPTION 'TEST FAIL R28: capital reversed after approval (%)', v_err; END IF;
-  RAISE NOTICE 'PASS R28: each investor gets exactly their funded capital; admins approve; changed accounts block until refreshed; approved is final';
+  RAISE NOTICE 'PASS R28: each investor gets exactly their funded capital; admins approve; unconfirmed accounts held and released on confirmation; approved is final';
 END $$;
 
 -- ------------------------------------------------------------

@@ -265,11 +265,13 @@ BEGIN
   IF v_both.kyc_status <> 'verified' OR v_both.kyc_source <> 'maalgrow' THEN
     RAISE EXCEPTION 'TEST FAIL R6: verified MaalGrow KYC was not reused (% / %)', v_both.kyc_status, v_both.kyc_source;
   END IF;
-  IF v_both.account_number <> '0123456701' OR v_both.bank_confirmed_at IS NOT NULL THEN
-    RAISE EXCEPTION 'TEST FAIL R6: MaalGrow bank details should be pre-filled and UNCONFIRMED';
+  -- 062: the MaalGrow KYC is approved, so its bank details count as confirmed in MaalRise at once
+  IF v_both.account_number <> '0123456701' OR v_both.bank_confirmed_at IS NULL THEN
+    RAISE EXCEPTION 'TEST FAIL R6: bank details on an approved MaalGrow KYC should be confirmed for MaalRise';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM maalrise_bank_details_history WHERE maalrise_investor_id = v_both.id AND event = 'prefilled_from_maalgrow') THEN
-    RAISE EXCEPTION 'TEST FAIL R6: the pre-fill was not recorded';
+  IF NOT EXISTS (SELECT 1 FROM maalrise_bank_details_history WHERE maalrise_investor_id = v_both.id AND event = 'prefilled_from_maalgrow')
+     OR NOT EXISTS (SELECT 1 FROM maalrise_bank_details_history WHERE maalrise_investor_id = v_both.id AND event = 'confirmed') THEN
+    RAISE EXCEPTION 'TEST FAIL R6: the pre-fill and the confirmation were not recorded';
   END IF;
   IF v_rise.kyc_status <> 'not_started' THEN
     RAISE EXCEPTION 'TEST FAIL R6: bank details alone counted as KYC';
@@ -286,14 +288,15 @@ BEGIN
   IF (SELECT bank_confirmed_at FROM maalrise_investors WHERE id = v_both.id) IS NOT NULL THEN
     RAISE EXCEPTION 'TEST FAIL R6: changed bank details stayed confirmed';
   END IF;
-  IF (SELECT COUNT(*) FROM maalrise_bank_details_history WHERE maalrise_investor_id = v_both.id) <> 3 THEN
-    RAISE EXCEPTION 'TEST FAIL R6: bank history should hold prefill, confirm and change';
+  IF NOT EXISTS (SELECT 1 FROM maalrise_bank_details_history WHERE maalrise_investor_id = v_both.id AND event = 'set'
+                   AND account_number = '0123456799') THEN
+    RAISE EXCEPTION 'TEST FAIL R6: bank history should record the change';
   END IF;
   -- MaalGrow's own record is untouched
   IF (SELECT account_number FROM investors WHERE id = '20000000-0000-0000-0000-00000000e001') <> '0123456701' THEN
     RAISE EXCEPTION 'TEST FAIL R6: MaalRise changed the MaalGrow bank details';
   END IF;
-  RAISE NOTICE 'PASS R6: staff refused, MaalGrow KYC reused, pre-fill unconfirmed, changes clear confirmation, MaalGrow untouched';
+  RAISE NOTICE 'PASS R6: staff refused, MaalGrow KYC reused, its approved bank details confirmed, changes clear confirmation, MaalGrow untouched';
 END $$;
 
 -- ------------------------------------------------------------

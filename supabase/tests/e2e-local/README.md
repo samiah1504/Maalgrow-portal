@@ -75,3 +75,5 @@ Rebuild the database (`up.sh`) before each run; each run creates records.
 `ui-e2e-export.mjs` covers the Investor Data Export: Series A/B and a MaalRise Cycle with overlapping investors, cancelled and unconfirmed entries and a rejected payment; exactly the right people, one row per person in contact lists, figures equal to the database, masking and super-admin unmasking, roles refused, the audit log, and downloads from both screens.
 
 `ui-e2e-chat-alerts.mjs` covers staff chat alerts: the Investor Chats badge, the admin bell and its dropdown, the pop-up and the tab count when investors write; who sees what (senior staff, the assigned manager, other staff, the payment officer); clearing on opening a chat; the Notifications page. Locally there is no Realtime server, so it exercises the 30-second re-check.
+
+`ui-e2e-held.mjs` covers migration 062: approving a month while one investor has no confirmed bank details (held, everyone else payable), the Cycle page note, MaalRise Payments, what the investor sees, and the automatic release when their KYC is approved in MaalGrow.

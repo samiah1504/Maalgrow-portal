@@ -108,6 +108,7 @@ export function suggestedPeriod(positions: MonthPosition[]): number | null {
 
 export const PAYMENT_STATUS_LABEL = {
   pending_approval: "Awaiting approval",
+  on_hold: "On hold — no confirmed bank details",
   payable: "Approved — to pay",
   paid: "Paid",
 } as const;

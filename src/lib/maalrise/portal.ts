@@ -18,6 +18,8 @@ export type MyMonth = {
   expected_kobo: number;
   paid_kobo: number;
   approved_kobo: number;
+  /** 062: approved, waiting for the investor's confirmed bank details (absent before 062). */
+  on_hold_kobo?: number;
   processing_kobo: number;
   paid_on: string | null;
   references: string[] | null;
@@ -31,6 +33,8 @@ export type MyCapital = {
   paid_on: string | null;
   reference: string | null;
   account_ending: string | null;
+  /** 062: approved, waiting for the investor's confirmed bank details. */
+  on_hold?: boolean;
   status: Exclude<MonthStatus, "part_paid">;
 };
 

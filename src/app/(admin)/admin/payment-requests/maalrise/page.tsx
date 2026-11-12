@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Banknote } from "lucide-react";
+import Link from "next/link";
+import { Banknote, PauseCircle } from "lucide-react";
 import { formatKobo } from "@/lib/maalrise/format";
 import { listCapitalQueue, listMyNotifications, listPaymentQueue, mr } from "@/lib/maalrise/db";
 import { requireMaalrisePaymentsPage } from "@/lib/maalrise/page-guard";
@@ -25,6 +26,7 @@ export default async function MaalRisePaymentsPage() {
     ...profit.map((i) => ({ ...i, cycleName: i.distribution?.cycle_name ?? null, label: `Profit · month ${i.period}` })),
     ...capital.map((i) => ({ ...i, cycleName: i.settlement?.cycle_name ?? null, label: "Capital repayment" })),
   ];
+  const held = items.filter((i) => i.status === "on_hold");
   const toPay = items.filter((i) => i.status === "payable");
   const paid = items.filter((i) => i.status === "paid");
   const unread = notes.filter((n) => !n.read_at);
@@ -54,13 +56,37 @@ export default async function MaalRisePaymentsPage() {
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {held.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-2" data-testid="held-payments">
+          <p className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
+            <PauseCircle className="h-4 w-4" /> On hold — waiting for confirmed bank details ({held.length}, {formatKobo(held.reduce((s, i) => s + i.amount_kobo, 0))})
+          </p>
+          <p className="text-xs text-amber-900">
+            Approved, but these investors have no confirmed bank details yet. Each is released here automatically, ready to pay, the moment
+            their bank details are confirmed — on their MaalRise page, by a bank-change approval, or by approving their KYC in MaalGrow.
+          </p>
+          <ul className="divide-y divide-amber-200 text-sm">
+            {held.map((i) => (
+              <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                <span>
+                  <Link href={`/admin/maalrise/investors/${i.maalrise_investor_id}`} className="font-medium text-primary-700 hover:underline">{i.investor_name}</Link>
+                  <span className="text-xs text-muted"> · {i.label}{i.cycleName ? ` · ${i.cycleName}` : ""}</span>
+                </span>
+                <span className="font-medium">{formatKobo(i.amount_kobo)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {items.length - held.length === 0 ? (
+        held.length > 0 ? null :
         <EmptyState icon={<Banknote className="h-5 w-5" />} title="No approved MaalRise payments">
           Payments appear here once an administrator approves a monthly profit distribution or a capital settlement.
         </EmptyState>
       ) : (
         <PaymentQueue
-          items={items.map((i) => ({
+          items={items.filter((i) => i.status !== "on_hold").map((i) => ({
             id: i.id,
             kind: i.kind,
             label: i.label,

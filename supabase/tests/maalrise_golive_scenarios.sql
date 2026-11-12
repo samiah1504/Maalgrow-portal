@@ -143,14 +143,13 @@ BEGIN
   PERFORM pg_temp.as_user('officer');
   IF maalrise_sync_from_maalgrow() <> 0 THEN RESET ROLE; RAISE EXCEPTION 'TEST FAIL R40: payment officer sync did something'; END IF;
   RESET ROLE;
-  IF (SELECT kyc_status FROM maalrise_investors WHERE id = (SELECT v FROM ids WHERE k = 'other')) <> 'not_started' THEN
-    RAISE EXCEPTION 'TEST FAIL R40: one investor''s sync changed another investor'; END IF;
+  -- 062: approving in MaalGrow verifies the person in MaalRise at once, with no page load needed
+  IF (SELECT kyc_status FROM maalrise_investors WHERE id = (SELECT v FROM ids WHERE k = 'other')) <> 'verified' THEN
+    RAISE EXCEPTION 'TEST FAIL R40: a MaalGrow approval did not reach MaalRise at once'; END IF;
   SET LOCAL ROLE authenticated;
   PERFORM pg_temp.as_user('other');
-  PERFORM maalrise_sync_from_maalgrow();
+  IF maalrise_sync_from_maalgrow() <> 0 THEN RESET ROLE; RAISE EXCEPTION 'TEST FAIL R40: nothing should be left for the page-load sync'; END IF;
   RESET ROLE;
-  IF (SELECT kyc_status FROM maalrise_investors WHERE id = (SELECT v FROM ids WHERE k = 'other')) <> 'verified' THEN
-    RAISE EXCEPTION 'TEST FAIL R40: an investor''s own sync did not apply'; END IF;
   PERFORM pg_temp.as_user('ops');
   PERFORM maalrise_sync_from_maalgrow();
   SELECT kyc_status || ':' || kyc_source INTO s FROM maalrise_investors WHERE id = (SELECT v FROM ids WHERE k = 'own');
