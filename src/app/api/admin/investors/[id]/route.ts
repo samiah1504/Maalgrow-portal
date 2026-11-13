@@ -5,6 +5,7 @@ import {
 } from "@/lib/residential-address";
 import { findLga, findState } from "@/lib/nigeria-geo";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { mr } from "@/lib/maalrise/db";
 import type { Database } from "@/lib/types/database.types";
 import { SITE_URL } from "@/lib/site-url";
 import { sendPasswordResetEmail } from "@/lib/email";
@@ -89,6 +90,24 @@ export async function PATCH(
         kyc_notes,
         preferred_channel,
       } = body as Record<string, string | undefined>;
+
+      /*
+       * Bank details are money. Only a super admin or administrator may
+       * change them here (063); everyone else may still save the rest
+       * of the form with the bank fields as they were.
+       */
+      const norm = (v: string | null | undefined) => (v ?? "").trim();
+      const bankChanged =
+        (bank_name !== undefined && norm(bank_name) !== norm(investor.bank_name)) ||
+        (account_name !== undefined && norm(account_name) !== norm(investor.account_name)) ||
+        (account_number !== undefined && norm(account_number) !== norm(investor.account_number));
+      const isAdmin = ["super_admin", "administrator"].includes(auth.profile?.role ?? "");
+      if (bankChanged && !isAdmin) {
+        return NextResponse.json(
+          { error: "Only a super admin or administrator can change bank details" },
+          { status: 403 }
+        );
+      }
 
       const investorUpdate: InvestorUpdate = {};
       if (full_name !== undefined) investorUpdate.full_name = full_name.trim();
@@ -224,6 +243,40 @@ export async function PATCH(
               { status: 400 }
             );
           }
+        }
+      }
+
+      /*
+       * MaalRise keeps its own copy of the bank details. An admin's
+       * change here is used there too, confirmed under their name, and
+       * unpaid MaalRise payments move to the new account (063). Email,
+       * name and phone follow by themselves in the database.
+       */
+      if (bankChanged) {
+        const { data: mrOut, error: mrError } = await mr(adminClient).rpc("maalrise_bank_from_maalgrow_edit", {
+          p_maalgrow: id,
+          p_actor: auth.user.id,
+        });
+        const out = mrOut as { updated?: boolean; reason?: string; moved?: number } | null;
+        if (mrError) {
+          return NextResponse.json({
+            success: true,
+            warning: "Saved. MaalRise bank details were not updated: " + mrError.message,
+          });
+        }
+        if (out?.reason === "incomplete") {
+          return NextResponse.json({
+            success: true,
+            warning: "Saved. MaalRise kept its bank details: bank name, account name and a 10-digit account number are all needed.",
+          });
+        }
+        if (out?.updated) {
+          return NextResponse.json({
+            success: true,
+            notice:
+              "MaalRise bank details updated and confirmed." +
+              (out.moved ? ` ${out.moved} unpaid MaalRise payment(s) moved to the new account.` : ""),
+          });
         }
       }
 

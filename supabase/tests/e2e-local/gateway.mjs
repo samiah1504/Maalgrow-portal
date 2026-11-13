@@ -48,6 +48,18 @@ http.createServer(async (req, res) => {
     if (!row) return send(404, { msg: "User not found" });
     return send(200, { ...JSON.parse(row), aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {} });
   }
+  // updateUserById: only the email is imitated (used by the investor Edit page).
+  if (delUser && req.method === "PUT") {
+    if (verify(bearer)?.role !== "service_role") return send(403, { msg: "service role required" });
+    const b = JSON.parse((await readBody(req)).toString() || "{}");
+    const email = String(b.email || "").toLowerCase();
+    if (email) {
+      if (!/^[^@\s']+@[^@\s']+$/.test(email)) return send(422, { msg: "bad email" });
+      execFileSync("psql", ["-d", DB, "-Atq", "-c", `update auth.users set email = '${email}' where id = '${delUser[1]}'`]);
+      EMAILS[delUser[1]] = email;
+    }
+    return send(200, { id: delUser[1], email: EMAILS[delUser[1]] || email, aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {} });
+  }
   if (delUser && req.method === "DELETE") {
     if (verify(bearer)?.role !== "service_role") return send(403, { msg: "service role required" });
     execFileSync("psql", ["-d", DB, "-Atq", "-c", `delete from auth.users where id = '${delUser[1]}'`]);

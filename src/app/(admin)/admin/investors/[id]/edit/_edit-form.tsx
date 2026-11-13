@@ -68,7 +68,7 @@ interface Investor {
   preferred_channel: string | null;
 }
 
-export function EditInvestorForm({ investor }: { investor: Investor }) {
+export function EditInvestorForm({ investor, canEditBank = false }: { investor: Investor; canEditBank?: boolean }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -139,7 +139,8 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
       return;
     }
 
-    toast.success("Investor updated successfully");
+    if (json.warning) toast.warning(json.warning, { duration: 10000 });
+    else toast.success(json.notice ? `Investor updated. ${json.notice}` : "Investor updated successfully");
     router.push(`/admin/investors/${investor.id}`);
     router.refresh();
   };
@@ -210,21 +211,29 @@ export function EditInvestorForm({ investor }: { investor: Investor }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Bank Details</CardTitle>
+          <p className="text-xs text-muted" data-testid="bank-edit-note">
+            {canEditBank
+              ? "If this person is a MaalRise investor, a change here is used in MaalRise too and counts as confirmed by you. Unpaid MaalRise payments move to the new account."
+              : "Only a super admin or administrator can change bank details."}
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
             {...register("bank_name")}
+            disabled={!canEditBank}
             label="Bank Name"
             error={errors.bank_name?.message}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               {...register("account_name")}
+              disabled={!canEditBank}
               label="Account Name"
               error={errors.account_name?.message}
             />
             <Input
               {...register("account_number")}
+              disabled={!canEditBank}
               label="Account Number"
               error={errors.account_number?.message}
             />

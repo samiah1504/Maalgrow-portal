@@ -14,7 +14,7 @@ export default async function EditInvestorPage({
 }) {
   // Role checked HERE, not only in the middleware. This page reads
   // with the service-role client, so there is no RLS behind it.
-  const { supabase } = await requireAdminPage();
+  const { supabase, role } = await requireAdminPage();
 
   const { id } = await params;
 
@@ -43,7 +43,7 @@ export default async function EditInvestorPage({
         </p>
       </div>
 
-      <EditInvestorForm investor={investor} />
+      <EditInvestorForm investor={investor} canEditBank={["super_admin", "administrator"].includes(role)} />
     </div>
   );
 }
