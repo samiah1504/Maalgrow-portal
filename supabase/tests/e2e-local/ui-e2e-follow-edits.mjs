@@ -109,6 +109,9 @@ await must("admin", "POST", `/api/admin/maalrise/distributions/${dist}`, { actio
 check("setup: Both Products' month 1 is payable to the MaalGrow KYC account",
   sql(`select status || ':' || account_number from maalrise_distribution_lines where distribution_id='${dist}'`) === "payable:0123456701");
 const mg = sql(`select id from investors where email='both@test.local'`);
+// The Edit form needs a complete residential address to save; give the test investor one.
+sql(`update investors set residential_street_address = '12 Test Street, near the market', residential_state_code = 'LA',
+  residential_state_name = 'Lagos', residential_lga_code = 'LA-IKEJA', residential_lga_name = 'Ikeja', residential_city = 'Ikeja' where id = '${mg}'`);
 const current = JSON.parse(sql(`select row_to_json(i) from (select full_name, phone, bank_name, account_name, account_number from investors where id='${mg}') i`));
 
 // ── Operations: the bank fields are locked; a bank change is refused, the rest still saves ──
@@ -128,7 +131,8 @@ check("the administrator sees the bank fields open, with what happens in MaalRis
   await page.evaluate(() => document.querySelector("input[name='account_number']")?.disabled === false)
   && (await page.evaluate(() => document.querySelector("[data-testid='bank-edit-note']")?.innerText ?? "")).includes("used in MaalRise too"));
 const setField = async (name, value) => {
-  await page.click(`input[name='${name}']`, { clickCount: 3 });
+  await page.focus(`input[name='${name}']`);
+  await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control");
   await page.keyboard.press("Backspace");
   await page.type(`input[name='${name}']`, value);
 };
@@ -139,7 +143,8 @@ await setField("bank_name", "Zenith");
 await setField("account_name", "Both Renamed");
 await setField("account_number", "0777777777");
 await shot("follow-01-edit");
-await click("Save", {});
+await click("Save Changes");
+await shot("follow-01b-after-save");
 check("saved, and the admin is told MaalRise followed and the unpaid payment moved",
   await toast(/MaalRise bank details updated and confirmed\. 1 unpaid MaalRise payment\(s\) moved/));
 check("MaalRise has the new email, name and phone",

@@ -16,3 +16,12 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
   SELECT NULLIF(COALESCE(current_setting('request.jwt.claim.sub', true),
                          current_setting('request.jwt.claims', true)::jsonb ->> 'sub'), '')::uuid;
 $$ LANGUAGE sql STABLE;
+
+-- As on Supabase: auth.role() reads the request's JWT role (service_role for the
+-- server's own client), so functions that trust the service role behave the same here.
+CREATE OR REPLACE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$
+  SELECT COALESCE(NULLIF(current_setting('test.role', true), ''),
+                  NULLIF(current_setting('request.jwt.claim.role', true), ''),
+                  NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
+                  'authenticated');
+$$;
