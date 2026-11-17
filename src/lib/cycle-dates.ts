@@ -16,23 +16,28 @@ export function formatCycleDateISO(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
 
+/** How long a cycle runs when nothing else says (before migration 064). */
+export const DEFAULT_CYCLE_MONTHS = 3;
+
 /**
- * Calculate maturity as exactly +3 calendar months using date-fns addMonths.
+ * Calculate maturity as exactly +N calendar months (the series' cycle
+ * length — 6 since migration 064) using date-fns addMonths. The
+ * examples below are for 3 months.
  * Month-end clamping is handled automatically:
  *   31 Jan 2026 → 30 Apr 2026  (April has 30 days)
  *   30 Nov 2026 → 28 Feb 2027  (February 2027 has 28 days)
  *   29 Feb 2028 → 29 May 2028  (2028 is a leap year)
  */
-export function calcMaturityDate(startDateStr: string): Date {
+export function calcMaturityDate(startDateStr: string, months: number = DEFAULT_CYCLE_MONTHS): Date {
   const start = parseCycleDate(startDateStr);
-  return addMonths(start, 3);
+  return addMonths(start, months);
 }
 
 /**
  * Same as calcMaturityDate but returns a YYYY-MM-DD string for form fields.
  */
-export function calcMaturityDateStr(startDateStr: string): string {
-  return formatCycleDateISO(calcMaturityDate(startDateStr));
+export function calcMaturityDateStr(startDateStr: string, months: number = DEFAULT_CYCLE_MONTHS): string {
+  return formatCycleDateISO(calcMaturityDate(startDateStr, months));
 }
 
 /**
@@ -43,9 +48,9 @@ export function calcMaturityDateStr(startDateStr: string): string {
  *   start=2026-01-01 → maturity 2026-04-01 → last day Mar 31 → "Jan 2026 – Mar 2026"
  *   start=2026-06-30 → maturity 2026-09-30 → last day Sep 29 → "Jun 2026 – Sep 2026"
  */
-export function calcCycleLabel(startDateStr: string): string {
+export function calcCycleLabel(startDateStr: string, months: number = DEFAULT_CYCLE_MONTHS): string {
   const start = parseCycleDate(startDateStr);
-  const maturity = addMonths(start, 3);
+  const maturity = addMonths(start, months);
   const lastDay = subDays(maturity, 1);
   return `${format(start, "MMM yyyy")} – ${format(lastDay, "MMM yyyy")}`;
 }

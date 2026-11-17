@@ -60,7 +60,8 @@ export type Draft = {
   status: "draft" | "active" | "settled";
   discloseMode: "full" | "perSlot";
   products: DraftProduct[];
-  months: [DraftMonth, DraftMonth, DraftMonth];
+  /** One per month of the cycle: 3, or 6 since migration 064 */
+  months: DraftMonth[];
 };
 
 /** One member of the cycle, read from investments — never typed here */
@@ -94,6 +95,8 @@ export type CycleTerms = {
   cycleStatus: string;
   startDate: string;
   endDate: string;
+  /** 064: how many months the cycle runs, so how many the ledger has */
+  cycleMonths: number;
   termsLocked: boolean;
   /** Kobo */
   unitValue: number;
@@ -140,14 +143,20 @@ export function emptyMonth(): DraftMonth {
   return { rows: {}, ads: "", logistics: "", misc: "", bankCharges: "" };
 }
 
-export function emptyDraft(cycleId: string): Draft {
+/** 064: a cycle's month count as the ledger reader gives it (3 before 064) */
+export function ledgerMonthCount(n: unknown): number {
+  const v = Math.trunc(Number(n ?? 3));
+  return Number.isFinite(v) && v >= 1 && v <= 12 ? v : 3;
+}
+
+export function emptyDraft(cycleId: string, monthCount = 3): Draft {
   return {
     cycleId,
     description: "",
     status: "draft",
     discloseMode: "perSlot",
     products: [],
-    months: [emptyMonth(), emptyMonth(), emptyMonth()],
+    months: Array.from({ length: ledgerMonthCount(monthCount) }, () => emptyMonth()),
   };
 }
 
@@ -155,7 +164,9 @@ const kobo = (s: string): number => parseNairaToKobo(s) ?? 0;
 const count = (s: string): number => parseCount(s) ?? 0;
 
 export function toCycleInput(draft: Draft, terms: CycleTerms): CycleInput {
-  const months = draft.months.map((m): MonthInput => ({
+  const monthCount = ledgerMonthCount(terms.cycleMonths);
+  const draftMonths = Array.from({ length: monthCount }, (_, i) => draft.months[i] ?? emptyMonth());
+  const months = draftMonths.map((m): MonthInput => ({
     rows: draft.products.map((p): MonthRowInput => {
       const r = m.rows[p.id] ?? emptyRow(p.id);
       const typed = parseCount(r.stockLeft);
@@ -173,7 +184,7 @@ export function toCycleInput(draft: Draft, terms: CycleTerms): CycleInput {
     logistics: kobo(m.logistics),
     misc: kobo(m.misc),
     bankCharges: kobo(m.bankCharges),
-  })) as [MonthInput, MonthInput, MonthInput];
+  }));
 
   return {
     name: terms.cycleLabel,
@@ -187,6 +198,9 @@ export function toCycleInput(draft: Draft, terms: CycleTerms): CycleInput {
     withdrawSlots: terms.withdrawSlots,
     products: draft.products.map((p) => ({ id: p.id, name: p.name })),
     months,
+    // 064: only said when it is not 3, so a 3-month cycle's input (and
+    // the settlement stored from it) is exactly what it always was
+    ...(monthCount !== 3 ? { monthCount } : {}),
   };
 }
 
@@ -225,6 +239,8 @@ export type LedgerPayload = {
   cycleStatus: string;
   startDate: string;
   endDate: string;
+  /** 064. Absent before migration 064, meaning 3. */
+  cycleMonths?: number;
   termsLocked: boolean;
   unitValue: number;
   ratio: number;
@@ -290,6 +306,7 @@ export function termsFromLedger(p: LedgerPayload): CycleTerms {
     cycleStatus: p.cycleStatus,
     startDate: p.startDate,
     endDate: p.endDate,
+    cycleMonths: ledgerMonthCount(p.cycleMonths),
     termsLocked: p.termsLocked,
     unitValue: toKobo(p.unitValue),
     ratio: Number(p.ratio ?? 0),
@@ -333,7 +350,7 @@ export function draftFromLedger(p: LedgerPayload): Draft {
   const asNaira = (k: number) => (k === 0 ? "" : String(k / 100));
   const asCount = (n: number) => (n === 0 ? "" : String(n));
 
-  const months = [0, 1, 2].map((i): DraftMonth => {
+  const months = Array.from({ length: ledgerMonthCount(p.cycleMonths) }, (_, i) => i).map((i): DraftMonth => {
     const m = p.months?.[i];
     if (!m) return emptyMonth();
     const rows: Record<string, DraftRow> = {};
@@ -355,7 +372,7 @@ export function draftFromLedger(p: LedgerPayload): Draft {
       misc: asNaira(m.misc),
       bankCharges: asNaira(m.bankCharges),
     };
-  }) as [DraftMonth, DraftMonth, DraftMonth];
+  });
 
   return {
     cycleId: p.cycleId,
@@ -522,7 +539,7 @@ export function removeProduct(draft: Draft, productId: string): Draft {
       const rows = { ...m.rows };
       delete rows[productId];
       return { ...m, rows };
-    }) as [DraftMonth, DraftMonth, DraftMonth],
+    }),
   };
 }
 

@@ -92,7 +92,7 @@ export default async function DeclareProfitPage({
                   Profit for this cycle is declared by settling its ledger.
                 </p>
                 <p className="text-sm text-muted leading-relaxed">
-                  The ledger records three months of real trading. Settling it runs
+                  The ledger records every month of the cycle&apos;s real trading. Settling it runs
                   the figures, freezes them as a snapshot every investor statement
                   reads from, and declares the profit here as part of the same step.
                 </p>

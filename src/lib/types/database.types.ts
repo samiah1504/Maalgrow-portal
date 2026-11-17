@@ -305,6 +305,8 @@ export type Database = {
           name: "A" | "B" | "C";
           description: string | null;
           start_month_offset: number;
+          /** 064: how long each new cycle of the series runs */
+          cycle_months: number;
           mudarabah_investor_ratio: number;
           price_per_unit: number;
           min_units: number;
@@ -318,6 +320,7 @@ export type Database = {
           name: "A" | "B" | "C";
           description?: string | null;
           start_month_offset: number;
+          cycle_months?: number;
           mudarabah_investor_ratio?: number;
           price_per_unit: number;
           min_units?: number;
@@ -328,6 +331,7 @@ export type Database = {
         };
         Update: {
           description?: string | null;
+          cycle_months?: number;
           mudarabah_investor_ratio?: number;
           price_per_unit?: number;
           min_units?: number;
@@ -345,6 +349,8 @@ export type Database = {
           cycle_label: string;
           start_date: string;
           end_date: string;
+          /** 064: how long THIS cycle runs */
+          cycle_months: number;
           status: "draft" | "subscription_open" | "subscription_closed" | "upcoming" | "active" | "maturity_window" | "awaiting_profit_declaration" | "matured" | "completed" | "cancelled";
           subscription_open_date: string | null;
           subscription_close_date: string | null;
@@ -367,6 +373,7 @@ export type Database = {
           cycle_label: string;
           start_date: string;
           end_date: string;
+          cycle_months?: number;
           status?: "draft" | "subscription_open" | "subscription_closed" | "upcoming" | "active" | "maturity_window" | "awaiting_profit_declaration" | "matured" | "completed" | "cancelled";
           subscription_open_date?: string | null;
           subscription_close_date?: string | null;
@@ -386,6 +393,7 @@ export type Database = {
           cycle_label?: string;
           start_date?: string;
           end_date?: string;
+          cycle_months?: number;
           status?: "draft" | "subscription_open" | "subscription_closed" | "upcoming" | "active" | "maturity_window" | "awaiting_profit_declaration" | "matured" | "completed" | "cancelled";
           subscription_open_date?: string | null;
           subscription_close_date?: string | null;

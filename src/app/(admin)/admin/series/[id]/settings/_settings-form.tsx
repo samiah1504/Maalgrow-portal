@@ -16,6 +16,8 @@ interface SeriesData {
   min_units: number;
   max_units: number | null;
   is_active: boolean;
+  /** 064: how long each new cycle runs */
+  cycle_months: number;
 }
 
 interface Props {
@@ -33,6 +35,7 @@ export function SeriesSettingsForm({ series }: Props) {
     min_units: series.min_units,
     max_units: series.max_units !== null ? series.max_units.toString() : "",
     is_active: series.is_active,
+    cycle_months: series.cycle_months ?? 6,
   });
 
   const companyPct = 100 - form.investor_ratio_pct;
@@ -58,6 +61,7 @@ export function SeriesSettingsForm({ series }: Props) {
           min_units: Number(form.min_units),
           max_units: form.max_units.trim() === "" ? null : Number(form.max_units),
           is_active: form.is_active,
+          cycle_months: Number(form.cycle_months),
         }),
       });
 
@@ -117,6 +121,30 @@ export function SeriesSettingsForm({ series }: Props) {
         <p className="text-xs text-muted">
           Mudārabah profit sharing ratio applied when profit is declared after each cycle.
           This is a distribution of actual business profit — not a guaranteed return.
+        </p>
+      </div>
+
+      {/* Cycle length (064) */}
+      <div className="space-y-1.5">
+        <label htmlFor="cycle_months" className="block text-sm font-medium text-foreground">
+          Cycle Length (months)
+        </label>
+        <Input
+          id="cycle_months"
+          type="number"
+          min={1}
+          max={12}
+          step={1}
+          required
+          value={form.cycle_months}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, cycle_months: Number(e.target.value) }))
+          }
+          className="w-28"
+        />
+        <p className="text-xs text-muted">
+          How long each NEW cycle of this series runs, from the next rollover on. Cycles
+          already running keep their own dates.
         </p>
       </div>
 

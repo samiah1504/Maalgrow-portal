@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Support" };
 const faqs = [
   {
     q: "When will my investment mature?",
-    a: "Each MaalGrow cycle is exactly 3 months. Your maturity date is shown on each investment card. You'll be notified when your investment matures.",
+    a: "Each MaalGrow cycle now runs for 6 months (cycles that began earlier keep their original dates). Your maturity date is shown on each investment card. You'll be notified when your investment matures.",
   },
   {
     q: "What happens when my investment matures?",

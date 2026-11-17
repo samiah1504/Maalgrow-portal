@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { calcMaturityDateStr, calcCycleLabel } from "@/lib/cycle-dates";
+import { calcMaturityDateStr, calcCycleLabel, DEFAULT_CYCLE_MONTHS } from "@/lib/cycle-dates";
 
 const ALLOWED_ROLES = ["super_admin", "administrator"];
 
@@ -54,13 +54,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const end_date = calcMaturityDateStr(start_date);
+    const adminClient = await createAdminClient();
+
+    // 064: the series' cycle length (6 months), recorded on the cycle
+    const { data: seriesRow } = await adminClient
+      .from("series")
+      .select("cycle_months")
+      .eq("id", series_id)
+      .single();
+    const cycle_months = seriesRow?.cycle_months ?? DEFAULT_CYCLE_MONTHS;
+    const end_date = calcMaturityDateStr(start_date, cycle_months);
 
     if (end_date <= start_date) {
       return NextResponse.json({ error: "Calculated maturity date is not after start date" }, { status: 400 });
     }
-
-    const adminClient = await createAdminClient();
 
     // Overlap check: a cycle [A,B) overlaps [C,D) if A < D AND B > C
     const { data: sameSeries } = await adminClient
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
       .eq("series_id", series_id);
 
     const cycle_number = (count ?? 0) + 1;
-    const cycle_label = body.cycle_label?.trim() || calcCycleLabel(start_date);
+    const cycle_label = body.cycle_label?.trim() || calcCycleLabel(start_date, cycle_months);
     const status = (body.status as string) || "draft";
 
     const { data: newCycle, error: insertError } = await adminClient
@@ -99,6 +106,7 @@ export async function POST(request: Request) {
         cycle_label,
         start_date,
         end_date,
+        cycle_months,
         status: status as "draft",
         subscription_open_date: subscription_open_date ?? null,
         subscription_close_date: subscription_close_date ?? null,

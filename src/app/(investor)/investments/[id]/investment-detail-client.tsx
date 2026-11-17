@@ -39,10 +39,13 @@ export interface MaturityInstructionsProps {
     declared_profit: number | null;
     status: string;
     maturity_date: string;
-    series?: { name: string };
+    /** 064: cycle_months is how long the series' NEXT cycle runs */
+    series?: { name: string; cycle_months?: number };
     cycle?: {
       cycle_label: string;
       end_date?: string;
+      /** 064: how long THIS cycle runs */
+      cycle_months?: number;
     };
   };
   /**
@@ -71,6 +74,9 @@ export function MaturityInstructions({
   deadline: deadlineProp,
 }: MaturityInstructionsProps) {
   const router = useRouter();
+  // 064: this cycle's length, and the next one's (the series' length)
+  const thisMonths = investment.cycle?.cycle_months ?? 3;
+  const nextMonths = investment.series?.cycle_months ?? thisMonths;
   /*
    * Locked when the CAPITAL has been dealt with, not when the profit
    * was declared. Settling a cycle matures every investment in it, so
@@ -290,7 +296,7 @@ export function MaturityInstructions({
           Maturity Instructions
         </CardTitle>
         <p className="text-sm text-muted mt-1 leading-relaxed">
-          Your 3-month investment cycle is approaching maturity. Your declared profit
+          Your {thisMonths}-month investment cycle is approaching maturity. Your declared profit
           will be paid to you at maturity. Please choose how you would like us to
           handle your investment capital for the next investment cycle.
         </p>
@@ -316,7 +322,7 @@ export function MaturityInstructions({
               </p>
               <p className="text-xs text-muted mt-1 leading-relaxed">
                 Pay my declared profit to my registered bank account and automatically
-                continue investing my existing capital in the next 3-month MaalGrow
+                continue investing my existing capital in the next {nextMonths}-month MaalGrow
                 investment cycle.
               </p>
             </div>
@@ -370,7 +376,7 @@ export function MaturityInstructions({
               <p className="text-xs text-muted mt-1 leading-relaxed">
                 Pay my declared profit at maturity and withdraw only part of my
                 investment capital. The remaining investment capital will automatically
-                continue into the next 3-month MaalGrow investment cycle.
+                continue into the next {nextMonths}-month MaalGrow investment cycle.
               </p>
             </div>
           </div>

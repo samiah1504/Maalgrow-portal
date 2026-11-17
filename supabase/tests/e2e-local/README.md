@@ -77,3 +77,7 @@ Rebuild the database (`up.sh`) before each run; each run creates records.
 `ui-e2e-chat-alerts.mjs` covers staff chat alerts: the Investor Chats badge, the admin bell and its dropdown, the pop-up and the tab count when investors write; who sees what (senior staff, the assigned manager, other staff, the payment officer); clearing on opening a chat; the Notifications page. Locally there is no Realtime server, so it exercises the 30-second re-check.
 
 `ui-e2e-held.mjs` covers migration 062: approving a month while one investor has no confirmed bank details (held, everyone else payable), the Cycle page note, MaalRise Payments, what the investor sees, and the automatic release when their KYC is approved in MaalGrow.
+
+`ui-e2e-follow-edits.mjs` covers migration 063: email, name and phone changed on the MaalGrow investor Edit page reach MaalRise; bank fields are admin-only (locked for operations, refused by the server); an administrator's bank change is used and confirmed in MaalRise and moves an unpaid payment to the new account.
+
+`ui-e2e-six-months.mjs` covers migration 064: every series runs 6-month cycles; the Series settings page shows and guards the length; a cycle created by hand and the rollover's next cycle are 6 months; the Mudarabah ledger of a 6-month cycle has six months (a seventh is refused) while a 3-month cycle keeps three; the investor FAQ wording.

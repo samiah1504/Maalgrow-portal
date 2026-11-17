@@ -11,11 +11,12 @@ import {
   SelectContent, SelectItem,
 } from "@/components/ui/select";
 import { formatDate } from "@/lib/utils";
-import { calcMaturityDateStr, calcCycleLabel, parseCycleDate } from "@/lib/cycle-dates";
+import { calcMaturityDateStr, calcCycleLabel, parseCycleDate, DEFAULT_CYCLE_MONTHS } from "@/lib/cycle-dates";
 
 interface SeriesOption {
   id: string;
   name: "A" | "B" | "C";
+  cycle_months: number;
 }
 
 interface Props {
@@ -45,19 +46,22 @@ export function CreateCycleForm({ series, defaultUnitValue }: Props) {
   const [status, setStatus] = useState<string>("draft");
   const [notes, setNotes] = useState("");
 
+  // The selected series' cycle length (6 months since migration 064)
+  const months = series.find((s) => s.id === seriesId)?.cycle_months ?? DEFAULT_CYCLE_MONTHS;
+
   // Live date preview
   const datePreview = useMemo(() => {
     if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return null;
     try {
-      const maturityStr = calcMaturityDateStr(startDate);
-      const autoLabel = calcCycleLabel(startDate);
+      const maturityStr = calcMaturityDateStr(startDate, months);
+      const autoLabel = calcCycleLabel(startDate, months);
       const start = parseCycleDate(startDate);
       const maturity = parseCycleDate(maturityStr);
       return { startDate: start, maturityDate: maturity, autoLabel, maturityStr };
     } catch {
       return null;
     }
-  }, [startDate]);
+  }, [startDate, months]);
 
   const displayLabel = cycleLabel.trim() || datePreview?.autoLabel || "";
 
@@ -155,7 +159,7 @@ export function CreateCycleForm({ series, defaultUnitValue }: Props) {
             </div>
           </div>
           <p className="text-xs text-primary-600 flex items-center gap-1">
-            <Info className="h-3 w-3" /> Duration: 3 calendar months
+            <Info className="h-3 w-3" /> Duration: {months} calendar months
           </p>
           <p className="text-xs text-primary-600">
             Auto-label: <span className="font-medium">{datePreview.autoLabel}</span>

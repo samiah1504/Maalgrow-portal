@@ -29,11 +29,11 @@ export default async function CreateCyclePage() {
 
   const { data: rawSeries } = await supabase
     .from("series")
-    .select("id, name")
+    .select("id, name, cycle_months")
     .eq("is_active", true)
     .order("name");
 
-  const series = (rawSeries ?? []) as { id: string; name: "A" | "B" | "C" }[];
+  const series = (rawSeries ?? []) as { id: string; name: "A" | "B" | "C"; cycle_months: number }[];
 
   return (
     <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
@@ -50,8 +50,8 @@ export default async function CreateCyclePage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Create Cycle</h1>
         <p className="text-sm text-muted mt-1">
-          Set up a new 3-month Mudārabah investment cycle. The maturity date is
-          calculated automatically as exactly 3 calendar months from the start date.
+          Set up a new Mudārabah investment cycle. The maturity date is calculated
+          automatically from the start date and the series&apos; cycle length (now 6 months).
         </p>
       </div>
 

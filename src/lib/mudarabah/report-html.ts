@@ -67,6 +67,17 @@ function monthWord(i: number): string {
   return words[i - 1] ? `Month ${words[i - 1]}` : `Month ${i}`;
 }
 
+/**
+ * "three months", "six months" — how long the cycle traded, from the
+ * number of months it actually has (3 before migration 064, 6 after).
+ */
+function monthsWord(n: number): string {
+  const words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+  const w = words[n - 1] ?? String(n);
+  return `${w} month${n === 1 ? "" : "s"}`;
+}
+const capital1 = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
 /** Every value that reaches the document goes through this */
 function esc(s: unknown): string {
   return String(s ?? "")
@@ -280,6 +291,15 @@ export const REPORT_CSS = `
   display: flex; flex-direction: column;
 }
 .mgr .mcard .b { display: flex; flex-direction: column; flex: 1; }
+/*
+ * 064: a 6-month cycle has six cards — two rows of three, set tighter
+ * so the page still holds them and the cycle summary on one sheet.
+ */
+.mgr .mrow.many { gap: 2mm; margin-top: 2mm; }
+.mgr .mrow.many .mcard .h { padding: 1.2mm 3mm; font-size: 9.5pt; }
+.mgr .mrow.many .mcard .b { padding: 1.5mm 3mm; }
+.mgr .mrow.many .mline { font-size: 7.5pt; padding: 0.5mm 0; }
+.mgr .mrow.many .mline.net { margin-top: 1mm; padding-top: 1.2mm; }
 .mgr .mcard .mline.net { margin-top: auto; }
 .mgr .mcard .h {
   background: var(--parchment-2); padding: 2mm 3.5mm; font-family: var(--font-head);
@@ -816,7 +836,7 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
     every slot, every investor, added together. Your own capital and earnings are on
     page one.</p>
 
-  <div class="mrow">${months}</div>
+  <div class="mrow${f.months.length > 3 ? " many" : ""}">${months}</div>
 
   <!--
     AFTER the months, because this is what they add up to. Each line
@@ -826,7 +846,7 @@ function page2(f: ReportFigures, cycle: ReportCycle): string {
   -->
   <div class="cyclesum">
     <div class="csh">Total cycle summary
-      <span>Three months · Series ${esc(cycle.seriesName)} · ${esc(cycle.cycleLabel)}</span>
+      <span>${capital1(monthsWord(f.months.length))} · Series ${esc(cycle.seriesName)} · ${esc(cycle.cycleLabel)}</span>
     </div>
     <div class="csb">
       <div class="csrow"><span>Total goods purchased</span><span class="val">${units(
@@ -903,7 +923,7 @@ function page4(f: ReportFigures, cycle: ReportCycle): string {
   <p style="font-size:10pt;line-height:1.7;margin:0 0 5mm">
     This cycle traded in <strong>${esc(
       cycle.description ?? "goods bought and sold for profit"
-    )}</strong>. Goods were bought, held and sold over three months, and what the trade
+    )}</strong>. Goods were bought, held and sold over ${monthsWord(f.months.length)}, and what the trade
     actually earned after every cost is what was shared.
   </p>
 
@@ -1028,7 +1048,7 @@ function page3(f: ReportFigures, cycle: ReportCycle): string {
     },
     {
       n: "Three", k: "sold" as const, t: "Sold to customers",
-      lines: [`${units(f.unitsSold)} items`, "over three months"],
+      lines: [`${units(f.unitsSold)} items`, `over ${monthsWord(f.months.length)}`],
     },
     {
       n: "Four", k: "shared" as const, t: "Profit shared",
@@ -1147,7 +1167,7 @@ function page3(f: ReportFigures, cycle: ReportCycle): string {
     <span class="mode">Across the whole cycle</span>
   </h3>
   <p class="pic-p">Capital pooled once at the start, spent on goods, sold to customers
-    across three months, and the profit divided at the end.</p>
+    across ${monthsWord(f.months.length)}, and the profit divided at the end.</p>
   <div class="journey">${steps}</div>
 
   <h3 class="pic-h">Every naira of sales income, divided

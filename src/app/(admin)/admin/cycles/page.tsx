@@ -73,7 +73,7 @@ export default async function AdminCyclesPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Cycles</h1>
           <p className="text-sm text-muted mt-1">
-            3-month Mudārabah investment cycles per series
+            Mudārabah investment cycles per series (6 months each)
           </p>
         </div>
         <Button asChild size="sm">

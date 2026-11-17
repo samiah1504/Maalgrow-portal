@@ -230,7 +230,7 @@ export function ReportPreview({
               <p className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 This cycle has no trading ledger yet, so every figure below is
-                zero. Record the three months first.
+                zero. Record the cycle&apos;s months first.
               </p>
             )}
 

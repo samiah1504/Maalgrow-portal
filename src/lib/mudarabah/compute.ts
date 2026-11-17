@@ -114,8 +114,24 @@ export type CycleInput = {
   /** Slots withdrawing capital at maturity */
   withdrawSlots: number;
   products: ProductRef[];
-  months: [MonthInput, MonthInput, MonthInput];
+  /**
+   * One entry per month of the cycle. A missing entry is an empty
+   * month. 064: how many months there are is monthCount.
+   */
+  months: MonthInput[];
+  /**
+   * 064: how many months the cycle runs (cycles.cycle_months). Absent
+   * means 3 — every cycle before 064, and every settlement stored
+   * before it, so their figures are reproduced exactly.
+   */
+  monthCount?: number;
 };
+
+/** How many months a cycle input covers (3 unless it says otherwise). */
+export function monthCountOf(input: Pick<CycleInput, "monthCount">): number {
+  const n = Math.trunc(Number(input.monthCount ?? 3));
+  return Number.isFinite(n) && n >= 1 && n <= 12 ? n : 3;
+}
 
 export type RowResult = {
   productId: string;
@@ -354,7 +370,8 @@ export function compute(input: CycleInput): CycleResult {
   let cash = 0;
   const months: MonthResult[] = [];
 
-  for (let k = 0; k < 3; k++) {
+  const monthCount = monthCountOf(input);
+  for (let k = 0; k < monthCount; k++) {
     const m = input.months[k];
     const entered = mergeRows(m?.rows ?? []);
     const oCash = cash;
@@ -514,7 +531,7 @@ export function compute(input: CycleInput): CycleResult {
   const grossPerSlot = slots > 0 ? Math.round(holderPot / slots) : 0;
   const whtPerSlot = grossPerSlot > 0 ? Math.round(grossPerSlot * whtRate) : 0;
   const netPerSlot = grossPerSlot - whtPerSlot;
-  const last = months[2];
+  const last = months[months.length - 1];
 
   return {
     months,

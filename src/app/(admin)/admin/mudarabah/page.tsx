@@ -43,7 +43,7 @@ export default async function MudarabahPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Mudarabah Ledger</h1>
           <p className="text-sm text-muted mt-0.5">
-            Three months of trading recorded against an existing cycle — profit is
+            Each month of trading recorded against an existing cycle (6 months from now on) — profit is
             shared as a ratio of what the trade actually realised
           </p>
         </div>

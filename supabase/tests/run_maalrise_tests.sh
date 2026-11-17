@@ -88,6 +88,11 @@ awk '/^-- >>> 063 BODY START/{f=1;next} /^-- <<< 063 BODY END/{f=0} f' supabase/
   || { echo "FAIL: the 063 part differs from the migration"; exit 1; }
 grep -q '^[[:space:]]' supabase/checks/063_parts/063_part_1_of_1.sql && { echo "FAIL: the 063 part has indented lines (phone paste)"; exit 1; }
 echo "PASS: the 063 part is identical to the migration body and has no indentation"
+awk '/^-- >>> 064 BODY START/{f=1;next} /^-- <<< 064 BODY END/{f=0} f' supabase/checks/064_parts/064_part_1_of_1.sql \
+  | cmp -s - <(awk '/^BEGIN;$/{f=1;next} /^COMMIT;$/{f=0} f' supabase/migrations/064_maalgrow_cycle_length.sql) \
+  || { echo "FAIL: the 064 part differs from the migration"; exit 1; }
+grep -q '^[[:space:]]' supabase/checks/064_parts/064_part_1_of_1.sql && { echo "FAIL: the 064 part has indented lines (phone paste)"; exit 1; }
+echo "PASS: the 064 part is identical to the migration body and has no indentation"
 
 dropdb --if-exists "$DB"
 createdb "$DB"
@@ -103,7 +108,7 @@ CREATE SCHEMA IF NOT EXISTS storage;
 CREATE TABLE IF NOT EXISTS storage.buckets (id TEXT PRIMARY KEY, name TEXT, public BOOLEAN);
 SQL
 for f in supabase/migrations/0*.sql; do
-  [[ "$f" == *051_maalrise_core.sql || "$f" == *052_maalrise_distributions.sql || "$f" == *053_maalrise_capital_settlement.sql || "$f" == *054_maalrise_investor_portal.sql || "$f" == *055_maalrise_go_live.sql || "$f" == *056_maalrise_super_admin_self_approval.sql || "$f" == *057_maalrise_cycle_emails.sql || "$f" == *058_maalrise_activation_warnings.sql || "$f" == *059_maalrise_view_as_investor.sql || "$f" == *060_maalrise_reopen_cycle.sql || "$f" == *061_maalrise_move_funding.sql || "$f" == *062_maalrise_held_payments_and_kyc.sql || "$f" == *063_maalrise_follow_maalgrow_edits.sql ]] && continue
+  [[ "$f" == *051_maalrise_core.sql || "$f" == *052_maalrise_distributions.sql || "$f" == *053_maalrise_capital_settlement.sql || "$f" == *054_maalrise_investor_portal.sql || "$f" == *055_maalrise_go_live.sql || "$f" == *056_maalrise_super_admin_self_approval.sql || "$f" == *057_maalrise_cycle_emails.sql || "$f" == *058_maalrise_activation_warnings.sql || "$f" == *059_maalrise_view_as_investor.sql || "$f" == *060_maalrise_reopen_cycle.sql || "$f" == *061_maalrise_move_funding.sql || "$f" == *062_maalrise_held_payments_and_kyc.sql || "$f" == *063_maalrise_follow_maalgrow_edits.sql || "$f" == *064_maalgrow_cycle_length.sql ]] && continue
   q -q -f "$f" >/dev/null
 done
 echo "scratch database: stub + migrations 001–050"
@@ -417,6 +422,32 @@ if q -q -f supabase/checks/063_parts/063_part_1_of_1.sql >/dev/null 2>&1; then e
   || { echo "FAIL: 063 part"; exit 1; }
 echo "PASS: 063 preflight, post-apply, fingerprint, rollback removes everything it added, one SQL Editor part (repeat refused)"
 
+# 064 (MaalGrow cycles: the length is a setting, now 6 months)
+[ "$(summary_of supabase/checks/maalgrow_064_preflight.sql ready_to_apply)" = "true" ] || { echo "FAIL: 064 preflight not ready"; q -f supabase/checks/maalgrow_064_preflight.sql; exit 1; }
+J0=$(fingerprint_of supabase/checks/maalgrow_064_preflight.sql)
+touched64() { q -c "SELECT md5(coalesce(string_agg(x, E'\n' ORDER BY x), '')) FROM (
+    SELECT proname || pg_get_functiondef(oid) || coalesce(proacl::TEXT, '') AS x FROM pg_proc
+     WHERE pronamespace = 'public'::regnamespace AND proname IN ('create_next_cycle', 'mudarabah_get_ledger', 'maalgrow_cycle_end',
+       'maalgrow_cycle_months_default_trg', 'mudarabah_month_within_cycle_trg')
+    UNION ALL SELECT conname || pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid IN ('public.mudarabah_months'::regclass, 'public.series'::regclass, 'public.cycles'::regclass)
+    UNION ALL SELECT table_name || '.' || column_name || data_type || coalesce(column_default, '') || is_nullable FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name IN ('series', 'cycles')
+    UNION ALL SELECT tgname || pg_get_triggerdef(oid) FROM pg_trigger
+     WHERE NOT tgisinternal AND tgrelid IN ('public.cycles'::regclass, 'public.mudarabah_months'::regclass)
+    UNION ALL SELECT id::TEXT || end_date::TEXT || cycle_label FROM cycles) s"; }
+V0=$(touched64)
+q -q -f supabase/migrations/064_maalgrow_cycle_length.sql
+[ "$(summary_of supabase/checks/maalgrow_064_postapply.sql all_ok)" = "t" ] || { echo "FAIL: 064 post-apply"; q -f supabase/checks/maalgrow_064_postapply.sql; exit 1; }
+[ "$(fingerprint_of supabase/checks/maalgrow_064_postapply.sql)" = "$J0" ] || { echo "FAIL: 064 changed an object it should not touch"; exit 1; }
+q -q -f supabase/checks/maalgrow_064_rollback.sql >/dev/null
+[ "$(fingerprint_of supabase/checks/maalgrow_064_preflight.sql)" = "$J0" ] && [ "$(touched64)" = "$V0" ] \
+  && [ "$(summary_of supabase/checks/maalgrow_064_preflight.sql ready_to_apply)" = "true" ] || { echo "FAIL: 064 rollback did not restore everything exactly"; exit 1; }
+q -q -f supabase/checks/064_parts/064_part_1_of_1.sql >/dev/null
+if q -q -f supabase/checks/064_parts/064_part_1_of_1.sql >/dev/null 2>&1; then echo "FAIL: the 064 part ran twice"; exit 1; fi
+[ "$(summary_of supabase/checks/maalgrow_064_postapply.sql all_ok)" = "t" ] && [ "$(fingerprint_of supabase/checks/maalgrow_064_postapply.sql)" = "$J0" ] \
+  || { echo "FAIL: 064 part"; exit 1; }
+echo "PASS: 064 preflight, post-apply, fingerprint, rollback restores 049/033 exactly, one SQL Editor part (repeat refused)"
+
 # 6. scenarios
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_core_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_distribution_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
@@ -430,17 +461,21 @@ psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_reopen_scenarios.sql
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_move_funding_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_held_payments_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalrise_follow_edits_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) R[0-9]+b?:.*|ERROR:.*"
+psql -d "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/maalgrow_cycle_length_scenarios.sql 2>&1 | grep -oE "(PASS|FAIL) L[0-9]+.*|ERROR:.*"
 npx tsx scripts/test-maalrise-sql-contract.ts "$DB" | grep -E "PASS|FAIL"
 npx tsx scripts/check-unfiltered-writes.ts "$DB"
 
+# The existing MaalGrow scenarios encode 3-month cycles: run them with every
+# series at 3 months, which proves 064 changes nothing at 3 months.
+q -qc "UPDATE series SET cycle_months = 3"
 psql -d postgres -qc "ALTER DATABASE $DB WITH is_template true"
 n=0
 for t in supabase/tests/*_scenarios.sql; do
   [[ "$t" == *maalrise* ]] && continue
   s=$(basename "$t" .sql)
   dropdb --if-exists "mr_$s"; createdb -T "$DB" "mr_$s"
-  psql -d "mr_$s" -v ON_ERROR_STOP=1 -q -f "$t" >/dev/null 2>&1 || { echo "FAIL: MaalGrow $s with 051–063 applied"; exit 1; }
+  psql -d "mr_$s" -v ON_ERROR_STOP=1 -q -f "$t" >/dev/null 2>&1 || { echo "FAIL: MaalGrow $s with 051–064 applied (series at 3 months)"; exit 1; }
   dropdb "mr_$s"; n=$((n + 1))
 done
 psql -d postgres -qc "ALTER DATABASE $DB WITH is_template false"
-echo "PASS: all $n existing MaalGrow scenarios pass with 051–063 applied"
+echo "PASS: all $n existing MaalGrow scenarios pass with 051–064 applied (series at 3 months)"

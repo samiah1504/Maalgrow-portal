@@ -36,7 +36,7 @@ export default async function SeriesSettingsPage({
   const { data: series } = await supabase
     .from("series")
     .select(
-      "id, name, description, mudarabah_investor_ratio, price_per_unit, min_units, max_units, is_active"
+      "id, name, description, mudarabah_investor_ratio, price_per_unit, min_units, max_units, is_active, cycle_months"
     )
     .eq("id", id)
     .single();

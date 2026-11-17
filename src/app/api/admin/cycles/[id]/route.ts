@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { calcMaturityDateStr } from "@/lib/cycle-dates";
+import { calcMaturityDateStr, DEFAULT_CYCLE_MONTHS } from "@/lib/cycle-dates";
 
 const ALLOWED_ROLES = ["super_admin", "administrator"];
 
@@ -98,7 +98,10 @@ export async function PATCH(
       return NextResponse.json({ error: "start_date must be a valid YYYY-MM-DD date" }, { status: 400 });
     }
 
-    const end_date = body.start_date ? calcMaturityDateStr(body.start_date) : existing.end_date;
+    // 064: a cycle keeps its own length when its start date is moved
+    const end_date = body.start_date
+      ? calcMaturityDateStr(body.start_date, existing.cycle_months ?? DEFAULT_CYCLE_MONTHS)
+      : existing.end_date;
 
     if (body.unit_value !== undefined && (typeof body.unit_value !== "number" || body.unit_value <= 0)) {
       return NextResponse.json({ error: "unit_value must be a positive number" }, { status: 400 });

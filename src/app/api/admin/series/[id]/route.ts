@@ -36,6 +36,8 @@ export async function PATCH(
       min_units?: number;
       max_units?: number | null;
       is_active?: boolean;
+      /** 064: how long each new cycle runs, 1–12 months */
+      cycle_months?: number;
     };
 
     const {
@@ -45,7 +47,15 @@ export async function PATCH(
       min_units,
       max_units,
       is_active,
+      cycle_months,
     } = body;
+
+    if (
+      cycle_months !== undefined &&
+      (typeof cycle_months !== "number" || !Number.isInteger(cycle_months) || cycle_months < 1 || cycle_months > 12)
+    ) {
+      return NextResponse.json({ error: "Cycle length must be a whole number of months, 1 to 12" }, { status: 400 });
+    }
 
     if (
       mudarabah_investor_ratio !== undefined &&
@@ -120,6 +130,7 @@ export async function PATCH(
         ...(min_units !== undefined ? { min_units } : {}),
         ...(max_units !== undefined ? { max_units } : {}),
         ...(is_active !== undefined ? { is_active } : {}),
+        ...(cycle_months !== undefined ? { cycle_months } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

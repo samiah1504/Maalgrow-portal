@@ -53,6 +53,7 @@ function terms(over: Partial<CycleTerms> = {}): CycleTerms {
     cycleLabel: "A-901",
     cycleStatus: "active",
     startDate: "2026-01-01",
+    cycleMonths: 3,
     endDate: "2026-03-31",
     termsLocked: false,
     unitValue: 100_000 * 100,

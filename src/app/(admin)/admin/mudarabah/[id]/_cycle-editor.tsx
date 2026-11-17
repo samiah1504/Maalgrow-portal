@@ -849,7 +849,8 @@ export function CycleEditor({
         </section>
 
         {/* ── 3. Month by month ────────────────────────────────── */}
-        {[0, 1, 2].map((i) => (
+        {/* 064: as many months as the cycle runs (3, or 6) */}
+        {cycle.months.map((_, i) => (
           <MonthCard
             key={i}
             index={i}

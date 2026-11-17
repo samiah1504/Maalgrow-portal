@@ -73,6 +73,7 @@ const TERMS: CycleTerms = {
   cycleStatus: "active",
   startDate: "2026-01-01",
   endDate: "2026-03-31",
+  cycleMonths: 3,
   termsLocked: false,
   unitValue: 100000 * 100,
   ratio: 0.7,
