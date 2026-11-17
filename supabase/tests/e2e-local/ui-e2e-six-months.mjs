@@ -129,9 +129,12 @@ t = await text();
 check("a 3-month cycle's ledger still has Month 1 to Month 3", t.includes("Month 3") && !t.includes("Month 4"));
 
 // ── What investors read ──
+sql(`update investors set kyc_submitted_at = now() where email = 'both@test.local' and kyc_submitted_at is null`); // past the KYC form
 await as("both");
 await go("/support");
-check("the investor FAQ says cycles now run 6 months", (await text()).includes("now runs for 6 months"));
+// The answers sit in collapsed <details>, so read the content, not the visible text
+check("the investor FAQ says cycles now run 6 months",
+  (await page.evaluate(() => document.body.textContent)).includes("now runs for 6 months"));
 
 check("no browser errors", pageErrors.length === 0, pageErrors.join(" | "));
 console.log(`\n${pass} passed, ${fail} failed`);
