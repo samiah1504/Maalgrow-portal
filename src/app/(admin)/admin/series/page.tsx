@@ -234,6 +234,8 @@ export default async function SeriesPage() {
     { data: profitDeclarations },
     { count: awaitingRollover },
     { data: memberships },
+    { data: unmoved },
+    { data: settledRollovers },
   ] = await Promise.all([
     supabase
       .from("series")
@@ -263,7 +265,30 @@ export default async function SeriesPage() {
       // still had the investors it had. Only "cancelled" was never
       // genuinely a member — see migration 033.
       .neq("status", "cancelled"),
+    // Who is still waiting to be rolled: matured, not yet moved on
+    supabase
+      .from("investments")
+      .select("id, cycle_id")
+      .eq("status", "matured")
+      .is("next_investment_id", null),
+    supabase
+      .from("cycle_rollovers")
+      .select("previous_investment_id")
+      .in("status", ["completed", "withdrawn"]),
   ]);
+
+  // A cycle is "Rollover Ready" only while someone in it is still
+  // waiting to be moved or paid out. Once everyone has gone — on their
+  // own instruction, or by an earlier rollover — the banner goes, even
+  // if nobody pressed Process Rollover.
+  const settledIds = new Set(
+    ((settledRollovers ?? []) as { previous_investment_id: string }[]).map((r) => r.previous_investment_id)
+  );
+  const waitingCycles = new Set(
+    ((unmoved ?? []) as { id: string; cycle_id: string }[])
+      .filter((i) => !settledIds.has(i.id))
+      .map((i) => i.cycle_id)
+  );
 
   const series = rawSeries as unknown as SeriesRow[] | null;
 
@@ -327,7 +352,8 @@ export default async function SeriesPage() {
       if (
         c.status === "completed" &&
         profitMap.has(c.id) &&
-        !c.rollover_processed_at
+        !c.rollover_processed_at &&
+        waitingCycles.has(c.id)
       ) {
         rolloverPending.push({ ...c, series_name: s.name });
       }

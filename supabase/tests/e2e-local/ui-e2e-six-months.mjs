@@ -35,14 +35,7 @@ async function api(who, method, path, body) {
     body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, body: await r.json().catch(() => ({})), location: r.headers.get("location") };
 }
-const must = async (who, method, path, body) => {
-  const r = await api(who, method, path, body);
-  if (r.status >= 400) throw new Error(`${who} ${method} ${path} → ${r.status} ${JSON.stringify(r.body)}`);
-  return r.body;
-};
 
-const lagos = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-const TODAY = lagos();
 
 const browser = await puppeteer.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
 const page = await browser.newPage();
@@ -58,24 +51,6 @@ async function as(who) {
 }
 async function go(path) { const r = await page.goto(BASE + path, { waitUntil: "networkidle0" }); return r?.status(); }
 const text = () => page.evaluate(() => document.body.innerText);
-async function toast(re) {
-  const ok = await page.waitForFunction((src) => [...document.querySelectorAll("[data-sonner-toast]")].some((x) => new RegExp(src, "i").test(x.innerText)),
-    { timeout: 15000 }, re.source).then(() => true).catch(() => false);
-  if (!ok) console.log("   toasts:", await page.evaluate(() => [...document.querySelectorAll("[data-sonner-toast]")].map((x) => x.innerText).join(" | ")));
-  return ok;
-}
-async function click(label, { exact = false, within = null, rowOnly = false } = {}) {
-  const handle = await page.evaluateHandle((label, exact, within, rowOnly) => {
-    const root = within ? [...document.querySelectorAll(rowOnly ? "tr" : "tr, li, div.rounded-lg")].find((r) => r.innerText.includes(within)) : document;
-    return [...(root ?? document).querySelectorAll("button, a")].find((b) => {
-      const t = b.textContent.trim();
-      return (exact ? t === label : t.includes(label)) && !b.disabled;
-    });
-  }, label, exact, within, rowOnly);
-  const el = handle.asElement();
-  if (!el) throw new Error(`No enabled button "${label}"${within ? ` in "${within}"` : ""}`);
-  await el.click();
-}
 const shot = (n) => page.screenshot({ path: `${SHOTS}/${n}.png`, fullPage: true });
 
 const A = sql(`select id from series where name='A'`);
